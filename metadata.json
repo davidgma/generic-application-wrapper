@@ -1,0 +1,6 @@
+{
+  "name": "GAW - Generic Application Wrapper",
+  "description": "A modern, web-native offline-first MS Access in the browser. Portable SQLite apps with dynamic TSX plugins, interactive query grids, spreadsheets, and reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
