@@ -14,6 +14,7 @@ import {
   Trash2,
   Lock,
   Sliders,
+  Shield,
 } from 'lucide-react';
 import { TableSchema, SavedQuery } from '../types/sqlite';
 import { PluginRecord } from '../types/plugin';
@@ -246,17 +247,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
                           <span>Edit in IDE</span>
                         </button>
-                        <div className="h-px bg-slate-800 my-1" />
-                        <button
-                          onClick={() => {
-                            setActiveMenu(null);
-                            onDeleteObject('plugin', p.id, p.name);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete...</span>
-                        </button>
+                        {p.id === 'plugin_manager' || p.id === 'plugin_local_storage' ? (
+                          <div className="px-3 py-1.5 text-[10px] text-slate-400 flex items-center gap-1.5 border-t border-slate-800 mt-1">
+                            <Shield className="w-3 h-3 text-indigo-400" />
+                            <span>Protected Core Plugin</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="h-px bg-slate-800 my-1" />
+                            <button
+                              onClick={() => {
+                                setActiveMenu(null);
+                                onDeleteObject('plugin', p.id, p.name);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete...</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

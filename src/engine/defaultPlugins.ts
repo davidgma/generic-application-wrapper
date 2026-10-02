@@ -1798,6 +1798,11 @@ export default function PluginManagerPlugin({ gaw }) {
 
   const handleConfirmDelete = () => {
     if (!deleteModalPlugin) return;
+    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage') {
+      gaw.toast.warning('Core system plugins (Plugin Manager & Local Storage) cannot be removed.');
+      setDeleteModalPlugin(null);
+      return;
+    }
     const name = deleteModalPlugin.name;
     gaw.plugins.delete(deleteModalPlugin.id);
     setDeleteModalPlugin(null);
@@ -1842,37 +1847,40 @@ export default function PluginManagerPlugin({ gaw }) {
     const randomId = Math.floor(100 + Math.random() * 900);
     const id = 'plugin_custom_' + randomId;
     const name = 'New Custom Plugin ' + randomId;
-    const blankCode = \`import React, { useState } from 'react';
-import { Sparkles, Database } from 'lucide-react';
+    const blankCode = [
+      "import React, { useState } from 'react';",
+      "import { Sparkles, Database } from 'lucide-react';",
+      "",
+      "export default function CustomPlugin({ gaw }) {",
+      "  const [tables] = useState(() => gaw.db.getTables());",
+      "",
+      "  return (",
+      '    <div className="p-6 max-w-4xl mx-auto space-y-6 text-slate-100">',
+      '      <div className="p-5 bg-slate-950/80 border border-indigo-700/50 rounded-2xl shadow-xl">',
+      '        <h1 className="text-xl font-bold text-white flex items-center gap-2">',
+      '          <Sparkles className="w-5 h-5 text-indigo-400" />',
+      '          <span>' + name + '</span>',
+      '        </h1>',
+      '        <p className="text-xs text-slate-300 mt-1">',
+      '          Edit this TSX component in the internal Monaco IDE. It has full access to SQLite via gaw.db.',
+      '        </p>',
+      '      </div>',
+      '',
+      '      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-2">',
+      '        <h3 className="font-semibold text-slate-200">Database Tables ({tables.length}):</h3>',
+      '        <div className="flex flex-wrap gap-2">',
+      '          {tables.map((t) => (',
+      '            <span key={t} className="px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-indigo-300 font-mono">',
+      '              {t}',
+      '            </span>',
+      '          ))}',
+      '        </div>',
+      '      </div>',
+      '    </div>',
+      '  );',
+      '}'
+    ].join('\\n');
 
-export default function CustomPlugin({ gaw }) {
-  const [tables] = useState(() => gaw.db.getTables());
-
-  return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6 text-slate-100">
-      <div className="p-5 bg-slate-950/80 border border-indigo-700/50 rounded-2xl shadow-xl">
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-indigo-400" />
-          <span>\${name}</span>
-        </h1>
-        <p className="text-xs text-slate-300 mt-1">
-          Edit this TSX component in the internal IDE. It has full access to the SQLite engine via \`gaw.db\`.
-        </p>
-      </div>
-
-      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-2">
-        <h3 className="font-semibold text-slate-200">Database Tables ({tables.length}):</h3>
-        <div className="flex flex-wrap gap-2">
-          {tables.map(t => (
-            <span key={t} className="px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-indigo-300 font-mono">
-              {t}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}\`;
     gaw.plugins.importPlugin({
       id,
       name,
@@ -2009,6 +2017,7 @@ export default function CustomPlugin({ gaw }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredPlugins.map((p) => {
           const isActive = p.enabled !== 0;
+          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage';
           return (
             <div
               key={p.id}
@@ -2072,13 +2081,23 @@ export default function CustomPlugin({ gaw }) {
                   </button>
                 </div>
 
-                <button
-                  onClick={() => setDeleteModalPlugin(p)}
-                  className="p-1.5 rounded-lg hover:bg-red-950/60 text-slate-500 hover:text-red-400 transition"
-                  title="Delete plugin from app database"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {isProtected ? (
+                  <span
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-950/60 border border-indigo-700/50 text-[10px] font-semibold text-indigo-300 select-none"
+                    title="Core System Plugin - Cannot be deleted to ensure application remains operational"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Protected</span>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setDeleteModalPlugin(p)}
+                    className="p-1.5 rounded-lg hover:bg-red-950/60 text-slate-500 hover:text-red-400 transition"
+                    title="Delete plugin from app database"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           );

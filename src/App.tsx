@@ -342,6 +342,10 @@ export default function App() {
           return;
         }
       }
+      if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage')) {
+        toastApi.warning(`"${name}" is a core system plugin and cannot be removed to maintain application operation.`);
+        return;
+      }
       setDeleteTarget({
         stage: 1,
         type,
@@ -356,6 +360,11 @@ export default function App() {
   const executeDeleteObject = useCallback(() => {
     if (!deleteTarget) return;
     const { type, id, name } = deleteTarget;
+    if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage')) {
+      toastApi.warning(`Cannot delete core system plugin "${name}".`);
+      setDeleteTarget(null);
+      return;
+    }
     const engine = SQLiteEngine.getInstance();
 
     try {
@@ -586,6 +595,10 @@ export default function App() {
           eventBusApi.emit('db_changed');
         },
         delete: (pluginId) => {
+          if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage') {
+            toastApi.warning('Core system plugins (Plugin Manager & Local Storage) cannot be deleted.');
+            return;
+          }
           SQLiteEngine.getInstance().deletePlugin(pluginId);
           refreshDatabaseState();
           eventBusApi.emit('db_changed');

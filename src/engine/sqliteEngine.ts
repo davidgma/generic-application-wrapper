@@ -878,6 +878,10 @@ export class SQLiteEngine {
   }
 
   public deletePlugin(pluginId: string): void {
+    if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage') {
+      console.warn('Cannot delete core system plugin:', pluginId);
+      return;
+    }
     if (!this.db) return;
     this.run('DELETE FROM t_plugins WHERE id = ?;', [pluginId]);
     this.notifyChange();
