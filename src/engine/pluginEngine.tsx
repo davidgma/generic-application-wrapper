@@ -18,9 +18,9 @@ export class PluginEngine {
    */
   public static compile(tsxCode: string, pluginId: string): CompilationResult {
     try {
-      // 1. Transform TSX + TypeScript to standard ES/CJS JavaScript
+      // 1. Transform TSX + TypeScript + ES Modules to standard executable JavaScript
       const transformed = transform(tsxCode, {
-        transforms: ['typescript', 'jsx'],
+        transforms: ['typescript', 'jsx', 'imports'],
         jsxRuntime: 'classic',
         production: true,
       });
@@ -31,6 +31,10 @@ export class PluginEngine {
       // The plugin exports default function or assigns module.exports = ...
       const exportsObj: any = {};
       const moduleObj: any = { exports: exportsObj };
+
+      const reactModule = { ...React, default: React, __esModule: true };
+      const lucideModule = { ...LucideIcons, default: LucideIcons, __esModule: true };
+      const motionModule = { ...Motion, default: Motion, __esModule: true };
 
       // Scope providers
       const scopeArgs = [
@@ -63,11 +67,11 @@ export class PluginEngine {
         moduleObj,
       ];
 
-      // Custom require polyfill inside plugin for Lucide icons or React
+      // Custom require polyfill inside plugin for Lucide icons, React, motion
       const mockRequire = (mod: string) => {
-        if (mod === 'react') return React;
-        if (mod === 'lucide-react') return LucideIcons;
-        if (mod === 'motion' || mod === 'motion/react' || mod === 'framer-motion') return Motion;
+        if (mod === 'react') return reactModule;
+        if (mod === 'lucide-react') return lucideModule;
+        if (mod === 'motion' || mod === 'motion/react' || mod === 'framer-motion') return motionModule;
         throw new Error(`Module "${mod}" is not available in sandbox. Use globals or React / Lucide.`);
       };
 

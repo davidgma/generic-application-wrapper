@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import writeXlsxFile from 'write-excel-file/browser';
+import readXlsxFile from 'read-excel-file/browser';
 import {
   Bold,
   DollarSign,
@@ -312,81 +313,115 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
   };
 
   // Export to Excel (.xlsx)
-  const exportToExcel = () => {
-    const wb = XLSX.utils.book_new();
-
-    sheets.forEach((sheet) => {
-      // Build 2D array
-      const aoa: any[][] = [];
-      for (let r = 0; r < sheet.rows; r++) {
-        const rowArr: any[] = [];
-        let hasContent = false;
-        for (let c = 0; c < sheet.cols; c++) {
-          const cell = sheet.data[`${r}_${c}`];
-          const val = evaluateCellValue(cell);
-          rowArr.push(val);
-          if (val !== '') hasContent = true;
+  const exportToExcel = async () => {
+    try {
+      const sheetsData = sheets.map((sheet) => {
+        const rows: any[][] = [];
+        for (let r = 0; r < sheet.rows; r++) {
+          const row: any[] = [];
+          let hasContent = false;
+          for (let c = 0; c < sheet.cols; c++) {
+            const cell = sheet.data[`${r}_${c}`];
+            const val = evaluateCellValue(cell);
+            if (val !== '') hasContent = true;
+            const num = Number(val);
+            const isNum = !isNaN(num) && val !== '';
+            row.push({
+              value: isNum ? num : (val || null),
+              fontWeight: cell?.isBold ? 'bold' : undefined,
+            });
+          }
+          if (hasContent || r < 10) {
+            rows.push(row);
+          }
         }
-        if (hasContent || r < 10) {
-          aoa.push(rowArr);
-        }
-      }
+        return {
+          sheet: sheet.name.slice(0, 31),
+          data: rows,
+        };
+      });
 
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
-    });
-
-    XLSX.writeFile(wb, 'gaw_workbook.xlsx');
+      await (writeXlsxFile as any)(sheetsData, {
+        fileName: 'gaw_workbook.xlsx',
+      });
+    } catch (err) {
+      console.error('Failed to export Excel:', err);
+    }
   };
 
   // Import Excel (.xlsx / .csv)
-  const importExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const importExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+    try {
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        const text = await file.text();
+        const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
+        const sheetData: Record<string, SpreadsheetCell> = {};
+        let maxCol = 12;
 
-        const importedSheets: SheetData[] = wb.SheetNames.map((sheetName, sIdx) => {
-          const ws = wb.Sheets[sheetName];
-          const aoa: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
-
-          const sheetData: Record<string, SpreadsheetCell> = {};
-          let maxCol = 12;
-
-          aoa.forEach((row, rIdx) => {
-            if (row.length > maxCol) maxCol = row.length;
-            row.forEach((cellVal: any, cIdx: number) => {
-              if (cellVal !== undefined && cellVal !== null) {
-                sheetData[`${rIdx}_${cIdx}`] = {
-                  raw: cellVal,
-                  isBold: rIdx === 0,
-                };
-              }
-            });
+        lines.forEach((line, rIdx) => {
+          const parts = line.split(',').map((p) => p.replace(/^"|"$/g, '').trim());
+          if (parts.length > maxCol) maxCol = parts.length;
+          parts.forEach((cellVal, cIdx) => {
+            const num = Number(cellVal);
+            sheetData[`${rIdx}_${cIdx}`] = {
+              raw: !isNaN(num) && cellVal !== '' ? num : cellVal,
+              isBold: rIdx === 0,
+            };
           });
-
-          return {
-            id: `sheet_imp_${sIdx}_${Date.now()}`,
-            name: sheetName,
-            rows: Math.max(aoa.length + 10, 30),
-            cols: Math.max(maxCol + 4, 16),
-            data: sheetData,
-          };
         });
 
-        if (importedSheets.length > 0) {
-          setSheets(importedSheets);
-          setActiveSheetIndex(0);
-        }
-      } catch (err) {
-        console.error('Failed to import Excel:', err);
+        const newSheet: SheetData = {
+          id: `sheet_imp_${Date.now()}`,
+          name: file.name.replace(/\.csv$/i, '').slice(0, 31),
+          rows: Math.max(lines.length + 10, 30),
+          cols: Math.max(maxCol + 4, 16),
+          data: sheetData,
+        };
+        setSheets([newSheet]);
+        setActiveSheetIndex(0);
+        return;
       }
-    };
-    reader.readAsBinaryString(file);
+
+      // Read .xlsx file - parses all sheets
+      const sheetList = await (readXlsxFile as any)(file);
+      const importedSheets: SheetData[] = [];
+
+      sheetList.forEach((sheetObj: any, sIdx: number) => {
+        const sheetRows: any[][] = sheetObj.data || [];
+        const sheetData: Record<string, SpreadsheetCell> = {};
+        let maxCol = 12;
+
+        sheetRows.forEach((row: any[], rIdx: number) => {
+          if (row.length > maxCol) maxCol = row.length;
+          row.forEach((cellVal: any, cIdx: number) => {
+            if (cellVal !== null && cellVal !== undefined) {
+              sheetData[`${rIdx}_${cIdx}`] = {
+                raw: cellVal instanceof Date ? cellVal.toISOString().split('T')[0] : cellVal,
+                isBold: rIdx === 0,
+              };
+            }
+          });
+        });
+
+        importedSheets.push({
+          id: `sheet_imp_${sIdx}_${Date.now()}`,
+          name: sheetObj.sheet || `Sheet ${sIdx + 1}`,
+          rows: Math.max(sheetRows.length + 10, 30),
+          cols: Math.max(maxCol + 4, 16),
+          data: sheetData,
+        });
+      });
+
+      if (importedSheets.length > 0) {
+        setSheets(importedSheets);
+        setActiveSheetIndex(0);
+      }
+    } catch (err) {
+      console.error('Failed to import Excel:', err);
+    }
   };
 
   const isDark = theme === 'vs-dark';
