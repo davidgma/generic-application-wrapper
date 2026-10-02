@@ -18,6 +18,7 @@ import { ReportViewer } from './components/ReportViewer';
 import { ReportBuilder } from './components/ReportBuilder';
 import { PluginHost } from './components/PluginHost';
 import { AIAssistant } from './components/AIAssistant';
+import { AddPluginModal } from './components/AddPluginModal';
 import { DropboxModal } from './components/DropboxModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ConflictDialog } from './components/ConflictDialog';
@@ -45,8 +46,12 @@ export default function App() {
   const [isEngineReady, setIsEngineReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
 
-  // Theme
-  const [theme, setTheme] = useState<'vs-dark' | 'vs-light'>('vs-dark');
+  // Theme (reads from localStorage immediately for zero-flicker initialization)
+  const [theme, setTheme] = useState<'vs-dark' | 'vs-light'>(() => {
+    const saved = localStorage.getItem('gaw_theme');
+    if (saved === 'vs-dark' || saved === 'vs-light') return saved;
+    return 'vs-dark';
+  });
 
   // Navigation & Active View
   // Values: 'table:customers', 'query:q_active_customers', 'report:report_exec_overview', 'plugin:plugin_crm', 'ide', 'spreadsheet'
@@ -75,6 +80,7 @@ export default function App() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [showReportBuilder, setShowReportBuilder] = useState(false);
   const [reportToEdit, setReportToEdit] = useState<SavedReport | null>(null);
+  const [showAddPluginModal, setShowAddPluginModal] = useState(false);
 
   // Target tab to open and edit in IDE
   const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
@@ -268,8 +274,11 @@ export default function App() {
       const title = engine.getSetting('app_title', 'Northwind Modern Commerce');
       setAppTitle(title);
 
-      const th = engine.getSetting('theme', 'vs-dark') as 'vs-dark' | 'vs-light';
-      setTheme(th);
+      const th = engine.getSetting('theme', '') as 'vs-dark' | 'vs-light';
+      if (th === 'vs-dark' || th === 'vs-light') {
+        setTheme(th);
+        localStorage.setItem('gaw_theme', th);
+      }
     } catch (e) {
       console.error('Failed to refresh database state:', e);
     }
@@ -524,7 +533,9 @@ export default function App() {
         onThemeToggle={() => {
           const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
           setTheme(next);
+          localStorage.setItem('gaw_theme', next);
           SQLiteEngine.getInstance().setSetting('theme', next);
+          storageEngine.save();
         }}
         onNewDatabase={() => {
           SQLiteEngine.getInstance().createDefaultDatabase();
@@ -586,6 +597,7 @@ export default function App() {
             setShowReportBuilder(true);
           }}
           onDeleteObject={handleDeleteObject}
+          onAddPlugin={() => setShowAddPluginModal(true)}
           onOpenAI={() => setShowAIModal(true)}
           theme={theme}
         />
@@ -738,8 +750,28 @@ export default function App() {
           theme={theme}
           onThemeChange={(newTheme) => {
             setTheme(newTheme);
+            localStorage.setItem('gaw_theme', newTheme);
             SQLiteEngine.getInstance().setSetting('theme', newTheme);
+            storageEngine.save();
           }}
+        />
+      )}
+
+      {/* 3b. Add Dynamic Plugin Modal (Local File/Directory, Dropbox, or IDE) */}
+      {showAddPluginModal && (
+        <AddPluginModal
+          onClose={() => setShowAddPluginModal(false)}
+          onPluginAdded={(newPlugin, openInIDE) => {
+            toastApi.success(`Installed dynamic plugin "${newPlugin.name}" into SQLite!`);
+            refreshDatabaseState();
+            if (openInIDE) {
+              handleOpenInIDE({ type: 'plugin', id: newPlugin.id, name: newPlugin.name });
+            } else {
+              setActiveView(`plugin:${newPlugin.id}`);
+            }
+          }}
+          onOpenDropboxSettings={() => setShowDropboxModal(true)}
+          theme={theme}
         />
       )}
 

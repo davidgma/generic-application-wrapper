@@ -783,6 +783,7 @@ export class SQLiteEngine {
   public setSetting(key: string, value: string): void {
     const now = new Date().toISOString();
     this.run('INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES (?, ?, ?);', [key, value, now]);
+    this.notifyChange();
   }
 
   public isSystemTable(tableName: string): boolean {

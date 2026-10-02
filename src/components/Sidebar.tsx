@@ -34,6 +34,7 @@ interface SidebarProps {
   onNewReport: () => void;
   onEditReportVisual?: (report: SavedReport) => void;
   onDeleteObject: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
+  onAddPlugin?: () => void;
   onOpenAI: () => void;
   theme?: 'vs-dark' | 'vs-light';
   isOpen: boolean;
@@ -55,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewReport,
   onEditReportVisual,
   onDeleteObject,
+  onAddPlugin,
   onOpenAI,
   theme = 'vs-dark',
   isOpen,
@@ -180,10 +182,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onOpenIDE({ type: 'plugin' });
+                if (onAddPlugin) {
+                  onAddPlugin();
+                } else {
+                  onOpenIDE({ type: 'plugin' });
+                }
               }}
-              title="Add New TSX Plugin"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+              title="Add Dynamic TSX Plugin (Local File, Dropbox, or IDE)"
+              className="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>

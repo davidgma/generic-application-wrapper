@@ -281,6 +281,63 @@ export class DropboxSyncEngine {
       }));
   }
 
+  // --- List Plugin Files (.tsx, .ts, .js) in Dropbox ---
+  public async listPluginFiles(folderPath: string = ''): Promise<DropboxFileItem[]> {
+    if (!this.config.accessToken) throw new Error('Dropbox not connected');
+
+    const res = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.config.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        path: folderPath,
+        recursive: false,
+        include_media_info: false,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to list Dropbox plugin files: ${err}`);
+    }
+
+    const data = await res.json();
+    const entries: any[] = data.entries || [];
+
+    return entries
+      .filter((e) => e['.tag'] === 'file' && /\.(tsx|ts|jsx|js)$/i.test(e.name))
+      .map((e) => ({
+        id: e.id,
+        name: e.name,
+        path_lower: e.path_lower,
+        path_display: e.path_display,
+        size: e.size,
+        server_modified: e.server_modified,
+        rev: e.rev,
+      }));
+  }
+
+  // --- Download Text Content (e.g. Plugin code) from Dropbox ---
+  public async downloadFileText(fileItem: DropboxFileItem): Promise<string> {
+    if (!this.config.accessToken) throw new Error('Dropbox not connected');
+
+    const res = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.config.accessToken}`,
+        'Dropbox-API-Arg': JSON.stringify({ path: fileItem.path_display }),
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to download ${fileItem.name} from Dropbox`);
+    }
+
+    return await res.text();
+  }
+
   // --- Download Database from Dropbox ---
   public async downloadFile(fileItem: DropboxFileItem): Promise<boolean> {
     if (!this.config.accessToken) throw new Error('Dropbox not connected');

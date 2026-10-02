@@ -216,18 +216,19 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           );
         }
       } else if (item.type === 'sql') {
-        tabId = item.id || `tab_sql_${Date.now()}`;
+        tabId = item.id || (item.name ? `tab_sql_${item.name}` : 'tab_sql_default');
         title = item.name ? `${item.name}.sql` : 'Query.sql';
         content = item.code || 'SELECT * FROM customers LIMIT 25;';
       }
 
       if (!tabId) return;
 
-      // Check if tab already exists
-      const existing = tabs.find((t) => t.id === tabId);
-      if (existing) {
-        setActiveTabId(tabId);
-      } else {
+      // Check if tab already exists without depending on tabs in callback
+      setTabs((prev) => {
+        const existing = prev.find((t) => t.id === tabId);
+        if (existing) {
+          return prev;
+        }
         const newTab: TabItem = {
           id: tabId,
           title,
@@ -238,17 +239,25 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           queryId: item.type === 'query' ? item.id : undefined,
           reportId: item.type === 'report' ? item.id : undefined,
         };
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabId(tabId);
-      }
+        return [...prev, newTab];
+      });
+      setActiveTabId(tabId);
       setShowOpenMenu(false);
     },
-    [engine, tabs]
+    [engine]
   );
+
+  const lastTargetTimestampRef = useRef<number | null>(null);
 
   // Sync external targetTab request (from Sidebar edit options)
   useEffect(() => {
     if (targetTab) {
+      if (targetTab.timestamp && lastTargetTimestampRef.current === targetTab.timestamp) {
+        return;
+      }
+      if (targetTab.timestamp) {
+        lastTargetTimestampRef.current = targetTab.timestamp;
+      }
       openOrActivateItem(targetTab);
     }
   }, [targetTab, openOrActivateItem]);
@@ -791,17 +800,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             >
               <Eye className="w-3.5 h-3.5" />
               <span>{showLivePreview ? 'Hide Preview' : 'Live Preview'}</span>
-            </button>
-          )}
-
-          {onOpenAI && (
-            <button
-              onClick={onOpenAI}
-              className="flex items-center gap-1 px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 text-xs transition"
-              title="AI Prompt & Code Generator Assistant"
-            >
-              <Sparkles className="w-3 h-3 text-indigo-400" />
-              <span>AI Exporter</span>
             </button>
           )}
         </div>
