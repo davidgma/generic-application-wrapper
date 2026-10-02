@@ -1,5 +1,5 @@
 import { SQLiteEngine } from './sqliteEngine';
-import { ConflictDetails, StorageMetadata, SyncStatus } from '../types/storage';
+import { ConflictDetails, StorageMetadata, StorageTarget, SyncStatus } from '../types/storage';
 
 export class FileStorageEngine {
   private static instance: FileStorageEngine | null = null;
@@ -14,6 +14,10 @@ export class FileStorageEngine {
   private statusListeners: Set<(meta: StorageMetadata) => void> = new Set();
   private autoSyncIntervalSec: number = 30;
   private isAutoSyncEnabled: boolean = true;
+  private activeTarget: StorageTarget =
+    typeof window !== 'undefined'
+      ? ((localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local')
+      : 'local';
 
   private constructor() {
     this.setupBeforeUnload();
@@ -57,6 +61,36 @@ export class FileStorageEngine {
     }
   }
 
+  public getActiveTarget(): StorageTarget {
+    return this.activeTarget;
+  }
+
+  public setActiveTarget(target: StorageTarget): void {
+    this.activeTarget = target;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_active_storage_target', target);
+    }
+    this.notifyStatus();
+  }
+
+  public exportDownload(fileName?: string): void {
+    const engine = SQLiteEngine.getInstance();
+    const binary = engine.exportBinary();
+    const baseName = fileName || engine.activeDbName || 'Northwind_Modern.db';
+    const name = baseName.endsWith('.db') || baseName.endsWith('.sqlite') || baseName.endsWith('.sqlite3')
+      ? baseName
+      : `${baseName}.db`;
+    const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   public getMetadata(): StorageMetadata {
     const engine = SQLiteEngine.getInstance();
     let fileSize = 0;
@@ -76,6 +110,8 @@ export class FileStorageEngine {
       hasFileHandle: this.fileHandle !== null,
       autoSyncIntervalSec: this.autoSyncIntervalSec,
       isAutoSyncEnabled: this.isAutoSyncEnabled,
+      activeTarget: this.activeTarget,
+      filePath: (this.fileHandle as any)?.name || engine.activeDbName,
     };
   }
 
@@ -123,6 +159,7 @@ export class FileStorageEngine {
         const engine = SQLiteEngine.getInstance();
         engine.loadBinary(binary, file.name);
 
+        this.setActiveTarget('local');
         this.notifyStatus();
         return true;
       } catch (err: any) {
@@ -151,6 +188,7 @@ export class FileStorageEngine {
             const engine = SQLiteEngine.getInstance();
             engine.loadBinary(binary, file.name);
 
+            this.setActiveTarget('local');
             this.notifyStatus();
             resolve(true);
           } else {
@@ -374,6 +412,9 @@ export class FileStorageEngine {
     if (!this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) return;
 
     this.autoSyncTimer = setInterval(async () => {
+      // If Dropbox connection is currently in active use, assume no local auto-syncing needed
+      if (this.activeTarget !== 'local') return;
+
       if (this.isDirty && this.fileHandle && this.syncStatus !== 'conflict' && this.syncStatus !== 'saving') {
         await this.save();
       }

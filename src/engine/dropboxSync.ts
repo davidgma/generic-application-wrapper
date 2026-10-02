@@ -1,5 +1,6 @@
 import { SQLiteEngine } from './sqliteEngine';
-import { DropboxConfig } from '../types/storage';
+import { DropboxConfig, StorageTarget } from '../types/storage';
+import { FileStorageEngine } from './fileStorage';
 
 export interface DropboxFileItem {
   id: string;
@@ -19,11 +20,19 @@ export class DropboxSyncEngine {
     connected: false,
   };
   private currentRemoteFile: DropboxFileItem | null = null;
-  private syncPollTimer: any = null;
+  private lastSyncTime: Date | null = null;
+  private autoSyncIntervalSec: number = 60;
+  private isAutoSyncEnabled: boolean = true;
+  private activeTarget: StorageTarget =
+    typeof window !== 'undefined'
+      ? ((localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local')
+      : 'local';
+  private autoSyncTimer: any = null;
   private listeners: Set<(config: DropboxConfig) => void> = new Set();
 
   private constructor() {
     this.loadPersistedConfig();
+    this.startAutoSync();
   }
 
   public static getInstance(): DropboxSyncEngine {
@@ -43,6 +52,18 @@ export class DropboxSyncEngine {
           this.validateToken();
         }
       }
+      const savedInterval = localStorage.getItem('gaw_dropbox_auto_sync_interval');
+      if (savedInterval) {
+        this.autoSyncIntervalSec = parseInt(savedInterval, 10);
+      }
+      const savedAuto = localStorage.getItem('gaw_dropbox_auto_sync_enabled');
+      if (savedAuto !== null) {
+        this.isAutoSyncEnabled = savedAuto === 'true';
+      }
+      const savedTarget = localStorage.getItem('gaw_active_storage_target');
+      if (savedTarget === 'local' || savedTarget === 'dropbox') {
+        this.activeTarget = savedTarget;
+      }
     } catch (e) {
       console.error('Failed to load Dropbox config:', e);
     }
@@ -60,14 +81,15 @@ export class DropboxSyncEngine {
 
   public subscribe(listener: (config: DropboxConfig) => void): () => void {
     this.listeners.add(listener);
-    listener(this.config);
+    listener(this.getConfig());
     return () => this.listeners.delete(listener);
   }
 
-  private notify(): void {
+  public notify(): void {
+    const cfg = this.getConfig();
     this.listeners.forEach((fn) => {
       try {
-        fn(this.config);
+        fn(cfg);
       } catch (e) {
         console.error(e);
       }
@@ -75,7 +97,65 @@ export class DropboxSyncEngine {
   }
 
   public getConfig(): DropboxConfig {
-    return { ...this.config };
+    return {
+      ...this.config,
+      lastSyncTime: this.lastSyncTime,
+      autoSyncIntervalSec: this.autoSyncIntervalSec,
+      isAutoSyncEnabled: this.isAutoSyncEnabled,
+      activeTarget: this.activeTarget,
+    };
+  }
+
+  public getLastSyncTime(): Date | null {
+    return this.lastSyncTime;
+  }
+
+  public getActiveTarget(): StorageTarget {
+    return this.activeTarget;
+  }
+
+  public setActiveTarget(target: StorageTarget): void {
+    this.activeTarget = target;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_active_storage_target', target);
+    }
+    this.notify();
+  }
+
+  public setAutoSyncInterval(seconds: number): void {
+    this.autoSyncIntervalSec = seconds;
+    this.isAutoSyncEnabled = seconds > 0;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_dropbox_auto_sync_interval', seconds.toString());
+      localStorage.setItem('gaw_dropbox_auto_sync_enabled', this.isAutoSyncEnabled.toString());
+    }
+    this.startAutoSync();
+    this.notify();
+  }
+
+  public setAutoSyncEnabled(enabled: boolean): void {
+    this.isAutoSyncEnabled = enabled;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_dropbox_auto_sync_enabled', enabled.toString());
+    }
+    this.startAutoSync();
+    this.notify();
+  }
+
+  private startAutoSync(): void {
+    if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
+    if (!this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) return;
+
+    this.autoSyncTimer = setInterval(async () => {
+      // Only auto-sync to Dropbox if Dropbox is the active sync target and is connected
+      if (this.activeTarget === 'dropbox' && this.config.connected && this.config.accessToken) {
+        try {
+          await this.uploadActiveDatabase();
+        } catch (err) {
+          console.error('Dropbox auto-sync background error:', err);
+        }
+      }
+    }, this.autoSyncIntervalSec * 1000);
   }
 
   public getCurrentRemoteFile(): DropboxFileItem | null {
@@ -98,7 +178,7 @@ export class DropboxSyncEngine {
     this.config.accountEmail = undefined;
     this.config.accountName = undefined;
     this.currentRemoteFile = null;
-    if (this.syncPollTimer) clearInterval(this.syncPollTimer);
+    if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
     this.saveConfig();
   }
 
@@ -361,6 +441,9 @@ export class DropboxSyncEngine {
     engine.loadBinary(binary, fileItem.name);
 
     this.currentRemoteFile = fileItem;
+    this.lastSyncTime = new Date();
+    this.setActiveTarget('dropbox');
+    FileStorageEngine.getInstance().setActiveTarget('dropbox');
     return true;
   }
 
@@ -408,6 +491,9 @@ export class DropboxSyncEngine {
     };
 
     this.currentRemoteFile = savedItem;
+    this.lastSyncTime = new Date();
+    this.setActiveTarget('dropbox');
+    FileStorageEngine.getInstance().setActiveTarget('dropbox');
     return savedItem;
   }
 }

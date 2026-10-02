@@ -28,9 +28,9 @@ interface NavbarProps {
   onThemeToggle: () => void;
   onNewDatabase: () => void;
   onOpenFile: () => void;
-  onSaveFile: () => void;
-  onSaveAsFile: () => void;
-  onOpenDropbox: () => void;
+  onSaveFile?: () => void;
+  onSaveAsFile?: () => void;
+  onOpenDropbox?: () => void;
   onOpenSettings: () => void;
   onOpenAI: () => void;
   onOpenIDE: (tab?: any) => void;
@@ -91,40 +91,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {/* Save Button with Dirty Badge */}
-          <button
-            onClick={onSaveFile}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold transition shadow-sm ${
-              storageMeta.syncStatus === 'dirty'
-                ? 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
-                : storageMeta.syncStatus === 'saving'
-                ? 'bg-indigo-700 text-slate-200'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-            }`}
-            title="Save to underlying file handle (Ctrl+S)"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>
-              {storageMeta.syncStatus === 'dirty'
-                ? 'Save Changes *'
-                : storageMeta.syncStatus === 'saving'
-                ? 'Saving...'
-                : 'Saved'}
-            </span>
-          </button>
-
-          {/* Dropbox Cloud Button */}
-          <button
-            onClick={onOpenDropbox}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded border text-xs transition ${
-              isDark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-300 hover:bg-slate-200 text-slate-700'
-            }`}
-            title="Sync with Dropbox"
-          >
-            <Cloud className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden md:inline">Dropbox</span>
-          </button>
-
           {/* AI Assistant Button */}
           <button
             onClick={onOpenAI}
@@ -189,38 +155,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <span>Open File...</span>
                 <span className="text-[10px] text-slate-500">Ctrl+O</span>
-              </button>
-              <div className="h-px bg-slate-800 my-1" />
-              <button
-                onClick={() => {
-                  onSaveFile();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Save Database</span>
-                <span className="text-[10px] text-slate-500">Ctrl+S</span>
-              </button>
-              <button
-                onClick={() => {
-                  onSaveAsFile();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Save As New Copy...</span>
-                <span className="text-[10px] text-slate-500">.db</span>
-              </button>
-              <div className="h-px bg-slate-800 my-1" />
-              <button
-                onClick={() => {
-                  onOpenDropbox();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Dropbox Two-Way Sync...</span>
-                <Cloud className="w-3.5 h-3.5 text-indigo-400" />
               </button>
               <div className="h-px bg-slate-800 my-1" />
               <button

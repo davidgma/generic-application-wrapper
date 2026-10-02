@@ -71,6 +71,7 @@ export default function App() {
 
   // Storage and Sync Metadata
   const storageEngine = useMemo(() => FileStorageEngine.getInstance(), []);
+  const dropboxEngine = useMemo(() => DropboxSyncEngine.getInstance(), []);
   const [storageMeta, setStorageMeta] = useState<StorageMetadata>(storageEngine.getMetadata());
   const [activeConflict, setActiveConflict] = useState<ConflictDetails | null>(null);
 
@@ -507,12 +508,131 @@ export default function App() {
         openSpreadsheet: (data, sheetName) => handleOpenSpreadsheet(data, sheetName),
         openReport: (repId) => setActiveView(`report:${repId}`),
         openPlugin: (plgId) => setActiveView(`plugin:${plgId}`),
+        openIDE: (tab) => handleOpenInIDE(tab),
       },
       eventBus: eventBusApi,
       theme,
       plugin: activePluginRecord,
+      storage: {
+        getMetadata: () => storageEngine.getMetadata(),
+        save: async () => {
+          const ok = await storageEngine.save();
+          if (ok) refreshDatabaseState();
+          return ok;
+        },
+        saveAs: async (suggestedName) => {
+          const ok = await storageEngine.saveAs(suggestedName);
+          if (ok) refreshDatabaseState();
+          return ok;
+        },
+        openFile: async () => {
+          const ok = await storageEngine.openFile();
+          if (ok) {
+            toastApi.success('Database opened successfully.');
+            refreshDatabaseState();
+          }
+          return ok;
+        },
+        exportDownload: (fileName) => storageEngine.exportDownload(fileName),
+        setAutoSyncInterval: (sec) => storageEngine.setAutoSyncInterval(sec),
+        setAutoSyncEnabled: (en) => storageEngine.setAutoSyncEnabled(en),
+        setActiveTarget: (target) => {
+          storageEngine.setActiveTarget(target);
+          dropboxEngine.setActiveTarget(target);
+          refreshDatabaseState();
+        },
+        onStatusChange: (listener) => storageEngine.onStatusChange(listener),
+      },
+      dropbox: {
+        getConfig: () => dropboxEngine.getConfig(),
+        setAccessToken: async (token) => {
+          const ok = await dropboxEngine.setAccessToken(token);
+          refreshDatabaseState();
+          return ok;
+        },
+        setClientId: (clientId) => dropboxEngine.setClientId(clientId),
+        disconnect: () => {
+          dropboxEngine.disconnect();
+          refreshDatabaseState();
+        },
+        validateToken: async () => dropboxEngine.validateToken(),
+        initiateOAuthFlow: async (clientId, redirectUri) => dropboxEngine.initiateOAuthFlow(clientId, redirectUri),
+        listDatabaseFiles: async (folderPath) => dropboxEngine.listDatabaseFiles(folderPath),
+        downloadFile: async (fileItem) => {
+          const ok = await dropboxEngine.downloadFile(fileItem);
+          if (ok) {
+            refreshDatabaseState();
+            toastApi.success(`Loaded ${fileItem.name} from Dropbox.`);
+          }
+          return ok;
+        },
+        uploadActiveDatabase: async (targetPath) => dropboxEngine.uploadActiveDatabase(targetPath),
+        setAutoSyncInterval: (sec) => dropboxEngine.setAutoSyncInterval(sec),
+        setAutoSyncEnabled: (en) => dropboxEngine.setAutoSyncEnabled(en),
+        setActiveTarget: (target) => {
+          dropboxEngine.setActiveTarget(target);
+          storageEngine.setActiveTarget(target);
+          refreshDatabaseState();
+        },
+        subscribe: (listener) => dropboxEngine.subscribe(listener),
+        getCurrentRemoteFile: () => dropboxEngine.getCurrentRemoteFile(),
+        getLastSyncTime: () => dropboxEngine.getLastSyncTime(),
+      },
+      plugins: {
+        getAll: () => SQLiteEngine.getInstance().getPlugins(),
+        toggleEnabled: (pluginId, enabled) => {
+          SQLiteEngine.getInstance().setPluginEnabled(pluginId, enabled);
+          refreshDatabaseState();
+          eventBusApi.emit('db_changed');
+        },
+        delete: (pluginId) => {
+          SQLiteEngine.getInstance().deletePlugin(pluginId);
+          refreshDatabaseState();
+          eventBusApi.emit('db_changed');
+        },
+        importPlugin: (plugin) => {
+          if (!plugin.id || !plugin.name || !plugin.code) return;
+          SQLiteEngine.getInstance().savePlugin({
+            id: plugin.id,
+            name: plugin.name,
+            version: plugin.version || '1.0.0',
+            enabled: plugin.enabled !== undefined ? plugin.enabled : 1,
+            icon: plugin.icon || 'Puzzle',
+            menu_category: plugin.menu_category || 'Custom',
+            route: plugin.route || `/${plugin.id}`,
+            description: plugin.description || '',
+            code: plugin.code,
+          });
+          refreshDatabaseState();
+          eventBusApi.emit('db_changed');
+        },
+        openInIDE: (pluginId, name) => {
+          const p = SQLiteEngine.getInstance().getPlugins().find((item) => item.id === pluginId);
+          handleOpenInIDE({
+            type: 'plugin',
+            id: pluginId,
+            name: name || p?.name,
+            code: p?.code,
+          });
+        },
+        openAddModal: () => {
+          setShowAddPluginModal(true);
+        },
+      },
     };
-  }, [plugins, activeView, toastApi, dialogApi, eventBusApi, theme]);
+  }, [
+    plugins,
+    activeView,
+    toastApi,
+    dialogApi,
+    eventBusApi,
+    theme,
+    storageEngine,
+    dropboxEngine,
+    handleOpenInIDE,
+    handleOpenSpreadsheet,
+    refreshDatabaseState,
+  ]);
 
   if (initError) {
     return (
@@ -819,7 +939,10 @@ export default function App() {
               setActiveView(`plugin:${newPlugin.id}`);
             }
           }}
-          onOpenDropboxSettings={() => setShowDropboxModal(true)}
+          onOpenDropboxSettings={() => {
+            setShowAddPluginModal(false);
+            setActiveView('plugin:plugin_dropbox_sync');
+          }}
           theme={theme}
         />
       )}

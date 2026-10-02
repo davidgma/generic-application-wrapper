@@ -1,4 +1,5 @@
 export type SyncStatus = 'saved' | 'saving' | 'dirty' | 'conflict' | 'error';
+export type StorageTarget = 'local' | 'dropbox';
 
 export interface StorageMetadata {
   fileName: string;
@@ -10,6 +11,8 @@ export interface StorageMetadata {
   hasFileHandle: boolean;
   autoSyncIntervalSec: number;
   isAutoSyncEnabled: boolean;
+  activeTarget: StorageTarget;
+  filePath?: string;
 }
 
 export interface ConflictDetails {
@@ -28,4 +31,8 @@ export interface DropboxConfig {
   connected: boolean;
   accountEmail?: string;
   accountName?: string;
+  lastSyncTime?: Date | null;
+  autoSyncIntervalSec?: number;
+  isAutoSyncEnabled?: boolean;
+  activeTarget?: StorageTarget;
 }

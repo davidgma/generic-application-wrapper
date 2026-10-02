@@ -897,3 +897,1237 @@ export default function HelloWorldPlugin({ gaw }) {
   );
 }
 `;
+
+export const DEFAULT_DROPBOX_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import {
+  Cloud,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Key,
+  Lock,
+  Folder,
+  Database,
+  ExternalLink,
+  Clock,
+  Settings,
+  HardDrive,
+  Eye,
+  EyeOff
+} from 'lucide-react';
+
+export default function DropboxSyncPlugin({ gaw }) {
+  const [config, setConfig] = useState(gaw.dropbox.getConfig());
+  const [storageMeta, setStorageMeta] = useState(gaw.storage.getMetadata());
+  const [tokenInput, setTokenInput] = useState(config.accessToken || '');
+  const [showToken, setShowToken] = useState(false);
+  const [clientIdInput, setClientIdInput] = useState(config.clientId || '');
+  const [autoInterval, setAutoInterval] = useState(config.autoSyncIntervalSec || 60);
+  const [autoEnabled, setAutoEnabled] = useState(config.isAutoSyncEnabled !== false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
+  const [remoteFiles, setRemoteFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [activeTab, setActiveTab] = useState('sync');
+
+  // Keep state in sync with external changes
+  useEffect(() => {
+    const unsubDropbox = gaw.dropbox.subscribe((cfg) => {
+      setConfig(cfg);
+      if (cfg.accessToken) setTokenInput(cfg.accessToken);
+      if (cfg.clientId) setClientIdInput(cfg.clientId);
+      if (cfg.autoSyncIntervalSec !== undefined) setAutoInterval(cfg.autoSyncIntervalSec);
+      if (cfg.isAutoSyncEnabled !== undefined) setAutoEnabled(cfg.isAutoSyncEnabled);
+    });
+
+    const unsubStorage = gaw.storage.onStatusChange((meta) => {
+      setStorageMeta(meta);
+    });
+
+    return () => {
+      unsubDropbox();
+      unsubStorage();
+    };
+  }, []);
+
+  const loadRemoteFiles = async () => {
+    if (!config.connected) return;
+    setLoadingFiles(true);
+    try {
+      const files = await gaw.dropbox.listDatabaseFiles('');
+      setRemoteFiles(files);
+    } catch (err) {
+      gaw.toast.error('Failed to list files: ' + (err.message || String(err)));
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'browser' && config.connected) {
+      loadRemoteFiles();
+    }
+  }, [activeTab, config.connected]);
+
+  const handleSaveToken = async () => {
+    if (!tokenInput.trim()) {
+      gaw.toast.warning('Please enter a valid Dropbox access token.');
+      return;
+    }
+    const ok = await gaw.dropbox.setAccessToken(tokenInput.trim());
+    if (ok) {
+      gaw.toast.success('Connected to Dropbox successfully!');
+    } else {
+      gaw.toast.error('Token validation failed. Please verify your token.');
+    }
+  };
+
+  const handlePushNow = async () => {
+    setIsPushing(true);
+    try {
+      const res = await gaw.dropbox.uploadActiveDatabase();
+      gaw.toast.success('Pushed database to Dropbox (' + res.name + ')');
+    } catch (err) {
+      gaw.toast.error('Push failed: ' + (err.message || String(err)));
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
+  const handlePullNow = async () => {
+    const remote = gaw.dropbox.getCurrentRemoteFile();
+    if (!remote) {
+      gaw.toast.warning('No active remote file selected. Please select a database from the browser tab.');
+      return;
+    }
+    const confirmed = await gaw.dialog.confirm(
+      'Are you sure you want to pull from Dropbox? Any unsaved local edits will be replaced with the remote version.'
+    );
+    if (!confirmed) return;
+
+    setIsPulling(true);
+    try {
+      await gaw.dropbox.downloadFile(remote);
+      gaw.toast.success('Successfully pulled ' + remote.name + ' from Dropbox!');
+    } catch (err) {
+      gaw.toast.error('Pull failed: ' + (err.message || String(err)));
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const handleLoadRemoteFile = async (file) => {
+    const confirmed = await gaw.dialog.confirm(
+      'Load ' + file.name + ' into GAW? This will switch your active database.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await gaw.dropbox.downloadFile(file);
+      gaw.toast.success('Loaded ' + file.name + ' from Dropbox!');
+    } catch (err) {
+      gaw.toast.error('Failed to load file: ' + (err.message || String(err)));
+    }
+  };
+
+  const handleDisconnect = async () => {
+    const confirmed = await gaw.dialog.confirm('Disconnect Dropbox account and stop cloud sync?');
+    if (confirmed) {
+      gaw.dropbox.disconnect();
+      gaw.toast.info('Disconnected from Dropbox.');
+    }
+  };
+
+  const handleIntervalChange = (val) => {
+    const num = parseInt(val, 10);
+    setAutoInterval(num);
+    gaw.dropbox.setAutoSyncInterval(num);
+    gaw.toast.info('Dropbox auto-sync interval set to ' + (num === 0 ? 'Off' : num + ' seconds'));
+  };
+
+  const handleToggleAuto = (enabled) => {
+    setAutoEnabled(enabled);
+    gaw.dropbox.setAutoSyncEnabled(enabled);
+    gaw.toast.info('Dropbox auto-sync ' + (enabled ? 'enabled' : 'disabled'));
+  };
+
+  const handleSetAsActiveTarget = () => {
+    gaw.dropbox.setActiveTarget('dropbox');
+    gaw.toast.success('Dropbox is now the primary active sync target!');
+  };
+
+  const isDropboxActive = storageMeta.activeTarget === 'dropbox';
+  const lastSyncDate = config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleString() : 'Never synced in this session';
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100">
+      {/* Top Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border border-blue-800/50 rounded-2xl shadow-xl backdrop-blur">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-400">
+            <Cloud className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white">Dropbox Cloud Synchronization</h1>
+              {config.connected ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 border border-emerald-700/60 text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Connected
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 border border-amber-700/60 text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> Disconnected
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Securely synchronize your SQLite database file with your personal or enterprise Dropbox storage.
+            </p>
+          </div>
+        </div>
+
+        {/* Account / Disconnect */}
+        {config.connected && (
+          <div className="flex items-center gap-3">
+            <div className="text-right text-xs">
+              <p className="font-semibold text-white">{config.accountName || 'Dropbox User'}</p>
+              <p className="text-[11px] text-slate-400">{config.accountEmail || ''}</p>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              className="px-3 py-1.5 rounded-lg border border-red-800/60 bg-red-950/40 hover:bg-red-900/60 text-red-300 text-xs font-medium transition"
+            >
+              Disconnect
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Target Coordination Status Banner */}
+      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (isDropboxActive ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-200' : 'bg-amber-950/30 border-amber-700/50 text-amber-200')}>
+        <div className="flex items-center gap-2.5">
+          {isDropboxActive ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <HardDrive className="w-4 h-4 text-amber-400" />}
+          <div>
+            <p className="font-bold">
+              {isDropboxActive
+                ? 'Dropbox is currently your Primary Active Sync Target'
+                : 'Current syncing is with a Local Disk File, not Dropbox'}
+            </p>
+            <p className="text-[11px] opacity-80">
+              {isDropboxActive
+                ? 'Automatic background sync periodically flushes database mutations to Dropbox.'
+                : 'Dropbox automatic background sync is paused so it will not overwrite your local disk edits.'}
+            </p>
+          </div>
+        </div>
+        {!isDropboxActive && (
+          <button
+            onClick={handleSetAsActiveTarget}
+            className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow transition active:scale-95"
+          >
+            Set Dropbox as Primary Sync Target
+          </button>
+        )}
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 text-xs">
+        <button
+          onClick={() => setActiveTab('sync')}
+          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (activeTab === 'sync' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800')}
+        >
+          Database Sync & Telemetry
+        </button>
+        <button
+          onClick={() => setActiveTab('browser')}
+          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (activeTab === 'browser' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800')}
+        >
+          Dropbox File Browser ({remoteFiles.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (activeTab === 'settings' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800')}
+        >
+          Connection & API Keys
+        </button>
+      </div>
+
+      {/* Tab 1: Database Sync & Telemetry */}
+      {activeTab === 'sync' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Card A: Active Database Status */}
+          <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Database className="w-4 h-4 text-blue-400" />
+              <span>Active Database Telemetry</span>
+            </h2>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+                <span className="text-slate-400">Database Name:</span>
+                <span className="font-mono font-semibold text-white">{storageMeta.fileName}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+                <span className="text-slate-400">Remote Dropbox Path:</span>
+                <span className="font-mono text-blue-300">
+                  {gaw.dropbox.getCurrentRemoteFile()?.path_display || '/' + storageMeta.fileName}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+                <span className="text-slate-400">Database Size:</span>
+                <span className="font-mono text-slate-200">{(storageMeta.fileSize / 1024).toFixed(1)} KB</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+                <span className="text-slate-400">Last Synced to Dropbox:</span>
+                <span className="font-mono text-emerald-400">{lastSyncDate}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-400">Sync Status:</span>
+                <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (storageMeta.syncStatus === 'dirty' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800')}>
+                  {storageMeta.syncStatus === 'dirty' ? 'Unsynced Local Edits' : 'Clean / Synced'}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handlePushNow}
+                disabled={isPushing || !config.connected}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
+              >
+                <ArrowUpRight className="w-4 h-4" />
+                <span>{isPushing ? 'Pushing...' : 'Push to Dropbox Now'}</span>
+              </button>
+              <button
+                onClick={handlePullNow}
+                disabled={isPulling || !config.connected}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+              >
+                <ArrowDownLeft className="w-4 h-4" />
+                <span>{isPulling ? 'Pulling...' : 'Pull from Dropbox'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card B: Auto-Sync Settings */}
+          <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-indigo-400" />
+              <span>Automatic Sync Schedule</span>
+            </h2>
+
+            <p className="text-xs text-slate-400">
+              When Dropbox is the primary active target, the background sync engine automatically pushes local changes to your cloud folder.
+            </p>
+
+            <div className="space-y-4 pt-2">
+              <label className="flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
+                <div>
+                  <p className="text-xs font-semibold text-white">Enable Cloud Auto-Sync</p>
+                  <p className="text-[11px] text-slate-400">Periodically upload changes while you work</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={autoEnabled}
+                  onChange={(e) => handleToggleAuto(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-300 font-medium">Sync Frequency Interval:</label>
+                <select
+                  value={autoInterval}
+                  onChange={(e) => handleIntervalChange(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+                >
+                  <option value={10}>Every 10 seconds (High frequency)</option>
+                  <option value={30}>Every 30 seconds (Standard)</option>
+                  <option value={60}>Every 60 seconds (Recommended)</option>
+                  <option value={300}>Every 5 minutes</option>
+                  <option value={900}>Every 15 minutes</option>
+                  <option value={0}>Manual only (Off)</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-blue-950/30 border border-blue-800/40 rounded-lg text-[11px] text-blue-300 flex items-start gap-2">
+                <RefreshCw className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  Automatic sync applies seamless overwrite to <code className="text-white font-mono">/{storageMeta.fileName}</code>.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Remote Dropbox File Browser */}
+      {activeTab === 'browser' && (
+        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Folder className="w-4 h-4 text-amber-400" />
+                <span>Database Files on Dropbox</span>
+              </h2>
+              <p className="text-xs text-slate-400">Browse and open any SQLite database stored in your Dropbox account.</p>
+            </div>
+            <button
+              onClick={loadRemoteFiles}
+              disabled={loadingFiles || !config.connected}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition"
+            >
+              <RefreshCw className={'w-3.5 h-3.5 ' + (loadingFiles ? 'animate-spin' : '')} />
+              <span>Refresh Files</span>
+            </button>
+          </div>
+
+          {!config.connected ? (
+            <div className="p-8 text-center text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl">
+              <Cloud className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p>Connect your Dropbox account in the "Connection & API Keys" tab to browse remote databases.</p>
+            </div>
+          ) : loadingFiles ? (
+            <div className="p-8 text-center text-xs text-slate-400">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-400 mb-2" />
+              <p>Scanning Dropbox for SQLite databases...</p>
+            </div>
+          ) : remoteFiles.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl">
+              <p>No SQLite files (*.db, *.sqlite, *.sqlite3) found in Dropbox root.</p>
+              <button
+                onClick={handlePushNow}
+                className="mt-3 px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-semibold"
+              >
+                Upload Current Database as First File
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800/80">
+              {remoteFiles.map((file) => (
+                <div key={file.id} className="py-3 flex items-center justify-between hover:bg-slate-900/50 px-3 rounded-lg transition">
+                  <div className="flex items-center gap-3">
+                    <Database className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-white">{file.name}</p>
+                      <p className="text-[11px] text-slate-400 font-mono">
+                        {(file.size / 1024).toFixed(1)} KB • Modified: {new Date(file.server_modified).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleLoadRemoteFile(file)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition active:scale-95"
+                  >
+                    Open in GAW
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 3: Connection & API Keys */}
+      {activeTab === 'settings' && (
+        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-5">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <Key className="w-4 h-4 text-amber-400" />
+            <span>Dropbox API Credentials & Authentication</span>
+          </h2>
+
+          <div className="space-y-4 max-w-xl">
+            {/* Method 1: Personal Access Token */}
+            <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-blue-400" />
+                <span>Method 1: Direct Access Token (Instant)</span>
+              </span>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Paste your Dropbox App Generated Access Token. This immediately connects GAW directly to your Dropbox app folder without OAuth redirects.
+              </p>
+
+              <div className="relative">
+                <input
+                  type={showToken ? 'text' : 'password'}
+                  placeholder="sl.u.AFlk... or Dropbox Access Token"
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                  className="w-full pr-10 pl-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowToken(!showToken)}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
+                >
+                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <button
+                onClick={handleSaveToken}
+                className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95"
+              >
+                Save & Validate Access Token
+              </button>
+            </div>
+
+            {/* Method 2: OAuth 2.0 PKCE */}
+            <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Method 2: OAuth 2.0 App Key</span>
+              </span>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Enter your Dropbox App Key to authenticate through Dropbox's official popup login screen.
+              </p>
+
+              <input
+                type="text"
+                placeholder="Dropbox App Key (Client ID)"
+                value={clientIdInput}
+                onChange={(e) => {
+                  setClientIdInput(e.target.value);
+                  gaw.dropbox.setClientId(e.target.value);
+                }}
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500"
+              />
+
+              <button
+                onClick={() => {
+                  if (!clientIdInput.trim()) {
+                    gaw.toast.warning('Please enter your Dropbox App Key.');
+                    return;
+                  }
+                  gaw.dropbox.initiateOAuthFlow(clientIdInput.trim(), window.location.origin + '/');
+                }}
+                className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95"
+              >
+                Sign In With Dropbox OAuth
+              </button>
+            </div>
+
+            {/* Instructions */}
+            <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl text-xs space-y-2 text-slate-400">
+              <h3 className="font-semibold text-slate-200">How to get a free Dropbox API Key:</h3>
+              <ol className="list-decimal pl-4 space-y-1 text-[11px]">
+                <li>Go to the <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noreferrer" className="text-blue-400 underline inline-flex items-center gap-0.5">Dropbox App Console <ExternalLink className="w-2.5 h-2.5" /></a>.</li>
+                <li>Click <strong>Create App</strong>, choose <strong>Scoped access</strong> &gt; <strong>App folder</strong>.</li>
+                <li>Under <strong>Permissions</strong>, check <code className="text-slate-300">files.content.write</code> and <code className="text-slate-300">files.content.read</code>.</li>
+                <li>Under the <strong>Settings</strong> tab, click <strong>Generate</strong> under Generated access token, and paste it above!</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+`;
+
+export const DEFAULT_LOCAL_STORAGE_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import {
+  HardDrive,
+  Save,
+  FolderOpen,
+  Download,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Database,
+  Cloud,
+  Layers,
+  FileCheck
+} from 'lucide-react';
+
+export default function LocalStoragePlugin({ gaw }) {
+  const [meta, setMeta] = useState(gaw.storage.getMetadata());
+  const [autoInterval, setAutoInterval] = useState(meta.autoSyncIntervalSec || 30);
+  const [autoEnabled, setAutoEnabled] = useState(meta.isAutoSyncEnabled);
+  const [isSaving, setIsSaving] = useState(false);
+  const [tableCount, setTableCount] = useState(0);
+
+  useEffect(() => {
+    const unsub = gaw.storage.onStatusChange((newMeta) => {
+      setMeta(newMeta);
+      setAutoInterval(newMeta.autoSyncIntervalSec);
+      setAutoEnabled(newMeta.isAutoSyncEnabled);
+    });
+
+    try {
+      const res = gaw.db.queryObjects("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+      setTableCount(res[0]?.count || 0);
+    } catch (e) {}
+
+    return unsub;
+  }, []);
+
+  const handleSaveNow = async () => {
+    setIsSaving(true);
+    try {
+      const ok = await gaw.storage.save();
+      if (ok) {
+        gaw.toast.success('Saved database changes to local file!');
+      }
+    } catch (err) {
+      gaw.toast.error('Save failed: ' + (err.message || String(err)));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAs = async () => {
+    try {
+      const ok = await gaw.storage.saveAs();
+      if (ok) {
+        gaw.toast.success('Saved new database copy to disk!');
+      }
+    } catch (err) {
+      gaw.toast.error('Save As failed: ' + (err.message || String(err)));
+    }
+  };
+
+  const handleOpenFile = async () => {
+    try {
+      const ok = await gaw.storage.openFile();
+      if (ok) {
+        gaw.toast.success('Opened local database file successfully!');
+      }
+    } catch (err) {
+      gaw.toast.error('Failed to open file: ' + (err.message || String(err)));
+    }
+  };
+
+  const handleExportDownload = () => {
+    gaw.storage.exportDownload();
+    gaw.toast.success('Exported and downloaded SQLite binary file.');
+  };
+
+  const handleSetPrimaryTarget = () => {
+    gaw.storage.setActiveTarget('local');
+    gaw.toast.success('Local File Storage is now your primary sync target!');
+  };
+
+  const handleIntervalChange = (val) => {
+    const num = parseInt(val, 10);
+    setAutoInterval(num);
+    gaw.storage.setAutoSyncInterval(num);
+    gaw.toast.info('Auto-save interval updated to ' + (num === 0 ? 'Off' : num + ' seconds'));
+  };
+
+  const handleToggleAuto = (enabled) => {
+    setAutoEnabled(enabled);
+    gaw.storage.setAutoSyncEnabled(enabled);
+    gaw.toast.info('Local file auto-save ' + (enabled ? 'enabled' : 'disabled'));
+  };
+
+  const isLocalActive = meta.activeTarget === 'local';
+  const lastSavedFormatted = meta.lastSavedAt
+    ? new Date(meta.lastSavedAt).toLocaleString()
+    : 'Not yet saved in this session';
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100">
+      {/* Top Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-800/50 rounded-2xl shadow-xl backdrop-blur">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-emerald-600/30 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+            <HardDrive className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white">Local File Storage & Disk Sync</h1>
+              {meta.hasFileHandle ? (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 border border-emerald-700/60 text-emerald-400 flex items-center gap-1">
+                  <FileCheck className="w-3 h-3" /> Disk Handle Attached
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-1">
+                  Session Only
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Directly synchronize SQLite changes with your local file system, configure auto-save intervals, and open databases.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleOpenFile}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow transition active:scale-95"
+        >
+          <FolderOpen className="w-4 h-4" />
+          <span>Open Local Database...</span>
+        </button>
+      </div>
+
+      {/* Target Coordination Banner */}
+      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (isLocalActive ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-200' : 'bg-blue-950/30 border-blue-700/50 text-blue-200')}>
+        <div className="flex items-center gap-2.5">
+          {isLocalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Cloud className="w-4 h-4 text-blue-400" />}
+          <div>
+            <p className="font-bold">
+              {isLocalActive
+                ? 'Local File Storage is currently your Primary Active Sync Target'
+                : 'Dropbox connection is currently in active use'}
+            </p>
+            <p className="text-[11px] opacity-80">
+              {isLocalActive
+                ? 'Automatic background saves write directly to your local database file handle.'
+                : 'Assumption: No automatic local syncing is needed while Dropbox is active. You can still save or open local files.'}
+            </p>
+          </div>
+        </div>
+        {!isLocalActive && (
+          <button
+            onClick={handleSetPrimaryTarget}
+            className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95"
+          >
+            Switch Primary Sync to Local File
+          </button>
+        )}
+      </div>
+
+      {/* Content Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Card 1: Storage Telemetry */}
+        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <Database className="w-4 h-4 text-emerald-400" />
+            <span>Database Storage Telemetry</span>
+          </h2>
+
+          <div className="space-y-2.5 text-xs">
+            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span className="text-slate-400">File Name:</span>
+              <span className="font-mono font-semibold text-white">{meta.fileName}</span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span className="text-slate-400">File Handle Path:</span>
+              <span className="font-mono text-emerald-300 truncate max-w-[220px]">
+                {meta.filePath || (meta.hasFileHandle ? 'Active OS File Handle' : 'In-Memory WebAssembly')}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span className="text-slate-400">File Size on Disk:</span>
+              <span className="font-mono text-slate-200">{(meta.fileSize / 1024).toFixed(1)} KB</span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span className="text-slate-400">Active Tables:</span>
+              <span className="font-mono text-slate-200">{tableCount} tables</span>
+            </div>
+            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span className="text-slate-400">Last Saved to Disk:</span>
+              <span className="font-mono text-emerald-400">{lastSavedFormatted}</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-slate-400">Sync Status:</span>
+              <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (meta.syncStatus === 'dirty' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800')}>
+                {meta.syncStatus === 'dirty' ? 'Unsaved Edits in Memory' : 'All Changes Saved to Disk'}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button
+              onClick={handleSaveNow}
+              disabled={isSaving}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'Saving...' : 'Save Now'}</span>
+            </button>
+            <button
+              onClick={handleSaveAs}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Save As...</span>
+            </button>
+            <button
+              onClick={handleExportDownload}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+              title="Download raw .db binary file directly"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export .db</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Card 2: Auto-Save Engine Configuration */}
+        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2">
+            <Clock className="w-4 h-4 text-emerald-400" />
+            <span>Local Auto-Save Engine</span>
+          </h2>
+
+          <p className="text-xs text-slate-400">
+            When enabled and a file handle is attached, GAW automatically flushes unwritten SQLite transactions to disk at the chosen interval.
+          </p>
+
+          <div className="space-y-4 pt-2">
+            <label className="flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
+              <div>
+                <p className="text-xs font-semibold text-white">Enable Auto-Save to Disk</p>
+                <p className="text-[11px] text-slate-400">Automatically persist memory writes to file</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={autoEnabled}
+                onChange={(e) => handleToggleAuto(e.target.checked)}
+                className="w-4 h-4 rounded text-emerald-600 focus:ring-0 cursor-pointer"
+              />
+            </label>
+
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-300 font-medium">Auto-Save Frequency:</label>
+              <select
+                value={autoInterval}
+                onChange={(e) => handleIntervalChange(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+              >
+                <option value={5}>Every 5 seconds (Real-time safety)</option>
+                <option value={10}>Every 10 seconds</option>
+                <option value={30}>Every 30 seconds (Standard)</option>
+                <option value={60}>Every 60 seconds</option>
+                <option value={0}>Manual save only (Disabled)</option>
+              </select>
+            </div>
+
+            <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-lg text-[11px] text-slate-400 space-y-1">
+              <p className="font-semibold text-slate-300">File System Access Note:</p>
+              <p>
+                Browsers maintain an active write lock on your selected file handle during your session. If you switch to Dropbox mode, local auto-saves pause automatically.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+`;
+
+export const DEFAULT_PLUGIN_MANAGER_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+import {
+  Puzzle,
+  Plus,
+  Power,
+  Trash2,
+  Edit3,
+  CheckCircle2,
+  XCircle,
+  Search,
+  Filter,
+  Sparkles,
+  Folder,
+  Upload,
+  Play,
+  RefreshCw,
+  Eye,
+  Shield,
+  Tag,
+  AlertTriangle
+} from 'lucide-react';
+
+export default function PluginManagerPlugin({ gaw }) {
+  const [plugins, setPlugins] = useState([]);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [deleteModalPlugin, setDeleteModalPlugin] = useState(null);
+
+  const loadPlugins = () => {
+    try {
+      const all = gaw.plugins.getAll();
+      setPlugins(all);
+    } catch (e) {
+      gaw.toast.error('Failed to load plugins: ' + (e.message || String(e)));
+    }
+  };
+
+  useEffect(() => {
+    loadPlugins();
+    const unsub = gaw.eventBus.on('db_changed', loadPlugins);
+    return unsub;
+  }, []);
+
+  const categories = useMemo(() => {
+    const set = new Set();
+    plugins.forEach((p) => {
+      if (p.menu_category) set.add(p.menu_category);
+    });
+    return Array.from(set).sort();
+  }, [plugins]);
+
+  const filteredPlugins = useMemo(() => {
+    return plugins.filter((p) => {
+      const matchSearch =
+        (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.description || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.menu_category || '').toLowerCase().includes(search.toLowerCase());
+      const matchCategory = categoryFilter === 'ALL' || p.menu_category === categoryFilter;
+      const matchStatus =
+        statusFilter === 'ALL'
+          ? true
+          : statusFilter === 'ACTIVE'
+          ? p.enabled !== 0
+          : p.enabled === 0;
+      return matchSearch && matchCategory && matchStatus;
+    });
+  }, [plugins, search, categoryFilter, statusFilter]);
+
+  const activeCount = plugins.filter((p) => p.enabled !== 0).length;
+  const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
+
+  const handleToggleActive = (plugin) => {
+    const nextState = plugin.enabled === 0 ? true : false;
+    gaw.plugins.toggleEnabled(plugin.id, nextState);
+    loadPlugins();
+    gaw.toast.success(
+      'Plugin "' + plugin.name + '" is now ' + (nextState ? 'Active (visible in sidebar)' : 'Inactive (hidden from sidebar)')
+    );
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteModalPlugin) return;
+    const name = deleteModalPlugin.name;
+    gaw.plugins.delete(deleteModalPlugin.id);
+    setDeleteModalPlugin(null);
+    loadPlugins();
+    gaw.toast.success('Removed plugin "' + name + '" from application database.');
+  };
+
+  const handleDirectImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result || '';
+        const baseName = file.name
+          .replace(/\.(tsx|ts|jsx|js|json)$/i, '')
+          .replace(/[_-]+/g, ' ')
+          .replace(/\b\w/g, (char) => char.toUpperCase());
+        const id = 'plugin_' + file.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        gaw.plugins.importPlugin({
+          id,
+          name: baseName,
+          version: '1.0.0',
+          enabled: 1, // Active by default
+          icon: 'Puzzle',
+          menu_category: 'Custom',
+          route: '/' + id,
+          description: 'Imported from local file ' + file.name,
+          code: text,
+        });
+        loadPlugins();
+        gaw.toast.success('Imported "' + baseName + '" successfully (Active by default)');
+      } catch (err) {
+        gaw.toast.error('Import failed: ' + (err.message || String(err)));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleCreateBlankPlugin = () => {
+    const randomId = Math.floor(100 + Math.random() * 900);
+    const id = 'plugin_custom_' + randomId;
+    const name = 'New Custom Plugin ' + randomId;
+    const blankCode = \`import React, { useState } from 'react';
+import { Sparkles, Database } from 'lucide-react';
+
+export default function CustomPlugin({ gaw }) {
+  const [tables] = useState(() => gaw.db.getTables());
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6 text-slate-100">
+      <div className="p-5 bg-slate-950/80 border border-indigo-700/50 rounded-2xl shadow-xl">
+        <h1 className="text-xl font-bold text-white flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-indigo-400" />
+          <span>\${name}</span>
+        </h1>
+        <p className="text-xs text-slate-300 mt-1">
+          Edit this TSX component in the internal IDE. It has full access to the SQLite engine via \`gaw.db\`.
+        </p>
+      </div>
+
+      <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-2">
+        <h3 className="font-semibold text-slate-200">Database Tables ({tables.length}):</h3>
+        <div className="flex flex-wrap gap-2">
+          {tables.map(t => (
+            <span key={t} className="px-2.5 py-1 rounded bg-slate-950 border border-slate-700 text-indigo-300 font-mono">
+              {t}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}\`;
+    gaw.plugins.importPlugin({
+      id,
+      name,
+      version: '1.0.0',
+      enabled: 1, // Active by default
+      icon: 'Puzzle',
+      menu_category: 'Custom',
+      route: '/' + id,
+      description: 'Custom React TSX plugin component',
+      code: blankCode,
+    });
+    loadPlugins();
+    gaw.toast.success('Created "' + name + '"! Opening in IDE...');
+    gaw.plugins.openInIDE(id, name);
+  };
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto space-y-6 text-slate-100">
+      {/* Header Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-purple-950/70 to-indigo-950/70 border border-purple-800/50 rounded-2xl shadow-xl backdrop-blur">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-400">
+            <Puzzle className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white">Dynamic Plugin Registry & Manager</h1>
+            <p className="text-xs text-slate-300 mt-0.5">
+              Manage runtime TSX plugins, toggle active/inactive visibility, import from disk or Dropbox, and edit code.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer">
+            <Upload className="w-4 h-4" />
+            <span>Import Plugin File...</span>
+            <input
+              type="file"
+              accept=".tsx,.ts,.jsx,.js,.json"
+              className="hidden"
+              onChange={handleDirectImportFile}
+            />
+          </label>
+          <button
+            onClick={handleCreateBlankPlugin}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow transition active:scale-95"
+            title="Create a new blank plugin and edit in IDE"
+          >
+            <Plus className="w-4 h-4 text-emerald-400" />
+            <span>New Blank Plugin</span>
+          </button>
+          <button
+            onClick={() => gaw.plugins.openAddModal()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow transition active:scale-95"
+            title="Open Guided Import Wizard"
+          >
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            <span>Import Wizard...</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
+          <span className="text-[11px] text-slate-400 font-medium">Total Plugins</span>
+          <p className="text-xl font-bold text-white">{plugins.length}</p>
+        </div>
+        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
+          <span className="text-[11px] text-emerald-400 font-medium">Active Plugins</span>
+          <p className="text-xl font-bold text-emerald-400">{activeCount}</p>
+        </div>
+        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
+          <span className="text-[11px] text-slate-400 font-medium">Inactive (Hidden)</span>
+          <p className="text-xl font-bold text-slate-300">{inactiveCount}</p>
+        </div>
+        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
+          <span className="text-[11px] text-purple-400 font-medium">Categories</span>
+          <p className="text-xl font-bold text-purple-400">{categories.length}</p>
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-xs">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search plugins by name, category, or description..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Status Filter */}
+          <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (statusFilter === 'ALL' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white')}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setStatusFilter('ACTIVE')}
+              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (statusFilter === 'ACTIVE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white')}
+            >
+              Active ({activeCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter('INACTIVE')}
+              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (statusFilter === 'INACTIVE' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white')}
+            >
+              Inactive ({inactiveCount})
+            </button>
+          </div>
+
+          {/* Category Filter */}
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs focus:outline-none"
+          >
+            <option value="ALL">All Categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Plugins Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {filteredPlugins.map((p) => {
+          const isActive = p.enabled !== 0;
+          return (
+            <div
+              key={p.id}
+              className={'p-5 rounded-xl border transition-all flex flex-col justify-between ' + (isActive ? 'bg-slate-950/80 border-slate-800/90 shadow-md hover:border-indigo-500/50' : 'bg-slate-950/40 border-slate-800/40 opacity-70')}
+            >
+              <div className="space-y-3">
+                {/* Header: Title, Category, Toggle */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-sm text-white">{p.name}</h3>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-slate-400">
+                        v{p.version || '1.0.0'}
+                      </span>
+                    </div>
+                    <span className="inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-950/80 border border-indigo-700/50 text-indigo-300">
+                      {p.menu_category || 'Custom'}
+                    </span>
+                  </div>
+
+                  {/* Active / Inactive Switch */}
+                  <button
+                    onClick={() => handleToggleActive(p)}
+                    className={'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition active:scale-95 ' + (isActive ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-400')}
+                    title={isActive ? 'Click to make Inactive (hide from sidebar)' : 'Click to make Active (show in sidebar)'}
+                  >
+                    <Power className="w-3 h-3" />
+                    <span>{isActive ? 'Active' : 'Inactive'}</span>
+                  </button>
+                </div>
+
+                {/* Description */}
+                <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                  {p.description || 'Dynamic client-compiled TSX plugin component.'}
+                </p>
+
+                {/* Route & Metadata */}
+                <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                  <span>ID: {p.id}</span>
+                  <span>•</span>
+                  <span>Route: {p.route || '/' + p.id}</span>
+                </div>
+              </div>
+
+              {/* Actions Footer */}
+              <div className="pt-4 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => gaw.navigation.openPlugin(p.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition active:scale-95"
+                  >
+                    <Play className="w-3 h-3 fill-white" />
+                    <span>Open</span>
+                  </button>
+                  <button
+                    onClick={() => gaw.plugins.openInIDE(p.id, p.name)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 text-xs font-semibold transition active:scale-95"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit in IDE</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setDeleteModalPlugin(p)}
+                  className="p-1.5 rounded-lg hover:bg-red-950/60 text-slate-500 hover:text-red-400 transition"
+                  title="Delete plugin from app database"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalPlugin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-red-800/80 rounded-2xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="w-10 h-10 rounded-full bg-red-950/80 border border-red-800/80 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Plugin from App?</h3>
+                <p className="text-xs text-slate-400">{deleteModalPlugin.name}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300">
+              <p className="font-semibold text-amber-300">Safe Deletion Guarantee:</p>
+              <p className="leading-relaxed">
+                Only the plugin record inside this application's SQLite database (<code className="text-slate-100 font-mono">t_plugins</code>) will be removed.
+              </p>
+              <p className="text-slate-400 text-[11px]">
+                Your original source file on local disk or Dropbox will <strong>NOT</strong> be deleted or touched.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteModalPlugin(null)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow transition active:scale-95"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+`;
+

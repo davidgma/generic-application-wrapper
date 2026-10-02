@@ -1,5 +1,6 @@
 import React from 'react';
 import { QueryResult, TableSchema } from './sqlite';
+import { StorageMetadata, DropboxConfig, StorageTarget } from './storage';
 
 export interface PluginRecord {
   id: string;
@@ -44,11 +45,51 @@ export interface GAWNavigationApi {
   openSpreadsheet: (data: { columns: string[]; values: any[][] }, sheetName?: string) => void;
   openReport: (reportId: string) => void;
   openPlugin: (pluginId: string) => void;
+  openIDE: (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string }) => void;
 }
 
 export interface GAWEventBusApi {
   on: (event: string, callback: (...args: any[]) => void) => () => void;
   emit: (event: string, ...args: any[]) => void;
+}
+
+export interface GAWStorageApi {
+  getMetadata: () => StorageMetadata;
+  save: () => Promise<boolean>;
+  saveAs: (suggestedName?: string) => Promise<boolean>;
+  openFile: () => Promise<boolean>;
+  exportDownload: (fileName?: string) => void;
+  setAutoSyncInterval: (seconds: number) => void;
+  setAutoSyncEnabled: (enabled: boolean) => void;
+  setActiveTarget: (target: StorageTarget) => void;
+  onStatusChange: (listener: (meta: StorageMetadata) => void) => () => void;
+}
+
+export interface GAWDropboxApi {
+  getConfig: () => DropboxConfig;
+  setAccessToken: (token: string) => Promise<boolean>;
+  setClientId: (clientId: string) => void;
+  disconnect: () => void;
+  validateToken: () => Promise<boolean>;
+  initiateOAuthFlow: (clientId: string, redirectUri: string) => Promise<void>;
+  listDatabaseFiles: (folderPath?: string) => Promise<any[]>;
+  downloadFile: (fileItem: any) => Promise<boolean>;
+  uploadActiveDatabase: (targetPath?: string) => Promise<any>;
+  setAutoSyncInterval: (seconds: number) => void;
+  setAutoSyncEnabled: (enabled: boolean) => void;
+  setActiveTarget: (target: StorageTarget) => void;
+  subscribe: (listener: (cfg: DropboxConfig) => void) => () => void;
+  getCurrentRemoteFile: () => any;
+  getLastSyncTime: () => Date | null;
+}
+
+export interface GAWPluginsApi {
+  getAll: () => PluginRecord[];
+  toggleEnabled: (pluginId: string, enabled: boolean) => void;
+  delete: (pluginId: string) => void;
+  importPlugin: (plugin: Partial<PluginRecord>) => void;
+  openInIDE: (pluginId: string, name?: string) => void;
+  openAddModal: () => void;
 }
 
 export interface GAWContext {
@@ -59,6 +100,9 @@ export interface GAWContext {
   eventBus: GAWEventBusApi;
   theme: 'vs-dark' | 'vs-light';
   plugin: PluginRecord;
+  storage: GAWStorageApi;
+  dropbox: GAWDropboxApi;
+  plugins: GAWPluginsApi;
 }
 
 export type GAWPluginComponent = React.ComponentType<{ gaw: GAWContext }>;

@@ -137,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [reports, search]);
 
   const filteredPlugins = useMemo(() => {
-    return plugins.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+    return plugins.filter((p) => p.enabled !== 0 && p.name.toLowerCase().includes(search.toLowerCase()));
   }, [plugins, search]);
 
   if (!isOpen) return null;
