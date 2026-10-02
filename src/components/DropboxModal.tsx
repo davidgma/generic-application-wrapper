@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Cloud,
   Download,
@@ -10,6 +10,8 @@ import {
   Key,
   Folder,
   File,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { DropboxSyncEngine, DropboxFileItem } from '../engine/dropboxSync';
 import { DropboxConfig } from '../types/storage';
@@ -27,6 +29,45 @@ export const DropboxModal: React.FC<DropboxModalProps> = ({ onClose, onFileLoade
   const [clientIdInput, setClientIdInput] = useState(config.clientId || '');
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [redirectUriOption, setRedirectUriOption] = useState<'callback' | 'root_slash' | 'root_noslash' | 'custom'>('callback');
+  const [customRedirectUri, setCustomRedirectUri] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const defaultCallbackUri = `${window.location.origin}/auth/callback`;
+  const rootSlashUri = `${window.location.origin}/`;
+  const rootNoSlashUri = `${window.location.origin}`;
+
+  const activeRedirectUri = useMemo(() => {
+    if (redirectUriOption === 'callback') return defaultCallbackUri;
+    if (redirectUriOption === 'root_slash') return rootSlashUri;
+    if (redirectUriOption === 'root_noslash') return rootNoSlashUri;
+    return customRedirectUri.trim() || defaultCallbackUri;
+  }, [redirectUriOption, customRedirectUri, defaultCallbackUri, rootSlashUri, rootNoSlashUri]);
+
+  // Listen for OAuth code from popup window
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'DROPBOX_OAUTH_CODE' && event.data.code) {
+        setLoading(true);
+        setStatusMsg('Exchanging authorization code with Dropbox...');
+        try {
+          const success = await dropbox.exchangeCode(event.data.code, activeRedirectUri);
+          if (success) {
+            setStatusMsg('Connected to Dropbox successfully!');
+            await loadFiles();
+          } else {
+            setStatusMsg('Failed to validate token after code exchange.');
+          }
+        } catch (err: any) {
+          setStatusMsg(`OAuth failed: ${err.message}`);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [activeRedirectUri]);
 
   useEffect(() => {
     const unsub = dropbox.subscribe((cfg) => {
@@ -76,9 +117,9 @@ export const DropboxModal: React.FC<DropboxModalProps> = ({ onClose, onFileLoade
       alert('Please enter your Dropbox App Key (Client ID)');
       return;
     }
-    const redirectUri = `${window.location.origin}/auth/callback`;
     dropbox.setClientId(clientIdInput);
-    await dropbox.initiateOAuthFlow(clientIdInput, redirectUri);
+    setStatusMsg(`Opening Dropbox authorization with redirect URI: ${activeRedirectUri}`);
+    await dropbox.initiateOAuthFlow(clientIdInput, activeRedirectUri);
   };
 
   const handleDownload = async (fileItem: DropboxFileItem) => {
@@ -171,24 +212,107 @@ export const DropboxModal: React.FC<DropboxModalProps> = ({ onClose, onFileLoade
               </form>
 
               {/* OAuth PKCE Flow */}
-              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-                <span className="font-semibold text-white block">Or Connect via OAuth PKCE (Client ID)</span>
-                <div className="flex gap-2">
+              <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-white block">Or Connect via OAuth PKCE (Client ID)</span>
+                  <a
+                    href="https://www.dropbox.com/developers/apps"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
+                  >
+                    <span>Dropbox App Console</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                {/* App Key (Client ID) */}
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1 font-medium">
+                    Dropbox App Key (Client ID):
+                  </label>
                   <input
                     type="text"
-                    placeholder="Dropbox App Key (Client ID)"
+                    placeholder="e.g. k9v3m8abc123xyz"
                     value={clientIdInput}
                     onChange={(e) => setClientIdInput(e.target.value)}
-                    className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-xs font-mono"
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
                   />
-                  <button
-                    type="button"
-                    onClick={handlePKCEAuth}
-                    className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium"
-                  >
-                    Launch Auth
-                  </button>
                 </div>
+
+                {/* Redirect URI configuration */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-slate-400 font-medium">
+                      Redirect URI (must match your Dropbox settings):
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeRedirectUri);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 transition"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="w-3 h-3 text-emerald-400" />
+                          <span className="text-emerald-400 font-semibold">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          <span>Copy URI</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={redirectUriOption}
+                      onChange={(e) => setRedirectUriOption(e.target.value as any)}
+                      className="px-2 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-200 text-xs focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="callback">/auth/callback (Standard)</option>
+                      <option value="root_slash">/ (Root with slash)</option>
+                      <option value="root_noslash">Root (no slash)</option>
+                      <option value="custom">Custom URI...</option>
+                    </select>
+
+                    {redirectUriOption === 'custom' ? (
+                      <input
+                        type="text"
+                        placeholder="https://..."
+                        value={customRedirectUri}
+                        onChange={(e) => setCustomRedirectUri(e.target.value)}
+                        className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-xs font-mono focus:outline-none focus:border-indigo-500"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        readOnly
+                        value={activeRedirectUri}
+                        className="flex-1 px-3 py-1.5 bg-slate-900/60 border border-slate-800 rounded text-slate-300 text-xs font-mono select-all cursor-text"
+                      />
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Paste this exact URI into your Dropbox App settings under{' '}
+                    <span className="text-indigo-300 font-mono">OAuth 2 &gt; Redirect URIs</span>.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handlePKCEAuth}
+                  disabled={loading || !clientIdInput.trim()}
+                  className="w-full py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition disabled:opacity-50"
+                >
+                  Launch Dropbox Authentication
+                </button>
               </div>
             </div>
           )}

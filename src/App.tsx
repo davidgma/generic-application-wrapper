@@ -112,6 +112,43 @@ export default function App() {
     [addToast]
   );
 
+  // Handle OAuth callback (Dropbox PKCE)
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    const isAuthCallback = window.location.pathname.startsWith('/auth/callback') || searchParams.has('code');
+
+    if (code && isAuthCallback) {
+      if (window.opener) {
+        try {
+          window.opener.postMessage({ type: 'DROPBOX_OAUTH_CODE', code }, '*');
+        } catch (e) {
+          console.error('Failed to postMessage to opener:', e);
+        }
+        window.close();
+      } else {
+        const dropbox = DropboxSyncEngine.getInstance();
+        const storedRedirect =
+          localStorage.getItem('dropbox_redirect_uri') || `${window.location.origin}/auth/callback`;
+        dropbox
+          .exchangeCode(code, storedRedirect)
+          .then((success) => {
+            if (success) {
+              addToast('success', 'Connected to Dropbox successfully!');
+            } else {
+              addToast('error', 'Dropbox connection failed: Token validation error.');
+            }
+          })
+          .catch((err: any) => {
+            addToast('error', `Dropbox connection failed: ${err.message}`);
+          })
+          .finally(() => {
+            window.history.replaceState({}, '', '/');
+          });
+      }
+    }
+  }, [addToast]);
+
   // Dialog API
   const dialogApi = useMemo(
     () => ({

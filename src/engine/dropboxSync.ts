@@ -157,6 +157,10 @@ export class DropboxSyncEngine {
     const { verifier, challenge } = await DropboxSyncEngine.generatePKCE();
     sessionStorage.setItem('dropbox_code_verifier', verifier);
     sessionStorage.setItem('dropbox_client_id', clientId);
+    sessionStorage.setItem('dropbox_redirect_uri', redirectUri);
+    localStorage.setItem('dropbox_code_verifier', verifier);
+    localStorage.setItem('dropbox_client_id', clientId);
+    localStorage.setItem('dropbox_redirect_uri', redirectUri);
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -167,12 +171,21 @@ export class DropboxSyncEngine {
       token_access_type: 'offline',
     });
 
-    window.open(`https://www.dropbox.com/oauth2/authorize?${params.toString()}`, '_blank', 'width=600,height=700');
+    const authUrl = `https://www.dropbox.com/oauth2/authorize?${params.toString()}`;
+    const popup = window.open(authUrl, 'dropbox_oauth', 'width=600,height=700');
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      window.location.href = authUrl;
+    }
   }
 
-  public async exchangeCode(code: string, redirectUri: string): Promise<boolean> {
-    const verifier = sessionStorage.getItem('dropbox_code_verifier');
-    const clientId = sessionStorage.getItem('dropbox_client_id') || this.config.clientId;
+  public async exchangeCode(code: string, redirectUri?: string): Promise<boolean> {
+    const verifier = sessionStorage.getItem('dropbox_code_verifier') || localStorage.getItem('dropbox_code_verifier');
+    const clientId = sessionStorage.getItem('dropbox_client_id') || localStorage.getItem('dropbox_client_id') || this.config.clientId;
+    const finalRedirectUri =
+      redirectUri ||
+      sessionStorage.getItem('dropbox_redirect_uri') ||
+      localStorage.getItem('dropbox_redirect_uri') ||
+      `${window.location.origin}/auth/callback`;
 
     if (!verifier || !clientId) throw new Error('Missing PKCE verifier or client ID');
 
@@ -181,7 +194,7 @@ export class DropboxSyncEngine {
       grant_type: 'authorization_code',
       client_id: clientId,
       code_verifier: verifier,
-      redirect_uri: redirectUri,
+      redirect_uri: finalRedirectUri,
     });
 
     const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
@@ -200,7 +213,33 @@ export class DropboxSyncEngine {
     if (data.refresh_token) this.config.refreshToken = data.refresh_token;
     this.config.clientId = clientId;
 
+    sessionStorage.removeItem('dropbox_code_verifier');
+    localStorage.removeItem('dropbox_code_verifier');
+
     return this.validateToken();
+  }
+
+  public async refreshAccessToken(): Promise<boolean> {
+    if (!this.config.refreshToken || !this.config.clientId) return false;
+    try {
+      const params = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: this.config.refreshToken,
+        client_id: this.config.clientId,
+      });
+      const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      this.config.accessToken = data.access_token;
+      this.saveConfig();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   // --- List SQLite Files in Dropbox ---

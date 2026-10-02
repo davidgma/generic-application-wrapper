@@ -17,6 +17,18 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="shortcut icon" href="/favicon.ico" />
+    <script>
+      (function() {
+        if (window.opener && window.location.search && window.location.search.includes('code=')) {
+          var params = new URLSearchParams(window.location.search);
+          var code = params.get('code');
+          if (code) {
+            window.opener.postMessage({ type: 'DROPBOX_OAUTH_CODE', code: code }, '*');
+            window.close();
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
