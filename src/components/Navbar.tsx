@@ -159,12 +159,12 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Desktop Menu Bar (File, Edit, View, Database, Plugins, Tools, Help) */}
-      <div ref={menuBarRef} className={`flex items-center gap-1 px-2 py-0.5 border-t text-xs ${isDark ? 'border-slate-800/80 bg-slate-950/60' : 'border-slate-200 bg-slate-100'}`}>
+      <div ref={menuBarRef} className={`flex items-center gap-1 px-2.5 py-1 border-t text-xs ${isDark ? 'border-slate-800/80 bg-slate-950' : 'border-slate-300 bg-slate-200/60'}`}>
         {/* File Menu */}
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'file' ? null : 'file')}
-            className={`px-2 py-0.5 rounded transition ${openMenu === 'file' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}
+            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'file' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
           >
             File
           </button>
@@ -241,7 +241,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}
-            className={`px-2 py-0.5 rounded transition ${openMenu === 'view' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}
+            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'view' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
           >
             View
           </button>
@@ -285,7 +285,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'db' ? null : 'db')}
-            className={`px-2 py-0.5 rounded transition ${openMenu === 'db' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}
+            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'db' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
           >
             Database
           </button>
@@ -319,7 +319,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'plugins' ? null : 'plugins')}
-            className={`px-2 py-0.5 rounded transition ${openMenu === 'plugins' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}
+            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'plugins' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
           >
             Plugins
           </button>
@@ -353,7 +353,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === 'help' ? null : 'help')}
-            className={`px-2 py-0.5 rounded transition ${openMenu === 'help' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-300'}`}
+            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'help' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
           >
             Help
           </button>

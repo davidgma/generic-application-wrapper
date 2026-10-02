@@ -784,4 +784,65 @@ export class SQLiteEngine {
     const now = new Date().toISOString();
     this.run('INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES (?, ?, ?);', [key, value, now]);
   }
+
+  public isSystemTable(tableName: string): boolean {
+    return (
+      tableName.startsWith('t_') ||
+      tableName.startsWith('sqlite_') ||
+      tableName.startsWith('_gaw_')
+    );
+  }
+
+  public getTableDDL(tableName: string): string {
+    if (!this.db) return '';
+    try {
+      const res = this.query("SELECT sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      if (res.values.length > 0 && res.values[0][0]) {
+        return String(res.values[0][0]);
+      }
+    } catch (e) {
+      console.error('getTableDDL error:', e);
+    }
+    return `-- Table schema definition for "${tableName}" not found.`;
+  }
+
+  public deleteTable(tableName: string): void {
+    if (this.isSystemTable(tableName)) {
+      throw new Error(`Cannot delete system table: ${tableName}`);
+    }
+    this.run(`DROP TABLE IF EXISTS "${tableName}";`);
+    this.notifyChange();
+  }
+
+  public deletePlugin(id: string): void {
+    this.run('DELETE FROM t_plugins WHERE id = ?;', [id]);
+    this.notifyChange();
+  }
+
+  public deleteQuery(id: string): void {
+    this.run('DELETE FROM t_sql_queries WHERE id = ?;', [id]);
+    this.notifyChange();
+  }
+
+  public deleteReport(id: string): void {
+    this.run('DELETE FROM t_reports WHERE id = ?;', [id]);
+    this.notifyChange();
+  }
+
+  public saveReport(report: SavedReport): void {
+    const now = new Date().toISOString();
+    this.run(
+      'INSERT OR REPLACE INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [
+        report.id,
+        report.name,
+        report.description || '',
+        report.query_id || '',
+        report.custom_sql || '',
+        typeof report.config === 'string' ? report.config : JSON.stringify(report.config),
+        report.created_at || now,
+      ]
+    );
+    this.notifyChange();
+  }
 }

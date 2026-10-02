@@ -12,7 +12,7 @@ import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { QueryGrid } from './components/QueryGrid';
-import { GAWIDE } from './components/IDE/GAWIDE';
+import { GAWIDE, TargetTabInfo } from './components/IDE/GAWIDE';
 import { SpreadsheetView } from './components/SpreadsheetView';
 import { ReportViewer } from './components/ReportViewer';
 import { ReportBuilder } from './components/ReportBuilder';
@@ -75,6 +75,17 @@ export default function App() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [showReportBuilder, setShowReportBuilder] = useState(false);
   const [reportToEdit, setReportToEdit] = useState<SavedReport | null>(null);
+
+  // Target tab to open and edit in IDE
+  const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
+
+  // Two-Stage Deletion Confirmation
+  const [deleteTarget, setDeleteTarget] = useState<{
+    stage: 1 | 2;
+    type: 'plugin' | 'table' | 'query' | 'report';
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Spreadsheet Transfer data
   const [spreadsheetInitialSheets, setSpreadsheetInitialSheets] = useState<
@@ -263,6 +274,77 @@ export default function App() {
       console.error('Failed to refresh database state:', e);
     }
   }, []);
+
+  // Open any object in IDE
+  const handleOpenInIDE = useCallback(
+    (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string }) => {
+      if (tab) {
+        setIdeTargetTab({
+          type: tab.type,
+          id: tab.id,
+          name: tab.name,
+          timestamp: Date.now(),
+        });
+      }
+      setActiveView('ide');
+    },
+    []
+  );
+
+  // Trigger two-stage deletion confirmation
+  const handleDeleteObject = useCallback(
+    (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => {
+      if (type === 'table') {
+        const engine = SQLiteEngine.getInstance();
+        if (engine.isSystemTable(name)) {
+          toastApi.error(`Table "${name}" is a protected system table and cannot be deleted.`);
+          return;
+        }
+      }
+      setDeleteTarget({
+        stage: 1,
+        type,
+        id,
+        name,
+      });
+    },
+    [toastApi]
+  );
+
+  // Execute confirmed deletion
+  const executeDeleteObject = useCallback(() => {
+    if (!deleteTarget) return;
+    const { type, id, name } = deleteTarget;
+    const engine = SQLiteEngine.getInstance();
+
+    try {
+      if (type === 'table') {
+        engine.deleteTable(name);
+      } else if (type === 'plugin') {
+        engine.deletePlugin(id);
+      } else if (type === 'query') {
+        engine.deleteQuery(id);
+      } else if (type === 'report') {
+        engine.deleteReport(id);
+      }
+
+      toastApi.success(`Permanently deleted ${type} "${name}".`);
+      refreshDatabaseState();
+
+      if (
+        (type === 'table' && activeView === `table:${name}`) ||
+        (type === 'plugin' && activeView === `plugin:${id}`) ||
+        (type === 'query' && activeView === `query:${id}`) ||
+        (type === 'report' && activeView === `report:${id}`)
+      ) {
+        setActiveView('plugin:plugin_crm');
+      }
+    } catch (err: any) {
+      toastApi.error(`Failed to delete ${type}: ${err.message}`);
+    } finally {
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, toastApi, refreshDatabaseState, activeView]);
 
   // Subscribe to SQLiteEngine internal changes
   useEffect(() => {
@@ -467,7 +549,7 @@ export default function App() {
         onOpenDropbox={() => setShowDropboxModal(true)}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenAI={() => setShowAIModal(true)}
-        onOpenIDE={(tab) => setActiveView('ide')}
+        onOpenIDE={handleOpenInIDE}
         onOpenSpreadsheet={() => handleOpenSpreadsheet()}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         onResetDefault={() => {
@@ -494,11 +576,16 @@ export default function App() {
           onSelectReport={(r) => setActiveView(`report:${r.id}`)}
           onSelectPlugin={(p) => setActiveView(`plugin:${p.id}`)}
           onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-          onOpenIDE={() => setActiveView('ide')}
+          onOpenIDE={handleOpenInIDE}
           onNewReport={() => {
             setReportToEdit(null);
             setShowReportBuilder(true);
           }}
+          onEditReportVisual={(r) => {
+            setReportToEdit(r);
+            setShowReportBuilder(true);
+          }}
+          onDeleteObject={handleDeleteObject}
           onOpenAI={() => setShowAIModal(true)}
           theme={theme}
         />
@@ -514,7 +601,7 @@ export default function App() {
                 pluginId={currentPlugin.id}
                 theme={theme}
                 gawContext={gawContext}
-                onOpenInIDE={() => setActiveView('ide')}
+                onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: currentPlugin.id, name: currentPlugin.name })}
               />
             </div>
           )}
@@ -526,10 +613,25 @@ export default function App() {
                 <span className="font-bold text-white">{activeQueryTitle}</span>
                 {activeView.startsWith('query:') && (
                   <button
-                    onClick={() => setActiveView('ide')}
-                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+                    onClick={() => {
+                      const qId = activeView.replace('query:', '');
+                      const foundQ = queries.find((q) => q.id === qId);
+                      handleOpenInIDE({ type: 'query', id: qId, name: foundQ?.name || activeQueryTitle });
+                    }}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
                   >
                     Edit Query in IDE
+                  </button>
+                )}
+                {activeView.startsWith('table:') && (
+                  <button
+                    onClick={() => {
+                      const tName = activeView.replace('table:', '');
+                      handleOpenInIDE({ type: 'table', name: tName });
+                    }}
+                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                  >
+                    Edit Structure in IDE
                   </button>
                 )}
               </div>
@@ -574,6 +676,7 @@ export default function App() {
           {activeView === 'ide' && (
             <div className="flex-1 overflow-hidden">
               <GAWIDE
+                targetTab={ideTargetTab}
                 onOpenSpreadsheet={handleOpenSpreadsheet}
                 onOpenAI={() => setShowAIModal(true)}
                 theme={theme}
@@ -671,6 +774,98 @@ export default function App() {
           }}
           onClose={() => setShowReportBuilder(false)}
         />
+      )}
+
+      {/* 6. Two-Stage Deletion Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 text-slate-100 flex flex-col space-y-4">
+            {deleteTarget.stage === 1 ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-950/80 border border-amber-600/60 flex items-center justify-center text-amber-400">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white capitalize">
+                      Delete {deleteTarget.type}
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Step 1 of 2: Verify item selection
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs space-y-1">
+                  <p className="text-slate-300">
+                    Are you sure you want to remove this {deleteTarget.type} from the database?
+                  </p>
+                  <p className="font-mono text-amber-400 font-semibold truncate">
+                    {deleteTarget.name}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setDeleteTarget(null)}
+                    className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() =>
+                      setDeleteTarget((prev) => (prev ? { ...prev, stage: 2 } : null))
+                    }
+                    className="px-4 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow transition"
+                  >
+                    Continue to Final Warning...
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-red-950/80 border border-red-600/60 flex items-center justify-center text-red-400">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">
+                      ⚠️ Permanent Deletion Warning
+                    </h3>
+                    <p className="text-xs text-red-400 font-semibold">
+                      Step 2 of 2: Irreversible Action
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-red-950/30 border border-red-800/40 rounded-lg text-xs space-y-2">
+                  <p className="text-red-200">
+                    This action <strong>CANNOT</strong> be undone. The {deleteTarget.type}{' '}
+                    <strong className="text-white font-mono">"{deleteTarget.name}"</strong> will be permanently removed from your SQLite database.
+                  </p>
+                  <p className="text-slate-400 text-[11px]">
+                    Click below to execute the permanent deletion.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setDeleteTarget(null)}
+                    className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition"
+                  >
+                    Keep Object (Cancel)
+                  </button>
+                  <button
+                    onClick={executeDeleteObject}
+                    className="px-4 py-1.5 rounded bg-red-600 hover:bg-red-500 text-white text-xs font-bold shadow-lg shadow-red-950/50 transition"
+                  >
+                    Yes, Permanently Delete
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* In-App Dialog Modal (confirm / alert / prompt) */}
