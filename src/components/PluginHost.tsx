@@ -50,7 +50,9 @@ export const PluginHost: React.FC<PluginHostProps> = ({
 
   return (
     <PluginErrorBoundary pluginName={pluginName} onOpenInIDE={onOpenInIDE}>
-      <Component gaw={gawContext} />
+      <div className="w-full h-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        <Component gaw={gawContext} />
+      </div>
     </PluginErrorBoundary>
   );
 };

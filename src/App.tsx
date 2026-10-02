@@ -34,6 +34,7 @@ import {
   Table as TableIcon,
   Play,
   RotateCcw,
+  Cloud,
 } from 'lucide-react';
 
 interface ToastItem {
@@ -82,6 +83,8 @@ export default function App() {
   const [showReportBuilder, setShowReportBuilder] = useState(false);
   const [reportToEdit, setReportToEdit] = useState<SavedReport | null>(null);
   const [showAddPluginModal, setShowAddPluginModal] = useState(false);
+  const [oauthCallbackStatus, setOauthCallbackStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [oauthCallbackError, setOauthCallbackError] = useState<string>('');
 
   // Target tab to open and edit in IDE
   const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
@@ -159,43 +162,6 @@ export default function App() {
     }),
     [addToast]
   );
-
-  // Handle OAuth callback (Dropbox PKCE)
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const code = searchParams.get('code');
-    const isAuthCallback = window.location.pathname.startsWith('/auth/callback') || searchParams.has('code');
-
-    if (code && isAuthCallback) {
-      if (window.opener) {
-        try {
-          window.opener.postMessage({ type: 'DROPBOX_OAUTH_CODE', code }, '*');
-        } catch (e) {
-          console.error('Failed to postMessage to opener:', e);
-        }
-        window.close();
-      } else {
-        const dropbox = DropboxSyncEngine.getInstance();
-        const storedRedirect =
-          localStorage.getItem('dropbox_redirect_uri') || `${window.location.origin}/auth/callback`;
-        dropbox
-          .exchangeCode(code, storedRedirect)
-          .then((success) => {
-            if (success) {
-              addToast('success', 'Connected to Dropbox successfully!');
-            } else {
-              addToast('error', 'Dropbox connection failed: Token validation error.');
-            }
-          })
-          .catch((err: any) => {
-            addToast('error', `Dropbox connection failed: ${err.message}`);
-          })
-          .finally(() => {
-            window.history.replaceState({}, '', '/');
-          });
-      }
-    }
-  }, [addToast]);
 
   // Dialog API
   const dialogApi = useMemo(
@@ -315,6 +281,124 @@ export default function App() {
     }
   }, []);
 
+  // Automatically connect to previous active storage target on startup (remember local or dropbox)
+  useEffect(() => {
+    dropboxEngine.autoConnectIfActive().then((connected) => {
+      if (connected) {
+        refreshDatabaseState();
+      }
+    });
+  }, [dropboxEngine, refreshDatabaseState]);
+
+  // Handle OAuth callback (Dropbox PKCE) and listen for popup messages
+  useEffect(() => {
+    // 1. Check if the current window was loaded as the OAuth callback redirect
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    const isAuthCallback = window.location.pathname.startsWith('/auth/callback') || searchParams.has('code');
+
+    if (code && isAuthCallback) {
+      setOauthCallbackStatus('processing');
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'DROPBOX_OAUTH_CODE', code }, '*');
+        } catch (e) {
+          console.error('Failed to postMessage to opener:', e);
+        }
+      }
+      localStorage.setItem('dropbox_pending_code', code);
+
+      // Exchange code in current window (handles both popup and direct redirect)
+      const dropbox = DropboxSyncEngine.getInstance();
+      const storedRedirect =
+        sessionStorage.getItem('dropbox_redirect_uri') ||
+        localStorage.getItem('dropbox_redirect_uri') ||
+        `${window.location.origin}/`;
+
+      dropbox
+        .exchangeCode(code, storedRedirect)
+        .then((success) => {
+          if (success) {
+            dropbox.setActiveTarget('dropbox');
+            storageEngine.setActiveTarget('dropbox');
+            setOauthCallbackStatus('success');
+            setTimeout(() => {
+              try {
+                window.close();
+              } catch (e) {}
+            }, 800);
+          } else {
+            setOauthCallbackStatus('error');
+            setOauthCallbackError('Token validation failed after code exchange.');
+          }
+        })
+        .catch((err: any) => {
+          setOauthCallbackStatus('error');
+          setOauthCallbackError(err.message || 'Dropbox connection failed');
+        })
+        .finally(() => {
+          window.history.replaceState({}, '', window.location.pathname || '/');
+        });
+    }
+
+    // 2. Main window listener: receive OAuth code from popup window
+    const handleOAuthMessage = async (event: MessageEvent) => {
+      if (event.data?.type === 'DROPBOX_OAUTH_CODE' && event.data.code) {
+        const dropbox = DropboxSyncEngine.getInstance();
+        const storedRedirect =
+          sessionStorage.getItem('dropbox_redirect_uri') ||
+          localStorage.getItem('dropbox_redirect_uri') ||
+          `${window.location.origin}/`;
+        try {
+          const success = await dropbox.exchangeCode(event.data.code, storedRedirect);
+          if (success) {
+            dropbox.setActiveTarget('dropbox');
+            storageEngine.setActiveTarget('dropbox');
+            addToast('success', 'Connected to Dropbox successfully!');
+            refreshDatabaseState();
+          }
+        } catch (err: any) {
+          addToast('error', `Dropbox connection failed: ${err.message}`);
+        }
+      }
+    };
+
+    // 3. Fallback & Cross-tab sync: storage event listener
+    const handleStorageEvent = async (e: StorageEvent) => {
+      if (e.key === 'gaw_dropbox_auth_broadcast' || e.key === 'gaw_dropbox_config') {
+        dropboxEngine.reloadFromStorage();
+        refreshDatabaseState();
+      }
+      if (e.key === 'dropbox_pending_code' && e.newValue) {
+        const pendingCode = e.newValue;
+        localStorage.removeItem('dropbox_pending_code');
+        const dropbox = DropboxSyncEngine.getInstance();
+        const storedRedirect =
+          sessionStorage.getItem('dropbox_redirect_uri') ||
+          localStorage.getItem('dropbox_redirect_uri') ||
+          `${window.location.origin}/`;
+        try {
+          const success = await dropbox.exchangeCode(pendingCode, storedRedirect);
+          if (success) {
+            dropbox.setActiveTarget('dropbox');
+            storageEngine.setActiveTarget('dropbox');
+            addToast('success', 'Connected to Dropbox successfully!');
+            refreshDatabaseState();
+          }
+        } catch (err: any) {
+          // If already exchanged, ignore gracefully
+        }
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+    window.addEventListener('storage', handleStorageEvent);
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+      window.removeEventListener('storage', handleStorageEvent);
+    };
+  }, [addToast, refreshDatabaseState, storageEngine, dropboxEngine]);
+
   // Open any object in IDE
   const handleOpenInIDE = useCallback(
     (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string; code?: string }) => {
@@ -405,6 +489,20 @@ export default function App() {
     });
     return unsub;
   }, [storageEngine, refreshDatabaseState]);
+
+  // Sync real-time storage & sync target changes
+  useEffect(() => {
+    const unsubStorage = storageEngine.onStatusChange((meta) => {
+      setStorageMeta(meta);
+    });
+    const unsubDropbox = dropboxEngine.subscribe(() => {
+      setStorageMeta(storageEngine.getMetadata());
+    });
+    return () => {
+      unsubStorage();
+      unsubDropbox();
+    };
+  }, [storageEngine, dropboxEngine]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -667,6 +765,55 @@ export default function App() {
     );
   }
 
+  if (oauthCallbackStatus !== 'idle') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-6">
+        <div className="max-w-md w-full p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4 shadow-2xl animate-fade-in">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <Cloud className="w-8 h-8" />
+          </div>
+          <h2 className="text-lg font-bold text-white">Dropbox Authentication</h2>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            {oauthCallbackStatus === 'success'
+              ? 'Successfully authenticated with Dropbox!'
+              : oauthCallbackStatus === 'error'
+              ? oauthCallbackError || 'Authentication failed. Please verify your credentials.'
+              : 'Verifying authorization code and securing session...'}
+          </p>
+          {oauthCallbackStatus === 'success' && (
+            <div className="pt-2 space-y-3">
+              <p className="text-[11px] text-emerald-400 font-semibold">
+                ✓ Connected! You can now close this window and return to your application.
+              </p>
+              <button
+                onClick={() => {
+                  try {
+                    window.close();
+                  } catch (e) {
+                    setOauthCallbackStatus('idle');
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition active:scale-95"
+              >
+                Close Window
+              </button>
+            </div>
+          )}
+          {oauthCallbackStatus === 'error' && (
+            <div className="pt-2">
+              <button
+                onClick={() => setOauthCallbackStatus('idle')}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition active:scale-95"
+              >
+                Return to Application
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (!isEngineReady) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100">
@@ -779,7 +926,7 @@ export default function App() {
         <main className="flex-1 flex flex-col overflow-hidden min-w-0 bg-slate-900">
           {/* View 1: Active Dynamic TSX Plugin */}
           {activeView.startsWith('plugin:') && currentPlugin && (
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col">
               <PluginHost
                 code={currentPlugin.code}
                 pluginName={currentPlugin.name}

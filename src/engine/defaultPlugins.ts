@@ -110,7 +110,7 @@ export default function CustomerCrmPlugin({ gaw }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-100 p-6 overflow-hidden">
+    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 p-6 pb-20">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800">
         <div>
@@ -180,11 +180,11 @@ export default function CustomerCrmPlugin({ gaw }) {
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={\`px-2.5 py-1 text-xs rounded font-medium transition \${
+              className={'px-2.5 py-1 text-xs rounded font-medium transition ' + (
                 statusFilter === st
                   ? 'bg-indigo-600 text-white'
                   : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-              }\`}
+              )}
             >
               {st}
             </button>
@@ -193,7 +193,7 @@ export default function CustomerCrmPlugin({ gaw }) {
       </div>
 
       {/* Table & Detail Split */}
-      <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
         <div className="flex-1 bg-slate-950/60 rounded-lg border border-slate-800 overflow-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-slate-800/90 sticky top-0 text-slate-300 font-semibold border-b border-slate-700">
@@ -211,9 +211,9 @@ export default function CustomerCrmPlugin({ gaw }) {
                 <tr
                   key={c.id}
                   onClick={() => setSelectedCustomer(c)}
-                  className={\`hover:bg-slate-800/50 cursor-pointer transition \${
+                  className={'hover:bg-slate-800/50 cursor-pointer transition ' + (
                     selectedCustomer?.id === c.id ? 'bg-indigo-950/40 border-l-2 border-indigo-500' : ''
-                  }\`}
+                  )}
                 >
                   <td className="py-2 px-3 font-medium text-white">{c.company_name}</td>
                   <td className="py-2 px-3">
@@ -221,15 +221,15 @@ export default function CustomerCrmPlugin({ gaw }) {
                     <div className="text-[10px] text-slate-500">{c.contact_title}</div>
                   </td>
                   <td className="py-2 px-3 text-slate-400">{c.city}, {c.country}</td>
-                  <td className="py-2 px-3 font-mono text-emerald-400">\${Number(c.credit_limit || 0).toLocaleString()}</td>
+                  <td className="py-2 px-3 font-mono text-emerald-400">{'$' + Number(c.credit_limit || 0).toLocaleString()}</td>
                   <td className="py-2 px-3">
-                    <span className={\`px-2 py-0.5 rounded text-[10px] font-semibold \${
+                    <span className={'px-2 py-0.5 rounded text-[10px] font-semibold ' + (
                       c.status === 'ACTIVE'
                         ? 'bg-emerald-500/20 text-emerald-400'
                         : c.status === 'VIP'
                         ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                         : 'bg-amber-500/20 text-amber-400'
-                    }\`}>
+                    )}>
                       {c.status}
                     </span>
                   </td>
@@ -290,7 +290,7 @@ export default function CustomerCrmPlugin({ gaw }) {
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-700/50">
                   <span className="text-slate-400">Credit Limit:</span>
-                  <span className="font-mono text-emerald-400 font-bold">\${Number(selectedCustomer.credit_limit || 0).toLocaleString()}</span>
+                  <span className="font-mono text-emerald-400 font-bold">{'$' + Number(selectedCustomer.credit_limit || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-700/50">
                   <span className="text-slate-400">Account Status:</span>
@@ -491,7 +491,7 @@ export default function InventoryValuatorPlugin({ gaw }) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-100 p-6 overflow-hidden">
+    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 p-6 pb-20">
       <div className="flex items-center justify-between pb-4 border-b border-slate-800">
         <div>
           <h1 className="text-xl font-bold text-white">Inventory Valuation & Reorder Desk</h1>
@@ -520,7 +520,7 @@ export default function InventoryValuatorPlugin({ gaw }) {
         <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
           <span className="text-[11px] font-medium text-slate-400 uppercase">Gross Inventory Value</span>
           <div className="text-2xl font-bold text-emerald-400 mt-1">
-            \${Math.round(valuationStats.totalValue).toLocaleString()}
+            {'$' + Math.round(valuationStats.totalValue).toLocaleString()}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">Current assets on hand</div>
         </div>
@@ -541,7 +541,7 @@ export default function InventoryValuatorPlugin({ gaw }) {
         <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
           <span className="text-[11px] font-medium text-slate-400 uppercase">Avg Unit Cost</span>
           <div className="text-2xl font-bold text-indigo-400 mt-1">
-            \${valuationStats.totalItems ? (valuationStats.totalValue / valuationStats.totalItems).toFixed(2) : 0}
+            {'$' + (valuationStats.totalItems ? (valuationStats.totalValue / valuationStats.totalItems).toFixed(2) : '0.00')}
           </div>
           <div className="text-[11px] text-slate-400 mt-1">Weighted asset average</div>
         </div>
@@ -597,17 +597,17 @@ export default function InventoryValuatorPlugin({ gaw }) {
                   <td className="py-2.5 px-3 font-medium text-white">{p.name}</td>
                   <td className="py-2.5 px-3 font-mono text-slate-400">{p.sku}</td>
                   <td className="py-2.5 px-3 text-indigo-300">{p.category}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-200">\${Number(p.unit_price).toFixed(2)}</td>
+                  <td className="py-2.5 px-3 font-mono text-slate-200">{'$' + Number(p.unit_price).toFixed(2)}</td>
                   <td className="py-2.5 px-3">
-                    <span className={\`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold \${
+                    <span className={'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold ' + (
                       isCritical ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-800 text-slate-300'
-                    }\`}>
+                    )}>
                       {p.units_in_stock}
                       {isCritical && <span className="text-[10px]">⚠️ Low</span>}
                     </span>
                   </td>
                   <td className="py-2.5 px-3 font-mono text-emerald-400">
-                    \${(p.units_in_stock * p.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {'$' + (p.units_in_stock * p.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="py-2.5 px-3 text-right">
                     <button
@@ -672,7 +672,7 @@ export default function ExecutivePulsePlugin({ gaw }) {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-100 p-6 overflow-auto">
+    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 p-6 pb-20">
       <div className="flex items-center justify-between pb-4 border-b border-slate-800">
         <div>
           <h1 className="text-xl font-bold text-white">Executive Pulse & Financial Overview</h1>
@@ -691,7 +691,7 @@ export default function ExecutivePulsePlugin({ gaw }) {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-6">
         <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-900/40 to-slate-800 border border-indigo-500/20 shadow-md">
           <span className="text-[11px] font-semibold text-indigo-300 uppercase">Gross Revenue</span>
-          <div className="text-3xl font-extrabold text-white mt-1">\${metrics.revenue.toLocaleString()}</div>
+          <div className="text-3xl font-extrabold text-white mt-1">{'$' + metrics.revenue.toLocaleString()}</div>
           <span className="text-[11px] text-emerald-400 mt-1 block">▲ +14.2% vs previous period</span>
         </div>
         <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
@@ -701,7 +701,7 @@ export default function ExecutivePulsePlugin({ gaw }) {
         </div>
         <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
           <span className="text-[11px] font-semibold text-slate-400 uppercase">Average Ticket</span>
-          <div className="text-3xl font-extrabold text-indigo-400 mt-1">\${metrics.avgOrder}</div>
+          <div className="text-3xl font-extrabold text-indigo-400 mt-1">{'$' + metrics.avgOrder}</div>
           <span className="text-[11px] text-slate-400 mt-1 block">Per closed order</span>
         </div>
         <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
@@ -735,7 +735,7 @@ export default function ExecutivePulsePlugin({ gaw }) {
                   <td className="py-2.5 px-3 font-medium text-white">{o.company_name}</td>
                   <td className="py-2.5 px-3 text-slate-400">{o.order_date}</td>
                   <td className="py-2.5 px-3">{o.ship_country}</td>
-                  <td className="py-2.5 px-3 font-mono text-emerald-400">\${Number(o.total_amount).toFixed(2)}</td>
+                  <td className="py-2.5 px-3 font-mono text-emerald-400">{'$' + Number(o.total_amount).toFixed(2)}</td>
                   <td className="py-2.5 px-3">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-200 border border-slate-700">
                       {o.status}
@@ -801,11 +801,11 @@ export default function HelloWorldPlugin({ gaw }) {
   const handleSayHello = () => {
     const nextCount = clickCount + 1;
     setClickCount(nextCount);
-    gaw.toast.success(\`Hello, \${userName || 'Friend'}! (Click #\${nextCount})\`);
+    gaw.toast.success('Hello, ' + (userName || 'Friend') + '! (Click #' + nextCount + ')');
   };
 
   const handleDialogDemo = async () => {
-    const ok = await gaw.dialog.confirm(\`Hello \${userName}! Do you want to test an interactive dialog?\`);
+    const ok = await gaw.dialog.confirm('Hello ' + (userName || 'Friend') + '! Do you want to test an interactive dialog?');
     if (ok) {
       gaw.toast.success('You clicked OK in the dialog!');
     } else {
@@ -814,7 +814,7 @@ export default function HelloWorldPlugin({ gaw }) {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-6">
+    <div className="p-8 max-w-4xl mx-auto space-y-6 pb-24">
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border border-indigo-700/50 rounded-2xl p-6 shadow-xl backdrop-blur">
         <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/50">
@@ -952,6 +952,12 @@ export default function DropboxSyncPlugin({ gaw }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (config.accessToken && !config.connected) {
+      gaw.dropbox.validateToken();
+    }
+  }, []);
+
   const loadRemoteFiles = async () => {
     if (!config.connected) return;
     setLoadingFiles(true);
@@ -1062,7 +1068,7 @@ export default function DropboxSyncPlugin({ gaw }) {
   const lastSyncDate = config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleString() : 'Never synced in this session';
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100">
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100 pb-28">
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border border-blue-800/50 rounded-2xl shadow-xl backdrop-blur">
         <div className="flex items-center gap-3.5">
@@ -1396,6 +1402,23 @@ export default function DropboxSyncPlugin({ gaw }) {
                 className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500"
               />
 
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-medium">Redirect URI (add to Dropbox App Console):</label>
+                <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-indigo-300">
+                  <span className="flex-1 truncate select-all">{window.location.origin + '/'}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(window.location.origin + '/');
+                      gaw.toast.info('Copied Redirect URI to clipboard!');
+                    }}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-sans transition"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+
               <button
                 onClick={() => {
                   if (!clientIdInput.trim()) {
@@ -1531,7 +1554,7 @@ export default function LocalStoragePlugin({ gaw }) {
     : 'Not yet saved in this session';
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100">
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100 pb-28">
       {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-800/50 rounded-2xl shadow-xl backdrop-blur">
         <div className="flex items-center gap-3.5">
@@ -1788,6 +1811,10 @@ export default function PluginManagerPlugin({ gaw }) {
   const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
 
   const handleToggleActive = (plugin) => {
+    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage') {
+      gaw.toast.warning('Core system plugin "' + plugin.name + '" must remain active to keep the application operational.');
+      return;
+    }
     const nextState = plugin.enabled === 0 ? true : false;
     gaw.plugins.toggleEnabled(plugin.id, nextState);
     loadPlugins();
@@ -1898,7 +1925,7 @@ export default function PluginManagerPlugin({ gaw }) {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 text-slate-100">
+    <div className="p-6 max-w-6xl mx-auto space-y-6 text-slate-100 pb-28">
       {/* Header Banner */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-purple-950/70 to-indigo-950/70 border border-purple-800/50 rounded-2xl shadow-xl backdrop-blur">
         <div className="flex items-center gap-3.5">
@@ -2041,8 +2068,15 @@ export default function PluginManagerPlugin({ gaw }) {
                   {/* Active / Inactive Switch */}
                   <button
                     onClick={() => handleToggleActive(p)}
-                    className={'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition active:scale-95 ' + (isActive ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-400')}
-                    title={isActive ? 'Click to make Inactive (hide from sidebar)' : 'Click to make Active (show in sidebar)'}
+                    disabled={isProtected}
+                    className={'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition ' + (
+                      isProtected
+                        ? 'bg-emerald-950/40 border-emerald-700/40 text-emerald-400 cursor-not-allowed opacity-90'
+                        : isActive
+                        ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300 active:scale-95'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 active:scale-95'
+                    )}
+                    title={isProtected ? 'Core system plugin must remain active' : isActive ? 'Click to make Inactive (hide from sidebar)' : 'Click to make Active (show in sidebar)'}
                   >
                     <Power className="w-3 h-3" />
                     <span>{isActive ? 'Active' : 'Inactive'}</span>

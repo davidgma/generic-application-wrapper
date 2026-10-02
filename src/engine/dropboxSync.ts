@@ -29,9 +29,13 @@ export class DropboxSyncEngine {
       : 'local';
   private autoSyncTimer: any = null;
   private listeners: Set<(config: DropboxConfig) => void> = new Set();
+  private static processedCodes: Set<string> = new Set();
+  private static activeExchanges: Map<string, Promise<boolean>> = new Map();
+  private broadcastChannel: BroadcastChannel | null = null;
 
   private constructor() {
     this.loadPersistedConfig();
+    this.setupCrossTabSync();
     this.startAutoSync();
   }
 
@@ -42,6 +46,92 @@ export class DropboxSyncEngine {
     return DropboxSyncEngine.instance;
   }
 
+  private setupCrossTabSync(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      if ('BroadcastChannel' in window) {
+        this.broadcastChannel = new BroadcastChannel('gaw_dropbox_auth');
+        this.broadcastChannel.onmessage = (event) => {
+          if (event.data?.type === 'DROPBOX_AUTH_UPDATE' || event.data?.type === 'DROPBOX_AUTH_SUCCESS') {
+            this.loadPersistedConfig();
+            this.notify();
+          }
+        };
+      }
+      window.addEventListener('storage', (e) => {
+        if (
+          e.key === 'gaw_dropbox_config' ||
+          e.key === 'gaw_active_storage_target' ||
+          e.key === 'gaw_dropbox_auth_broadcast'
+        ) {
+          this.loadPersistedConfig();
+          this.notify();
+        }
+      });
+    } catch (err) {
+      console.warn('Cross-tab sync error:', err);
+    }
+  }
+
+  private broadcastUpdate(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      if (this.broadcastChannel) {
+        this.broadcastChannel.postMessage({
+          type: 'DROPBOX_AUTH_UPDATE',
+          config: this.config,
+          activeTarget: this.activeTarget,
+        });
+      }
+      localStorage.setItem('gaw_dropbox_auth_broadcast', Date.now().toString());
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  public reloadFromStorage(): void {
+    this.loadPersistedConfig();
+    this.notify();
+  }
+
+  public async autoConnectIfActive(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+    this.loadPersistedConfig();
+    const prevTarget = (localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local';
+
+    if (this.config.accessToken) {
+      const isValid = await this.validateToken();
+      if (isValid) {
+        if (prevTarget === 'dropbox') {
+          this.setActiveTarget('dropbox');
+          FileStorageEngine.getInstance().setActiveTarget('dropbox');
+        }
+        this.notify();
+        return true;
+      }
+      if (this.config.refreshToken) {
+        const refreshed = await this.refreshAccessToken();
+        if (refreshed) {
+          const validAfter = await this.validateToken();
+          if (validAfter) {
+            if (prevTarget === 'dropbox') {
+              this.setActiveTarget('dropbox');
+              FileStorageEngine.getInstance().setActiveTarget('dropbox');
+            }
+            this.notify();
+            return true;
+          }
+        }
+      }
+    }
+
+    if (prevTarget === 'dropbox' && !this.config.connected) {
+      this.setActiveTarget('local');
+      FileStorageEngine.getInstance().setActiveTarget('local');
+    }
+    return false;
+  }
+
   private loadPersistedConfig(): void {
     if (typeof window === 'undefined') return;
     try {
@@ -49,7 +139,9 @@ export class DropboxSyncEngine {
       if (stored) {
         this.config = JSON.parse(stored);
         if (this.config.accessToken) {
-          this.validateToken();
+          // Optimistically maintain connected state while validating in background
+          this.config.connected = true;
+          this.validateToken().catch(() => {});
         }
       }
       const savedInterval = localStorage.getItem('gaw_dropbox_auto_sync_interval');
@@ -62,7 +154,7 @@ export class DropboxSyncEngine {
       }
       const savedTarget = localStorage.getItem('gaw_active_storage_target');
       if (savedTarget === 'local' || savedTarget === 'dropbox') {
-        this.activeTarget = savedTarget;
+        this.activeTarget = savedTarget as StorageTarget;
       }
     } catch (e) {
       console.error('Failed to load Dropbox config:', e);
@@ -76,6 +168,7 @@ export class DropboxSyncEngine {
     } catch (e) {
       console.error('Failed to persist Dropbox config:', e);
     }
+    this.broadcastUpdate();
     this.notify();
   }
 
@@ -119,6 +212,7 @@ export class DropboxSyncEngine {
     if (typeof window !== 'undefined') {
       localStorage.setItem('gaw_active_storage_target', target);
     }
+    this.broadcastUpdate();
     this.notify();
   }
 
@@ -198,9 +292,17 @@ export class DropboxSyncEngine {
       });
 
       if (!res.ok) {
-        this.config.connected = false;
-        this.saveConfig();
-        return false;
+        if (this.config.refreshToken) {
+          const refreshed = await this.refreshAccessToken();
+          if (refreshed) {
+            return this.validateToken();
+          }
+        }
+        if (res.status === 401 || res.status === 400) {
+          this.config.connected = false;
+          this.saveConfig();
+          return false;
+        }
       }
 
       const data = await res.json();
@@ -210,9 +312,8 @@ export class DropboxSyncEngine {
       this.saveConfig();
       return true;
     } catch (err) {
-      this.config.connected = false;
-      this.saveConfig();
-      return false;
+      // Network failure / offline - retain existing token and connection
+      return !!this.config.accessToken;
     }
   }
 
@@ -259,44 +360,76 @@ export class DropboxSyncEngine {
   }
 
   public async exchangeCode(code: string, redirectUri?: string): Promise<boolean> {
-    const verifier = sessionStorage.getItem('dropbox_code_verifier') || localStorage.getItem('dropbox_code_verifier');
-    const clientId = sessionStorage.getItem('dropbox_client_id') || localStorage.getItem('dropbox_client_id') || this.config.clientId;
-    const finalRedirectUri =
-      redirectUri ||
-      sessionStorage.getItem('dropbox_redirect_uri') ||
-      localStorage.getItem('dropbox_redirect_uri') ||
-      `${window.location.origin}/auth/callback`;
-
-    if (!verifier || !clientId) throw new Error('Missing PKCE verifier or client ID');
-
-    const params = new URLSearchParams({
-      code,
-      grant_type: 'authorization_code',
-      client_id: clientId,
-      code_verifier: verifier,
-      redirect_uri: finalRedirectUri,
-    });
-
-    const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Dropbox token exchange failed: ${err}`);
+    const trimmedCode = code.trim();
+    if (DropboxSyncEngine.processedCodes.has(trimmedCode)) {
+      return true;
+    }
+    if (DropboxSyncEngine.activeExchanges.has(trimmedCode)) {
+      return DropboxSyncEngine.activeExchanges.get(trimmedCode)!;
     }
 
-    const data = await res.json();
-    this.config.accessToken = data.access_token;
-    if (data.refresh_token) this.config.refreshToken = data.refresh_token;
-    this.config.clientId = clientId;
+    const exchangePromise = (async () => {
+      const verifier =
+        sessionStorage.getItem('dropbox_code_verifier') ||
+        localStorage.getItem('dropbox_code_verifier');
+      const clientId =
+        sessionStorage.getItem('dropbox_client_id') ||
+        localStorage.getItem('dropbox_client_id') ||
+        this.config.clientId;
+      const finalRedirectUri =
+        sessionStorage.getItem('dropbox_redirect_uri') ||
+        localStorage.getItem('dropbox_redirect_uri') ||
+        redirectUri ||
+        `${window.location.origin}/`;
 
-    sessionStorage.removeItem('dropbox_code_verifier');
-    localStorage.removeItem('dropbox_code_verifier');
+      if (!verifier || !clientId) throw new Error('Missing PKCE verifier or client ID');
 
-    return this.validateToken();
+      const params = new URLSearchParams({
+        code: trimmedCode,
+        grant_type: 'authorization_code',
+        client_id: clientId.trim(),
+        code_verifier: verifier.trim(),
+        redirect_uri: finalRedirectUri,
+      });
+
+      const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        console.error('Dropbox token exchange error:', err);
+        throw new Error(`Dropbox token exchange failed: ${err}`);
+      }
+
+      const data = await res.json();
+      this.config.accessToken = data.access_token;
+      if (data.refresh_token) this.config.refreshToken = data.refresh_token;
+      this.config.clientId = clientId;
+      this.config.connected = true;
+
+      sessionStorage.removeItem('dropbox_code_verifier');
+      localStorage.removeItem('dropbox_code_verifier');
+      this.saveConfig();
+
+      await this.validateToken();
+
+      this.setActiveTarget('dropbox');
+      FileStorageEngine.getInstance().setActiveTarget('dropbox');
+      DropboxSyncEngine.processedCodes.add(trimmedCode);
+      this.broadcastUpdate();
+      this.notify();
+      return true;
+    })();
+
+    DropboxSyncEngine.activeExchanges.set(trimmedCode, exchangePromise);
+    try {
+      return await exchangePromise;
+    } finally {
+      DropboxSyncEngine.activeExchanges.delete(trimmedCode);
+    }
   }
 
   public async refreshAccessToken(): Promise<boolean> {

@@ -50,6 +50,7 @@ export class SQLiteEngine {
       } else if (!this.db) {
         this.createDefaultDatabase();
       }
+      this.ensureSystemTables();
     })();
 
     await this.isInitializing;
@@ -794,6 +795,39 @@ export class SQLiteEngine {
       // Ensure default system & example plugins exist
       const defaultPluginsToCheck = [
         {
+          id: 'plugin_crm',
+          name: 'Customer Directory & CRM',
+          version: '1.0.0',
+          enabled: 1,
+          icon: 'Users',
+          category: 'Business',
+          route: '/crm',
+          desc: 'Manage client accounts, credit limits, and orders directly inside this .db file.',
+          code: DEFAULT_CRM_PLUGIN_CODE,
+        },
+        {
+          id: 'plugin_inventory',
+          name: 'Inventory Valuation Desk',
+          version: '1.0.0',
+          enabled: 1,
+          icon: 'Package',
+          category: 'Operations',
+          route: '/inventory',
+          desc: 'Monitor real-time warehouse inventory value, low-stock triggers, and execute immediate batch restocks.',
+          code: DEFAULT_INVENTORY_PLUGIN_CODE,
+        },
+        {
+          id: 'plugin_executive',
+          name: 'Executive Pulse',
+          version: '1.0.0',
+          enabled: 1,
+          icon: 'BarChart3',
+          category: 'Business',
+          route: '/executive',
+          desc: 'Aggregated business KPIs computed directly from SQLite relational tables.',
+          code: DEFAULT_EXECUTIVE_PLUGIN_CODE,
+        },
+        {
           id: 'plugin_hello_world',
           name: 'Hello World Starter',
           version: '1.0.0',
@@ -847,7 +881,8 @@ export class SQLiteEngine {
             'INSERT OR IGNORE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             [p.id, p.name, p.version, p.enabled, p.icon, p.category, p.route, p.desc, p.code, now, now]
           );
-        } else if (p.id === 'plugin_dropbox_sync' || p.id === 'plugin_local_storage' || p.id === 'plugin_manager') {
+        } else {
+          // Update default system and template plugins to latest working code
           this.db.run(
             'UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?;',
             [p.code, now, p.id]
@@ -868,6 +903,10 @@ export class SQLiteEngine {
   }
 
   public setPluginEnabled(pluginId: string, enabled: boolean): void {
+    if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage') && !enabled) {
+      console.warn('Cannot disable core system plugin:', pluginId);
+      return;
+    }
     if (!this.db) return;
     this.run('UPDATE t_plugins SET enabled = ?, updated_at = ? WHERE id = ?;', [
       enabled ? 1 : 0,
