@@ -269,7 +269,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
               <button
                 onClick={() => {
-                  onOpenIDE({ type: 'sql' });
+                  onOpenIDE();
                   setOpenMenu(null);
                 }}
                 className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"

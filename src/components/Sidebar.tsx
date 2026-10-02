@@ -594,7 +594,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
 
         <button
-          onClick={() => onOpenIDE({ type: 'sql' })}
+          onClick={() => onOpenIDE()}
           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-semibold shadow-sm border transition active:scale-[0.98] ${
             activeView === 'ide'
               ? 'bg-indigo-600 border-indigo-500 text-white shadow-indigo-950/50'

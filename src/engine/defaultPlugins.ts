@@ -751,3 +751,149 @@ export default function ExecutivePulsePlugin({ gaw }) {
   );
 }
 `;
+
+export const DEFAULT_HELLO_WORLD_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+
+/**
+ * GAW (Generic Application Wrapper) - Hello World Plugin
+ * --------------------------------------------------------
+ * This simple example demonstrates how to write a dynamic plugin in GAW.
+ *
+ * Plugins are standard React components with access to the 'gaw' object:
+ *  - gaw.db.query(sql, params) -> returns { columns, values }
+ *  - gaw.db.queryObjects(sql, params) -> returns an array of JavaScript objects
+ *  - gaw.db.run(sql, params) -> executes INSERT, UPDATE, DELETE, CREATE
+ *  - gaw.toast.success / error / info / warning -> in-app notifications
+ *  - gaw.dialog.confirm / alert / prompt -> interactive dialogs
+ *  - gaw.eventBus.on('db_changed', callback) -> listen for database mutations
+ *  - gaw.theme -> current visual theme ('vs-dark' or 'vs-light')
+ */
+
+export default function HelloWorldPlugin({ gaw }) {
+  const [userName, setUserName] = useState('World');
+  const [clickCount, setClickCount] = useState(0);
+  const [dbGreeting, setDbGreeting] = useState('');
+  const [tableCount, setTableCount] = useState(0);
+
+  // 1. Run a query on the in-browser SQLite database
+  const fetchDbGreeting = () => {
+    try {
+      // Query SQLite directly in WebAssembly
+      const result = gaw.db.queryObjects("SELECT 'Hello from SQLite in WebAssembly!' AS message;");
+      if (result.length > 0) {
+        setDbGreeting(result[0].message);
+      }
+
+      // Count user tables
+      const tables = gaw.db.queryObjects("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+      setTableCount(tables[0]?.count || 0);
+
+      gaw.toast.info('Queried SQLite database successfully!');
+    } catch (err) {
+      gaw.toast.error('Query error: ' + err.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchDbGreeting();
+  }, []);
+
+  const handleSayHello = () => {
+    const nextCount = clickCount + 1;
+    setClickCount(nextCount);
+    gaw.toast.success(\`Hello, \${userName || 'Friend'}! (Click #\${nextCount})\`);
+  };
+
+  const handleDialogDemo = async () => {
+    const ok = await gaw.dialog.confirm(\`Hello \${userName}! Do you want to test an interactive dialog?\`);
+    if (ok) {
+      gaw.toast.success('You clicked OK in the dialog!');
+    } else {
+      gaw.toast.info('You cancelled the dialog.');
+    }
+  };
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto space-y-6">
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border border-indigo-700/50 rounded-2xl p-6 shadow-xl backdrop-blur">
+        <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/50">
+          Starter Plugin Guide
+        </span>
+        <h1 className="text-2xl font-bold text-white mt-2">
+          👋 Hello, {userName || 'World'}!
+        </h1>
+        <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+          Welcome to your first GAW plugin! This component is compiled on-the-fly inside your browser
+          using Sucrase and runs locally with direct access to your SQLite database.
+        </p>
+      </div>
+
+      {/* Interactive Controls Card */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 space-y-4 shadow-lg">
+        <h2 className="text-sm font-bold text-white flex items-center gap-2">
+          <span>⚡ Interactive Plugin State Demo</span>
+        </h2>
+
+        <div className="flex flex-col sm:flex-row gap-3 items-center">
+          <div className="flex-1 w-full">
+            <label className="block text-[11px] text-slate-400 mb-1 font-medium">
+              Enter your name:
+            </label>
+            <input
+              type="text"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              placeholder="e.g. Alice"
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="flex gap-2 w-full sm:w-auto pt-4 sm:pt-0">
+            <button
+              onClick={handleSayHello}
+              className="flex-1 sm:flex-none px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg shadow transition active:scale-95"
+            >
+              Say Hello! ({clickCount})
+            </button>
+            <button
+              onClick={handleDialogDemo}
+              className="flex-1 sm:flex-none px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700 transition"
+            >
+              Test Dialog
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* SQLite Live Database Connection Card */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 space-y-3 shadow-lg">
+        <h2 className="text-sm font-bold text-white flex items-center justify-between">
+          <span>🗄️ Live SQLite Integration</span>
+          <button
+            onClick={fetchDbGreeting}
+            className="text-[11px] text-indigo-400 hover:text-indigo-300 font-normal transition"
+          >
+            Re-run Query
+          </button>
+        </h2>
+        <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-1 font-mono text-xs">
+          <p className="text-slate-400 text-[11px]">Query Output:</p>
+          <p className="text-emerald-400 font-semibold">{dbGreeting || 'Querying database...'}</p>
+          <p className="text-slate-500 text-[10px] pt-1">
+            Database contains {tableCount} active tables.
+          </p>
+        </div>
+      </div>
+
+      {/* Quick Reference Code Explanation */}
+      <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 space-y-2 text-xs text-slate-400">
+        <h3 className="font-semibold text-slate-200">How to edit this plugin:</h3>
+        <p>
+          Click the three dots <strong className="text-slate-200">(···)</strong> next to "Hello World Starter" in the left sidebar and choose <strong className="text-indigo-400">Edit in IDE</strong>. Any changes you make will instantly hot-reload here!
+        </p>
+      </div>
+    </div>
+  );
+}
+`;

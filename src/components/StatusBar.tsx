@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, HardDrive, Wifi, WifiOff, Clock, ShieldCheck } from 'lucide-react';
+import { Database, HardDrive, Wifi, WifiOff, Clock, ShieldCheck, Code2 } from 'lucide-react';
 import { StorageMetadata } from '../types/storage';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -10,6 +10,9 @@ interface StatusBarProps {
   pluginCount: number;
   theme?: 'vs-dark' | 'vs-light';
   onOpenSettings?: () => void;
+  isVSCodeMode?: boolean;
+  onToggleVSCodeMode?: () => void;
+  activeView?: string;
 }
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -18,6 +21,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   pluginCount,
   theme = 'vs-dark',
   onOpenSettings,
+  isVSCodeMode = false,
+  onToggleVSCodeMode,
+  activeView,
 }) => {
   const isOnline = useOnlineStatus();
   const isDark = theme === 'vs-dark';
@@ -45,6 +51,25 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           <span>{pluginCount} plugins</span>
         </div>
       </div>
+
+      {/* Center: Full-Screen VS Code Studio Toggle */}
+      {onToggleVSCodeMode && (
+        <button
+          onClick={onToggleVSCodeMode}
+          className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-sans font-medium transition border cursor-pointer active:scale-95 ${
+            isVSCodeMode
+              ? 'bg-blue-600 text-white border-blue-400 shadow-sm'
+              : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700/80 hover:text-white'
+          }`}
+          title="Toggle between standard GAW shell and full VS Code Studio layout (Ctrl+Shift+F)"
+        >
+          <Code2 className="w-3.5 h-3.5 text-cyan-400" />
+          <span>{isVSCodeMode ? 'VS Code: FULL' : 'VS Code Studio'}</span>
+          <kbd className="opacity-80 text-[9px] px-1 bg-black/40 rounded border border-white/10 font-mono">
+            Ctrl+Shift+F
+          </kbd>
+        </button>
+      )}
 
       {/* Right Sync & PWA Diagnostics */}
       <div className="flex items-center gap-3">

@@ -6,6 +6,7 @@ import {
   DEFAULT_CRM_PLUGIN_CODE,
   DEFAULT_INVENTORY_PLUGIN_CODE,
   DEFAULT_EXECUTIVE_PLUGIN_CODE,
+  DEFAULT_HELLO_WORLD_PLUGIN_CODE,
 } from './defaultPlugins';
 
 export class SQLiteEngine {
@@ -476,6 +477,17 @@ export class SQLiteEngine {
         description: 'High-level business telemetry, order velocity, and recent transactions view.',
         code: DEFAULT_EXECUTIVE_PLUGIN_CODE,
       },
+      {
+        id: 'plugin_hello_world',
+        name: 'Hello World Starter',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Sparkles',
+        menu_category: 'Examples',
+        route: '/hello-world',
+        description: 'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in GAW.',
+        code: DEFAULT_HELLO_WORLD_PLUGIN_CODE,
+      },
     ];
 
     for (const p of plugins) {
@@ -742,6 +754,28 @@ export class SQLiteEngine {
         CREATE TABLE IF NOT EXISTS t_sql_queries (id TEXT PRIMARY KEY, name TEXT, description TEXT, query TEXT, params TEXT, layout TEXT, created_at TEXT);
         CREATE TABLE IF NOT EXISTS t_reports (id TEXT PRIMARY KEY, name TEXT, description TEXT, query_id TEXT, custom_sql TEXT, config TEXT, created_at TEXT);
       `);
+
+      // Ensure Hello World starter plugin exists for all databases
+      const helloCheck = this.db.exec("SELECT id FROM t_plugins WHERE id = 'plugin_hello_world';");
+      if (!helloCheck || helloCheck.length === 0 || !helloCheck[0].values || helloCheck[0].values.length === 0) {
+        const now = new Date().toISOString();
+        this.db.run(
+          'INSERT OR IGNORE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            'plugin_hello_world',
+            'Hello World Starter',
+            '1.0.0',
+            1,
+            'Sparkles',
+            'Examples',
+            '/hello-world',
+            'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in GAW.',
+            DEFAULT_HELLO_WORLD_PLUGIN_CODE,
+            now,
+            now,
+          ]
+        );
+      }
     } catch (err) {
       console.error('ensureSystemTables error:', err);
     }

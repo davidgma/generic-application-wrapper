@@ -85,6 +85,36 @@ export default function App() {
   // Target tab to open and edit in IDE
   const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
 
+  // VS Code Studio full-interface mode toggle (stored in localStorage)
+  const [isVSCodeMode, setIsVSCodeMode] = useState<boolean>(() => {
+    return localStorage.getItem('gaw_vscode_mode') === 'true';
+  });
+
+  const handleToggleVSCodeMode = useCallback(() => {
+    setIsVSCodeMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('gaw_vscode_mode', String(next));
+      return next;
+    });
+    setActiveView('ide');
+  }, []);
+
+  // Keyboard shortcut listener for Ctrl+Shift+F or Ctrl+Shift+M to toggle full VS Code mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key === 'F' || e.key === 'f' || e.key === 'M' || e.key === 'm')
+      ) {
+        e.preventDefault();
+        handleToggleVSCodeMode();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleToggleVSCodeMode]);
+
   // Two-Stage Deletion Confirmation
   const [deleteTarget, setDeleteTarget] = useState<{
     stage: 1 | 2;
@@ -286,12 +316,13 @@ export default function App() {
 
   // Open any object in IDE
   const handleOpenInIDE = useCallback(
-    (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string }) => {
-      if (tab) {
+    (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string; code?: string }) => {
+      if (tab && (tab.id || tab.name || tab.code)) {
         setIdeTargetTab({
           type: tab.type,
           id: tab.id,
           name: tab.name,
+          code: tab.code,
           timestamp: Date.now(),
         });
       }
@@ -523,84 +554,93 @@ export default function App() {
   const currentPlugin = plugins.find((p) => activeView === `plugin:${p.id}`);
   const currentReport = reports.find((r) => activeView === `report:${r.id}`);
 
+  const isFullVSCode = activeView === 'ide' && isVSCodeMode;
+
   return (
     <div className={`flex flex-col h-screen overflow-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      {/* Top Application Header & Menus */}
-      <Navbar
-        appTitle={appTitle}
-        storageMeta={storageMeta}
-        theme={theme}
-        onThemeToggle={() => {
-          const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
-          setTheme(next);
-          localStorage.setItem('gaw_theme', next);
-          SQLiteEngine.getInstance().setSetting('theme', next);
-          storageEngine.save();
-        }}
-        onNewDatabase={() => {
-          SQLiteEngine.getInstance().createDefaultDatabase();
-          toastApi.info('Created new database.');
-          refreshDatabaseState();
-          setActiveView('ide');
-        }}
-        onOpenFile={async () => {
-          const ok = await storageEngine.openFile();
-          if (ok) {
-            toastApi.success('Opened database file successfully.');
+      {/* Top Application Header & Menus (Hidden in full VS Code mode) */}
+      {!isFullVSCode && (
+        <Navbar
+          appTitle={appTitle}
+          storageMeta={storageMeta}
+          theme={theme}
+          onThemeToggle={() => {
+            const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
+            setTheme(next);
+            localStorage.setItem('gaw_theme', next);
+            try {
+              SQLiteEngine.getInstance().setSetting('theme', next);
+            } catch (e) {
+              console.error('Failed to save theme in t_settings', e);
+            }
+          }}
+          onNewDatabase={() => {
+            SQLiteEngine.getInstance().createDefaultDatabase();
+            toastApi.info('Created new database.');
             refreshDatabaseState();
-          }
-        }}
-        onSaveFile={async () => {
-          const ok = await storageEngine.save();
-          if (ok) toastApi.success('Saved to disk file handle.');
-        }}
-        onSaveAsFile={async () => {
-          await storageEngine.saveAs();
-        }}
-        onOpenDropbox={() => setShowDropboxModal(true)}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        onOpenAI={() => setShowAIModal(true)}
-        onOpenIDE={handleOpenInIDE}
-        onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        onResetDefault={() => {
-          SQLiteEngine.getInstance().createDefaultDatabase();
-          toastApi.success('Reset database to Northwind Modern template.');
-          refreshDatabaseState();
-          setActiveView('plugin:plugin_crm');
-        }}
-      />
+            setActiveView('ide');
+          }}
+          onOpenFile={async () => {
+            const ok = await storageEngine.openFile();
+            if (ok) {
+              toastApi.success('Opened database file successfully.');
+              refreshDatabaseState();
+            }
+          }}
+          onSaveFile={async () => {
+            const ok = await storageEngine.save();
+            if (ok) toastApi.success('Saved to disk file handle.');
+          }}
+          onSaveAsFile={async () => {
+            await storageEngine.saveAs();
+          }}
+          onOpenDropbox={() => setShowDropboxModal(true)}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onOpenAI={() => setShowAIModal(true)}
+          onOpenIDE={handleOpenInIDE}
+          onOpenSpreadsheet={() => handleOpenSpreadsheet()}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onResetDefault={() => {
+            SQLiteEngine.getInstance().createDefaultDatabase();
+            toastApi.success('Reset database to Northwind Modern template.');
+            refreshDatabaseState();
+            setActiveView('plugin:plugin_crm');
+          }}
+        />
+      )}
 
       {/* Main Workspace Area (Sidebar + Active View) */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* MS Access Object Navigation Pane */}
-        <Sidebar
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-          tables={tables}
-          queries={queries}
-          reports={reports}
-          plugins={plugins}
-          activeView={activeView}
-          onSelectTable={handleSelectTable}
-          onSelectQuery={handleSelectQuery}
-          onSelectReport={(r) => setActiveView(`report:${r.id}`)}
-          onSelectPlugin={(p) => setActiveView(`plugin:${p.id}`)}
-          onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-          onOpenIDE={handleOpenInIDE}
-          onNewReport={() => {
-            setReportToEdit(null);
-            setShowReportBuilder(true);
-          }}
-          onEditReportVisual={(r) => {
-            setReportToEdit(r);
-            setShowReportBuilder(true);
-          }}
-          onDeleteObject={handleDeleteObject}
-          onAddPlugin={() => setShowAddPluginModal(true)}
-          onOpenAI={() => setShowAIModal(true)}
-          theme={theme}
-        />
+        {/* MS Access Object Navigation Pane (Hidden in full VS Code mode) */}
+        {!isFullVSCode && (
+          <Sidebar
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen(!sidebarOpen)}
+            tables={tables}
+            queries={queries}
+            reports={reports}
+            plugins={plugins}
+            activeView={activeView}
+            onSelectTable={handleSelectTable}
+            onSelectQuery={handleSelectQuery}
+            onSelectReport={(r) => setActiveView(`report:${r.id}`)}
+            onSelectPlugin={(p) => setActiveView(`plugin:${p.id}`)}
+            onOpenSpreadsheet={() => handleOpenSpreadsheet()}
+            onOpenIDE={handleOpenInIDE}
+            onNewReport={() => {
+              setReportToEdit(null);
+              setShowReportBuilder(true);
+            }}
+            onEditReportVisual={(r) => {
+              setReportToEdit(r);
+              setShowReportBuilder(true);
+            }}
+            onDeleteObject={handleDeleteObject}
+            onAddPlugin={() => setShowAddPluginModal(true)}
+            onOpenAI={() => setShowAIModal(true)}
+            theme={theme}
+          />
+        )}
 
         {/* Center Canvas */}
         <main className="flex-1 flex flex-col overflow-hidden min-w-0 bg-slate-900">
@@ -689,10 +729,13 @@ export default function App() {
             <div className="flex-1 overflow-hidden">
               <GAWIDE
                 targetTab={ideTargetTab}
+                onClearTargetTab={() => setIdeTargetTab(null)}
                 onOpenSpreadsheet={handleOpenSpreadsheet}
                 onOpenAI={() => setShowAIModal(true)}
                 theme={theme}
                 gawContext={gawContext}
+                isVSCodeMode={isVSCodeMode}
+                onToggleVSCodeMode={handleToggleVSCodeMode}
               />
             </div>
           )}
@@ -706,6 +749,9 @@ export default function App() {
         pluginCount={plugins.length}
         theme={theme}
         onOpenSettings={() => setShowSettingsModal(true)}
+        isVSCodeMode={isVSCodeMode}
+        onToggleVSCodeMode={handleToggleVSCodeMode}
+        activeView={activeView}
       />
 
       {/* Modals & Dialogs */}
@@ -751,8 +797,11 @@ export default function App() {
           onThemeChange={(newTheme) => {
             setTheme(newTheme);
             localStorage.setItem('gaw_theme', newTheme);
-            SQLiteEngine.getInstance().setSetting('theme', newTheme);
-            storageEngine.save();
+            try {
+              SQLiteEngine.getInstance().setSetting('theme', newTheme);
+            } catch (e) {
+              console.error('Failed to save theme in t_settings', e);
+            }
           }}
         />
       )}
