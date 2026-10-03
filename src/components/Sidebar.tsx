@@ -247,7 +247,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
                           <span>Edit in IDE</span>
                         </button>
-                        {p.id === 'plugin_manager' || p.id === 'plugin_local_storage' ? (
+                        {p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager' ? (
                           <div className="px-3 py-1.5 text-[10px] text-slate-400 flex items-center gap-1.5 border-t border-slate-800 mt-1">
                             <Shield className="w-3 h-3 text-indigo-400" />
                             <span>Protected Core Plugin</span>

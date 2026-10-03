@@ -1,6 +1,6 @@
 import React from 'react';
 import { QueryResult, TableSchema } from './sqlite';
-import { StorageMetadata, DropboxConfig, StorageTarget } from './storage';
+import { StorageMetadata, DropboxConfig, StorageTarget, RecentFileItem } from './storage';
 
 export interface PluginRecord {
   id: string;
@@ -92,6 +92,17 @@ export interface GAWPluginsApi {
   openAddModal: () => void;
 }
 
+export interface GAWWorkspaceApi {
+  toggleSidebar: () => void;
+  isSidebarOpen: () => boolean;
+  getRecentFiles: () => RecentFileItem[];
+  addRecentFile: (item: Omit<RecentFileItem, 'id' | 'lastOpened'> & { id?: string; lastOpened?: string }) => void;
+  removeRecentFile: (id: string) => void;
+  clearRecentFiles: () => void;
+  loadNorthwindDemo: () => void;
+  closeDatabase: () => Promise<void>;
+}
+
 export interface GAWContext {
   db: GAWDatabaseApi;
   toast: GAWToastApi;
@@ -103,6 +114,7 @@ export interface GAWContext {
   storage: GAWStorageApi;
   dropbox: GAWDropboxApi;
   plugins: GAWPluginsApi;
+  workspace: GAWWorkspaceApi;
 }
 
 export type GAWPluginComponent = React.ComponentType<{ gaw: GAWContext }>;

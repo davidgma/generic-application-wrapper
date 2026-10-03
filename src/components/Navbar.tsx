@@ -28,6 +28,7 @@ interface NavbarProps {
   onThemeToggle: () => void;
   onNewDatabase: () => void;
   onOpenFile: () => void;
+  onOpenFileWorkspace?: () => void;
   onSaveFile?: () => void;
   onSaveAsFile?: () => void;
   onOpenDropbox?: () => void;
@@ -46,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onThemeToggle,
   onNewDatabase,
   onOpenFile,
+  onOpenFileWorkspace,
   onSaveFile,
   onSaveAsFile,
   onOpenDropbox,
@@ -156,6 +158,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>Open File...</span>
                 <span className="text-[10px] text-slate-500">Ctrl+O</span>
               </button>
+              {onOpenFileWorkspace && (
+                <button
+                  onClick={() => {
+                    onOpenFileWorkspace();
+                    setOpenMenu(null);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white text-indigo-300 hover:text-white transition"
+                >
+                  <span>File & Workspace Manager</span>
+                  <span className="text-[10px] text-indigo-400">Hub</span>
+                </button>
+              )}
               <div className="h-px bg-slate-800 my-1" />
               <button
                 onClick={() => {

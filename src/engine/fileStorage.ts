@@ -1,5 +1,6 @@
 import { SQLiteEngine } from './sqliteEngine';
 import { ConflictDetails, StorageMetadata, StorageTarget, SyncStatus } from '../types/storage';
+import { RecentFilesManager } from './recentFiles';
 
 export class FileStorageEngine {
   private static instance: FileStorageEngine | null = null;
@@ -159,6 +160,13 @@ export class FileStorageEngine {
         const engine = SQLiteEngine.getInstance();
         engine.loadBinary(binary, file.name);
 
+        RecentFilesManager.addRecentFile({
+          name: file.name,
+          source: 'local',
+          size: file.size,
+          path: 'Local Disk',
+        });
+
         this.setActiveTarget('local');
         this.notifyStatus();
         return true;
@@ -188,6 +196,13 @@ export class FileStorageEngine {
             const engine = SQLiteEngine.getInstance();
             engine.loadBinary(binary, file.name);
 
+            RecentFilesManager.addRecentFile({
+              name: file.name,
+              source: 'local',
+              size: file.size,
+              path: 'Local Disk',
+            });
+
             this.setActiveTarget('local');
             this.notifyStatus();
             resolve(true);
@@ -198,6 +213,15 @@ export class FileStorageEngine {
         input.click();
       });
     }
+  }
+
+  public closeFile(): void {
+    this.fileHandle = null;
+    this.lastModifiedDisk = null;
+    this.lastSavedAt = null;
+    this.isDirty = false;
+    this.syncStatus = 'saved';
+    this.notifyStatus();
   }
 
   // --- Save Database ---
@@ -281,6 +305,13 @@ export class FileStorageEngine {
         this.isDirty = false;
         this.syncStatus = 'saved';
         engine.activeDbName = file.name;
+
+        RecentFilesManager.addRecentFile({
+          name: file.name,
+          source: 'local',
+          size: file.size,
+          path: 'Local Disk',
+        });
 
         this.notifyStatus();
         return true;

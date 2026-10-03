@@ -1,6 +1,7 @@
 import { SQLiteEngine } from './sqliteEngine';
 import { DropboxConfig, StorageTarget } from '../types/storage';
 import { FileStorageEngine } from './fileStorage';
+import { RecentFilesManager } from './recentFiles';
 
 export interface DropboxFileItem {
   id: string;
@@ -572,6 +573,13 @@ export class DropboxSyncEngine {
 
     const engine = SQLiteEngine.getInstance();
     engine.loadBinary(binary, fileItem.name);
+
+    RecentFilesManager.addRecentFile({
+      name: fileItem.name,
+      source: 'dropbox',
+      path: fileItem.path_display,
+      size: fileItem.size,
+    });
 
     this.currentRemoteFile = fileItem;
     this.lastSyncTime = new Date();

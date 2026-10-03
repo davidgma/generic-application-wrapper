@@ -1811,7 +1811,7 @@ export default function PluginManagerPlugin({ gaw }) {
   const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
 
   const handleToggleActive = (plugin) => {
-    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage') {
+    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage' || plugin.id === 'plugin_file_manager') {
       gaw.toast.warning('Core system plugin "' + plugin.name + '" must remain active to keep the application operational.');
       return;
     }
@@ -1825,8 +1825,8 @@ export default function PluginManagerPlugin({ gaw }) {
 
   const handleConfirmDelete = () => {
     if (!deleteModalPlugin) return;
-    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage') {
-      gaw.toast.warning('Core system plugins (Plugin Manager & Local Storage) cannot be removed.');
+    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage' || deleteModalPlugin.id === 'plugin_file_manager') {
+      gaw.toast.warning('Core system plugins (Plugin Manager, Local Storage & File Manager) cannot be removed.');
       setDeleteModalPlugin(null);
       return;
     }
@@ -2044,7 +2044,7 @@ export default function PluginManagerPlugin({ gaw }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredPlugins.map((p) => {
           const isActive = p.enabled !== 0;
-          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage';
+          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager';
           return (
             <div
               key={p.id}
@@ -2183,4 +2183,762 @@ export default function PluginManagerPlugin({ gaw }) {
   );
 }
 `;
+
+export const DEFAULT_FILE_MANAGER_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import {
+  FolderOpen,
+  HardDrive,
+  Cloud,
+  Sparkles,
+  Clock,
+  Trash2,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  ExternalLink,
+  Database,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ArrowRight,
+  Shield,
+  FileCode,
+  Save,
+  Check,
+  Folder,
+  Download,
+  FileSpreadsheet
+} from 'lucide-react';
+
+export default function FileManagerPlugin({ gaw }) {
+  const [storageMeta, setStorageMeta] = useState(() => gaw.storage.getMetadata());
+  const [dropboxConfig, setDropboxConfig] = useState(() => gaw.dropbox.getConfig());
+  const [recentFiles, setRecentFiles] = useState(() => gaw.workspace.getRecentFiles());
+  const [sidebarOpen, setSidebarOpen] = useState(() => gaw.workspace.isSidebarOpen());
+  const [isConnectingDropbox, setIsConnectingDropbox] = useState(false);
+  const [showDropboxPicker, setShowDropboxPicker] = useState(false);
+  const [dropboxFiles, setDropboxFiles] = useState([]);
+  const [isLoadingDropbox, setIsLoadingDropbox] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  useEffect(() => {
+    const unsubStorage = gaw.storage.onStatusChange((meta) => {
+      setStorageMeta(meta);
+    });
+    const unsubDropbox = gaw.dropbox.subscribe((cfg) => {
+      setDropboxConfig(cfg);
+    });
+    const unsubRecent = gaw.eventBus.on('recent_files_changed', () => {
+      setRecentFiles(gaw.workspace.getRecentFiles());
+    });
+
+    if (gaw.dropbox.getConfig().accessToken && !gaw.dropbox.getConfig().connected) {
+      setIsConnectingDropbox(true);
+      gaw.dropbox.validateToken().then((ok) => {
+        setIsConnectingDropbox(false);
+        setDropboxConfig(gaw.dropbox.getConfig());
+        if (ok) {
+          gaw.toast.info('Dropbox connection restored.');
+        }
+      }).catch(() => {
+        setIsConnectingDropbox(false);
+      });
+    }
+
+    return () => {
+      unsubStorage();
+      unsubDropbox();
+      unsubRecent();
+    };
+  }, [gaw]);
+
+  const handleOpenLocal = async () => {
+    try {
+      const ok = await gaw.storage.openFile();
+      if (ok) {
+        setRecentFiles(gaw.workspace.getRecentFiles());
+        gaw.toast.success('Local database opened successfully.');
+      }
+    } catch (err) {
+      gaw.toast.error('Failed to open local file: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleOpenDropboxBrowser = async () => {
+    if (!dropboxConfig.connected) {
+      gaw.navigation.openPlugin('plugin_dropbox_sync');
+      return;
+    }
+    setShowDropboxPicker(true);
+    setIsLoadingDropbox(true);
+    try {
+      const files = await gaw.dropbox.listDatabaseFiles();
+      setDropboxFiles(files || []);
+    } catch (err) {
+      gaw.toast.error('Failed to list Dropbox files: ' + (err.message || ''));
+    } finally {
+      setIsLoadingDropbox(false);
+    }
+  };
+
+  const handleSelectDropboxFile = async (fileItem) => {
+    try {
+      setShowDropboxPicker(false);
+      const ok = await gaw.dropbox.downloadFile(fileItem);
+      if (ok) {
+        setRecentFiles(gaw.workspace.getRecentFiles());
+        gaw.toast.success('Loaded ' + fileItem.name + ' from Dropbox.');
+      }
+    } catch (err) {
+      gaw.toast.error('Failed to download file: ' + (err.message || ''));
+    }
+  };
+
+  const handleOpenNorthwindDemo = () => {
+    gaw.workspace.loadNorthwindDemo();
+  };
+
+  const handleCloseActiveDatabase = async () => {
+    if (storageMeta.syncStatus === 'dirty') {
+      const confirm = await gaw.dialog.confirm(
+        'You have unsaved changes in the active database. Closing will discard unsaved modifications. Do you want to close?'
+      );
+      if (!confirm) return;
+    }
+    await gaw.workspace.closeDatabase();
+    setStorageMeta(gaw.storage.getMetadata());
+  };
+
+  const handleClearRecentFiles = () => {
+    gaw.workspace.clearRecentFiles();
+    setRecentFiles([]);
+    setShowClearConfirm(false);
+    gaw.toast.success('Recent files log cleared. (Disk and cloud files remain unchanged)');
+  };
+
+  const handleRemoveRecentFile = (id, e) => {
+    e.stopPropagation();
+    gaw.workspace.removeRecentFile(id);
+    setRecentFiles(gaw.workspace.getRecentFiles());
+    gaw.toast.info('Removed entry from recent files log.');
+  };
+
+  const handleOpenRecent = async (file) => {
+    if (file.source === 'demo') {
+      handleOpenNorthwindDemo();
+    } else if (file.source === 'dropbox') {
+      if (!dropboxConfig.connected) {
+        gaw.toast.warning('Dropbox is not connected. Opening Dropbox Sync plugin...');
+        gaw.navigation.openPlugin('plugin_dropbox_sync');
+        return;
+      }
+      try {
+        const ok = await gaw.dropbox.downloadFile({
+          name: file.name,
+          path_display: file.path || '/' + file.name,
+        });
+        if (ok) {
+          setRecentFiles(gaw.workspace.getRecentFiles());
+          gaw.toast.success('Loaded ' + file.name + ' from Dropbox.');
+        }
+      } catch (err) {
+        gaw.toast.error('Could not open Dropbox file: ' + (err.message || 'File not found'));
+      }
+    } else {
+      await handleOpenLocal();
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    gaw.workspace.toggleSidebar();
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  function formatDate(iso) {
+    if (!iso) return 'Unknown';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      const now = Date.now();
+      const diff = (now - d.getTime()) / 1000;
+      if (diff < 60) return 'Just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  }
+
+  return (
+    <div className='p-6 max-w-6xl mx-auto space-y-6 pb-28 text-slate-100'>
+      {/* Top Header */}
+      <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5'>
+        <div>
+          <div className='flex items-center gap-3'>
+            <div className='w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400'>
+              <FolderOpen className='w-5 h-5' />
+            </div>
+            <div>
+              <h1 className='text-xl font-bold tracking-tight text-white flex items-center gap-2'>
+                File & Workspace Manager
+              </h1>
+              <p className='text-xs text-slate-400'>
+                Open local databases, sync with Dropbox, manage recent files, or explore the Northwind demo.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Indicators */}
+        <div className='flex items-center gap-2 flex-wrap'>
+          {/* Dropbox Status Badge */}
+          {dropboxConfig.connected ? (
+            <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-300'>
+              <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400' />
+              <span>Dropbox Connected</span>
+              {dropboxConfig.accountName && (
+                <span className='text-emerald-400/80 font-mono text-[11px]'>
+                  ({dropboxConfig.accountName})
+                </span>
+              )}
+              <button
+                onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                className='ml-1 text-[11px] text-emerald-400 underline hover:text-emerald-200'
+              >
+                Sync Settings
+              </button>
+            </div>
+          ) : (
+            <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-400'>
+              <Cloud className='w-3.5 h-3.5 text-slate-400' />
+              <span>Dropbox Disconnected</span>
+              <button
+                onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                className='ml-1 text-[11px] text-indigo-400 underline hover:text-indigo-300 font-medium'
+              >
+                Connect Cloud Sync
+              </button>
+            </div>
+          )}
+
+          {/* Storage Mode Badge */}
+          <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-300'>
+            <HardDrive className='w-3.5 h-3.5 text-indigo-400' />
+            <span>Target: {storageMeta.activeTarget === 'dropbox' ? 'Dropbox' : 'Local Disk'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Database Overview & File Closing Card */}
+      <div className='bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3'>
+          <div className='flex items-center gap-3'>
+            <div className='w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400'>
+              <Database className='w-4 h-4' />
+            </div>
+            <div>
+              <div className='flex items-center gap-2'>
+                <span className='text-xs font-semibold text-slate-400 uppercase tracking-wider'>
+                  Active Loaded Database
+                </span>
+                <span className={'px-2 py-0.5 rounded text-[10px] font-semibold ' + (
+                  storageMeta.syncStatus === 'dirty'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                )}>
+                  {storageMeta.syncStatus === 'dirty' ? 'Modified (Unsaved)' : 'Synchronized'}
+                </span>
+              </div>
+              <h2 className='text-base font-bold text-white font-mono mt-0.5'>
+                {storageMeta.fileName || 'northwind_commerce.db'}
+              </h2>
+            </div>
+          </div>
+
+          <div className='flex items-center gap-2 flex-wrap'>
+            <button
+              onClick={() => gaw.storage.save()}
+              className='px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 shadow transition'
+            >
+              <Save className='w-3.5 h-3.5' />
+              <span>Save Database</span>
+            </button>
+            <button
+              onClick={() => gaw.storage.saveAs()}
+              className='px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition'
+            >
+              Save As...
+            </button>
+            <button
+              onClick={() => gaw.storage.exportDownload()}
+              className='px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition'
+              title='Export direct file download'
+            >
+              Export .db
+            </button>
+            <button
+              onClick={handleCloseActiveDatabase}
+              className='px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 text-xs font-medium transition flex items-center gap-1.5'
+              title='Close active file and unload database'
+            >
+              <X className='w-3.5 h-3.5 text-red-400' />
+              <span>Close Active Database</span>
+            </button>
+          </div>
+        </div>
+
+        <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs'>
+          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
+            <span className='text-slate-400 block text-[11px]'>File Size</span>
+            <span className='font-mono font-semibold text-white mt-0.5 block'>
+              {formatBytes(storageMeta.fileSize)}
+            </span>
+          </div>
+          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
+            <span className='text-slate-400 block text-[11px]'>Storage Target</span>
+            <span className='font-semibold text-white mt-0.5 block capitalize'>
+              {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}
+            </span>
+          </div>
+          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
+            <span className='text-slate-400 block text-[11px]'>Last Saved</span>
+            <span className='font-semibold text-white mt-0.5 block'>
+              {storageMeta.lastSavedAt ? formatDate(storageMeta.lastSavedAt.toISOString()) : 'Not saved yet'}
+            </span>
+          </div>
+          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
+            <span className='text-slate-400 block text-[11px]'>Database Tables</span>
+            <span className='font-semibold text-white mt-0.5 block'>
+              {gaw.db.getTables().length + ' user tables'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main 3 File Opening Options */}
+      <div>
+        <h2 className='text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3'>
+          Open or Launch Database
+        </h2>
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
+          {/* Card 1: Local File */}
+          <div className='bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group'>
+            <div className='space-y-3'>
+              <div className='w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-105 transition'>
+                <HardDrive className='w-6 h-6' />
+              </div>
+              <div>
+                <h3 className='text-base font-bold text-white'>Open Local File</h3>
+                <p className='text-xs text-slate-400 mt-1 leading-relaxed'>
+                  Open any SQLite database file (.db, .sqlite, .sqlite3) stored directly on your computer's local hard drive.
+                </p>
+              </div>
+            </div>
+            <div className='pt-5'>
+              <button
+                onClick={handleOpenLocal}
+                className='w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
+              >
+                <FolderOpen className='w-4 h-4' />
+                <span>Choose Local File...</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Dropbox Cloud */}
+          <div className='bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group'>
+            <div className='space-y-3'>
+              <div className='w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition'>
+                <Cloud className='w-6 h-6' />
+              </div>
+              <div>
+                <div className='flex items-center gap-2'>
+                  <h3 className='text-base font-bold text-white'>Open from Dropbox</h3>
+                  {dropboxConfig.connected && (
+                    <span className='px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>
+                      Connected
+                    </span>
+                  )}
+                </div>
+                <p className='text-xs text-slate-400 mt-1 leading-relaxed'>
+                  {dropboxConfig.connected
+                    ? 'Browse database files in your connected Dropbox storage and open them directly into GAW.'
+                    : 'Connect your Dropbox account to browse, pull, and synchronize cloud databases anywhere.'}
+                </p>
+              </div>
+            </div>
+            <div className='pt-5 space-y-2'>
+              {dropboxConfig.connected ? (
+                <button
+                  onClick={handleOpenDropboxBrowser}
+                  className='w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
+                >
+                  <Cloud className='w-4 h-4' />
+                  <span>Browse Dropbox Files...</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                  className='w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-700/40 text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98'
+                >
+                  <ExternalLink className='w-4 h-4' />
+                  <span>Open Dropbox Cloud Sync</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Northwind Demo */}
+          <div className='bg-slate-900 border border-indigo-900/40 hover:border-indigo-600/50 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30'>
+            <div className='space-y-3'>
+              <div className='w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition'>
+                <Sparkles className='w-6 h-6' />
+              </div>
+              <div>
+                <div className='flex items-center gap-2'>
+                  <h3 className='text-base font-bold text-white'>Open Northwind Demo</h3>
+                  <span className='px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30'>
+                    Demo Template
+                  </span>
+                </div>
+                <p className='text-xs text-slate-400 mt-1 leading-relaxed'>
+                  Open the full Northwind Modern Commerce sample suite with orders, inventory, CRM, and interactive reports.
+                </p>
+              </div>
+            </div>
+            <div className='pt-5'>
+              <button
+                onClick={handleOpenNorthwindDemo}
+                className='w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
+              >
+                <Sparkles className='w-4 h-4' />
+                <span>Open Northwind Demo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Files Log Section */}
+      <div className='bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4'>
+        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3'>
+          <div>
+            <div className='flex items-center gap-2'>
+              <h2 className='text-base font-bold text-white flex items-center gap-2'>
+                <Clock className='w-4 h-4 text-indigo-400' />
+                <span>Recent Files Log</span>
+              </h2>
+              <span className='px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700'>
+                {recentFiles.length + ' recorded'}
+              </span>
+            </div>
+            <p className='text-xs text-slate-400 mt-0.5'>
+              Maintained in your browser's private local storage. Blank in new incognito browser windows.
+            </p>
+          </div>
+
+          {recentFiles.length > 0 && (
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              className='px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-red-950/40 text-slate-300 hover:text-red-300 border border-slate-700 hover:border-red-800/40 text-xs font-medium transition flex items-center gap-1.5 self-start sm:self-auto'
+              title='Delete recent files log from local browser storage'
+            >
+              <Trash2 className='w-3.5 h-3.5' />
+              <span>Clear Recent Files Log</span>
+            </button>
+          )}
+        </div>
+
+        {recentFiles.length === 0 ? (
+          <div className='py-12 flex flex-col items-center justify-center text-center space-y-3 bg-slate-950/40 rounded-xl border border-dashed border-slate-800'>
+            <div className='w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500'>
+              <FolderOpen className='w-6 h-6' />
+            </div>
+            <div className='max-w-sm'>
+              <h4 className='text-sm font-semibold text-slate-300'>No Recent Files Recorded</h4>
+              <p className='text-xs text-slate-500 mt-1 leading-relaxed'>
+                Open a local file, pull a database from Dropbox, or launch the Northwind Demo above to track files here.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className='overflow-x-auto'>
+            <table className='w-full text-left text-xs'>
+              <thead>
+                <tr className='border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px] font-semibold'>
+                  <th className='py-2.5 px-3'>Database File</th>
+                  <th className='py-2.5 px-3'>Source</th>
+                  <th className='py-2.5 px-3'>Size</th>
+                  <th className='py-2.5 px-3'>Last Opened</th>
+                  <th className='py-2.5 px-3 text-right'>Actions</th>
+                </tr>
+              </thead>
+              <tbody className='divide-y divide-slate-800/60'>
+                {recentFiles.map((file) => {
+                  const isDemo = file.source === 'demo';
+                  const isDropbox = file.source === 'dropbox';
+                  return (
+                    <tr
+                      key={file.id}
+                      className='hover:bg-slate-800/40 transition group cursor-pointer'
+                      onClick={() => handleOpenRecent(file)}
+                    >
+                      <td className='py-3 px-3'>
+                        <div className='flex items-center gap-2.5'>
+                          <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
+                            isDemo
+                              ? 'bg-purple-600/20 text-purple-400'
+                              : isDropbox
+                              ? 'bg-indigo-600/20 text-indigo-400'
+                              : 'bg-blue-600/20 text-blue-400'
+                          )}>
+                            {isDemo ? (
+                              <Sparkles className='w-3.5 h-3.5' />
+                            ) : isDropbox ? (
+                              <Cloud className='w-3.5 h-3.5' />
+                            ) : (
+                              <HardDrive className='w-3.5 h-3.5' />
+                            )}
+                          </div>
+                          <div>
+                            <span className='font-semibold text-white block group-hover:text-indigo-300 transition'>
+                              {file.name}
+                            </span>
+                            <span className='text-[10px] text-slate-500 font-mono'>
+                              {file.path || (isDropbox ? 'Dropbox Cloud' : 'Local Disk')}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className='py-3 px-3'>
+                        <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ' + (
+                          isDemo
+                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            : isDropbox
+                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        )}>
+                          {isDemo ? 'Demo Template' : isDropbox ? 'Dropbox' : 'Local Disk'}
+                        </span>
+                      </td>
+
+                      <td className='py-3 px-3 font-mono text-slate-400'>
+                        {file.size ? formatBytes(file.size) : '—'}
+                      </td>
+
+                      <td className='py-3 px-3 text-slate-400 whitespace-nowrap'>
+                        {formatDate(file.lastOpened)}
+                      </td>
+
+                      <td className='py-3 px-3 text-right'>
+                        <div className='flex items-center justify-end gap-1.5'>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenRecent(file);
+                            }}
+                            className='px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition shadow'
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={(e) => handleRemoveRecentFile(file.id, e)}
+                            className='p-1 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition'
+                            title='Remove from recent list'
+                          >
+                            <Trash2 className='w-3.5 h-3.5' />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Option Bar: Toggle Side Panel */}
+      <div className='bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+        <div className='flex items-center gap-3'>
+          <div className='w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400'>
+            {sidebarOpen ? (
+              <PanelLeftClose className='w-5 h-5 text-indigo-400' />
+            ) : (
+              <PanelLeftOpen className='w-5 h-5 text-slate-400' />
+            )}
+          </div>
+          <div>
+            <div className='flex items-center gap-2'>
+              <span className='text-xs font-semibold text-white'>
+                Workspace Side Navigation Pane
+              </span>
+              <span className={'px-1.5 py-0.2 rounded text-[10px] font-semibold ' + (
+                sidebarOpen ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-400'
+              )}>
+                {sidebarOpen ? 'Visible' : 'Hidden'}
+              </span>
+            </div>
+            <p className='text-xs text-slate-400 mt-0.5'>
+              {sidebarOpen
+                ? 'The side navigation panel is visible. You can browse tables, queries, reports, and plugins.'
+                : 'The side navigation panel is hidden for a clean, focused initial view.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={handleToggleSidebar}
+          className='px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-95 flex-shrink-0'
+        >
+          {sidebarOpen ? (
+            <>
+              <PanelLeftClose className='w-4 h-4' />
+              <span>Hide Side Panel</span>
+            </>
+          ) : (
+            <>
+              <PanelLeftOpen className='w-4 h-4' />
+              <span>Show Side Panel</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Confirmation Modal: Delete Recent Files Log */}
+      {showClearConfirm && (
+        <div className='fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4'>
+          <div className='max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4'>
+            <div className='flex items-center gap-3'>
+              <div className='w-10 h-10 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400'>
+                <Trash2 className='w-5 h-5' />
+              </div>
+              <div>
+                <h3 className='text-base font-bold text-white'>Clear Recent Files Log?</h3>
+                <p className='text-xs text-slate-400'>This action is safe and non-destructive.</p>
+              </div>
+            </div>
+
+            <div className='p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300'>
+              <p className='font-semibold text-emerald-400'>Non-Destructive Guarantee:</p>
+              <p className='leading-relaxed'>
+                Clearing the log removes only your session history from this browser's local storage.
+              </p>
+              <p className='text-slate-400 text-[11px]'>
+                Your actual database files on local disk or Dropbox will <strong>NOT</strong> be deleted or modified.
+              </p>
+            </div>
+
+            <div className='flex items-center justify-end gap-2 pt-2'>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className='px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearRecentFiles}
+                className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow transition active:scale-95'
+              >
+                Clear Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dropbox File Picker Modal */}
+      {showDropboxPicker && (
+        <div className='fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4'>
+          <div className='max-w-lg w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4'>
+            <div className='flex items-center justify-between border-b border-slate-800 pb-3'>
+              <div className='flex items-center gap-2.5'>
+                <div className='w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center'>
+                  <Cloud className='w-4 h-4' />
+                </div>
+                <div>
+                  <h3 className='text-sm font-bold text-white'>Select Database from Dropbox</h3>
+                  <p className='text-[11px] text-slate-400'>Showing .db and .sqlite files in your Dropbox</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDropboxPicker(false)}
+                className='p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition'
+              >
+                <X className='w-4 h-4' />
+              </button>
+            </div>
+
+            {isLoadingDropbox ? (
+              <div className='py-8 flex flex-col items-center justify-center space-y-2 text-slate-400'>
+                <RefreshCw className='w-5 h-5 animate-spin text-indigo-400' />
+                <span className='text-xs'>Scanning Dropbox for databases...</span>
+              </div>
+            ) : dropboxFiles.length === 0 ? (
+              <div className='py-8 text-center space-y-2'>
+                <p className='text-xs text-slate-400'>No database files (.db, .sqlite) found in Dropbox.</p>
+                <button
+                  onClick={() => {
+                    setShowDropboxPicker(false);
+                    gaw.navigation.openPlugin('plugin_dropbox_sync');
+                  }}
+                  className='text-xs text-indigo-400 underline hover:text-indigo-300'
+                >
+                  Open Dropbox Cloud Sync to push the active database
+                </button>
+              </div>
+            ) : (
+              <div className='max-h-64 overflow-y-auto divide-y divide-slate-800/80'>
+                {dropboxFiles.map((file) => (
+                  <button
+                    key={file.id || file.path_display}
+                    onClick={() => handleSelectDropboxFile(file)}
+                    className='w-full text-left py-2.5 px-3 hover:bg-slate-800/60 rounded-lg flex items-center justify-between group transition'
+                  >
+                    <div className='flex items-center gap-2.5 min-w-0'>
+                      <Database className='w-4 h-4 text-indigo-400 flex-shrink-0' />
+                      <div className='truncate'>
+                        <span className='text-xs font-semibold text-white group-hover:text-indigo-300 block truncate'>
+                          {file.name}
+                        </span>
+                        <span className='text-[10px] text-slate-400 block truncate font-mono'>
+                          {file.path_display}
+                        </span>
+                      </div>
+                    </div>
+                    <span className='text-[11px] font-mono text-slate-400 flex-shrink-0 ml-2'>
+                      {formatBytes(file.size)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className='flex items-center justify-end pt-2 border-t border-slate-800'>
+              <button
+                onClick={() => setShowDropboxPicker(false)}
+                className='px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition'
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+`;
+
 

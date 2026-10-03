@@ -10,6 +10,7 @@ import {
   DEFAULT_DROPBOX_PLUGIN_CODE,
   DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
   DEFAULT_PLUGIN_MANAGER_CODE,
+  DEFAULT_FILE_MANAGER_PLUGIN_CODE,
 } from './defaultPlugins';
 
 export class SQLiteEngine {
@@ -69,6 +70,66 @@ export class SQLiteEngine {
         console.error('SQLiteEngine listener error:', err);
       }
     });
+  }
+
+  public createEmptyDatabase(dbName: string = 'untitled.db'): void {
+    if (!this.sqlJs) throw new Error('SQL.js not initialized');
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    this.db = new this.sqlJs.Database();
+    this.activeDbName = dbName;
+
+    // Create System Tables
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS t_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS t_plugins (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        version TEXT,
+        enabled INTEGER,
+        icon TEXT,
+        menu_category TEXT,
+        route TEXT,
+        description TEXT,
+        code TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS t_sql_queries (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        query TEXT,
+        params TEXT,
+        layout TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS t_reports (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        query_id TEXT,
+        custom_sql TEXT,
+        config TEXT,
+        created_at TEXT
+      );
+    `);
+
+    this.ensureSystemTables();
+    this.notifyChange();
   }
 
   public createDefaultDatabase(): void {
@@ -525,6 +586,17 @@ export class SQLiteEngine {
         description: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
         code: DEFAULT_PLUGIN_MANAGER_CODE,
       },
+      {
+        id: 'plugin_file_manager',
+        name: 'File & Workspace Manager',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'FolderOpen',
+        menu_category: 'System & Storage',
+        route: '/files',
+        description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
+        code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+      },
     ];
 
     for (const p of plugins) {
@@ -871,6 +943,17 @@ export class SQLiteEngine {
           desc: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
           code: DEFAULT_PLUGIN_MANAGER_CODE,
         },
+        {
+          id: 'plugin_file_manager',
+          name: 'File & Workspace Manager',
+          version: '1.0.0',
+          enabled: 1,
+          icon: 'FolderOpen',
+          category: 'System & Storage',
+          route: '/files',
+          desc: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
+          code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+        },
       ];
 
       const now = new Date().toISOString();
@@ -903,7 +986,7 @@ export class SQLiteEngine {
   }
 
   public setPluginEnabled(pluginId: string, enabled: boolean): void {
-    if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage') && !enabled) {
+    if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') && !enabled) {
       console.warn('Cannot disable core system plugin:', pluginId);
       return;
     }
@@ -917,7 +1000,7 @@ export class SQLiteEngine {
   }
 
   public deletePlugin(pluginId: string): void {
-    if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage') {
+    if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') {
       console.warn('Cannot delete core system plugin:', pluginId);
       return;
     }

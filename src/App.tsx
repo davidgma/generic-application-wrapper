@@ -7,6 +7,7 @@ import { TableSchema, SavedQuery, QueryResult } from './types/sqlite';
 import { PluginRecord, GAWContext } from './types/plugin';
 import { SavedReport } from './types/report';
 import { ConflictDetails, StorageMetadata } from './types/storage';
+import { RecentFilesManager } from './engine/recentFiles';
 
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -55,9 +56,9 @@ export default function App() {
   });
 
   // Navigation & Active View
-  // Values: 'table:customers', 'query:q_active_customers', 'report:report_exec_overview', 'plugin:plugin_crm', 'ide', 'spreadsheet'
-  const [activeView, setActiveView] = useState<string>('plugin:plugin_crm');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Values: 'table:customers', 'query:q_active_customers', 'report:report_exec_overview', 'plugin:plugin_file_manager', 'ide', 'spreadsheet'
+  const [activeView, setActiveView] = useState<string>('plugin:plugin_file_manager');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Database metadata & collections
   const [tables, setTables] = useState<TableSchema[]>([]);
@@ -426,7 +427,7 @@ export default function App() {
           return;
         }
       }
-      if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage')) {
+      if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage' || id === 'plugin_file_manager')) {
         toastApi.warning(`"${name}" is a core system plugin and cannot be removed to maintain application operation.`);
         return;
       }
@@ -444,7 +445,7 @@ export default function App() {
   const executeDeleteObject = useCallback(() => {
     if (!deleteTarget) return;
     const { type, id, name } = deleteTarget;
-    if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage')) {
+    if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage' || id === 'plugin_file_manager')) {
       toastApi.warning(`Cannot delete core system plugin "${name}".`);
       setDeleteTarget(null);
       return;
@@ -693,8 +694,8 @@ export default function App() {
           eventBusApi.emit('db_changed');
         },
         delete: (pluginId) => {
-          if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage') {
-            toastApi.warning('Core system plugins (Plugin Manager & Local Storage) cannot be deleted.');
+          if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') {
+            toastApi.warning('Core system plugins cannot be deleted.');
             return;
           }
           SQLiteEngine.getInstance().deletePlugin(pluginId);
@@ -730,10 +731,46 @@ export default function App() {
           setShowAddPluginModal(true);
         },
       },
+      workspace: {
+        toggleSidebar: () => setSidebarOpen((prev) => !prev),
+        isSidebarOpen: () => sidebarOpen,
+        getRecentFiles: () => RecentFilesManager.getRecentFiles(),
+        addRecentFile: (item) => {
+          RecentFilesManager.addRecentFile(item);
+          eventBusApi.emit('recent_files_changed');
+        },
+        removeRecentFile: (id) => {
+          RecentFilesManager.removeRecentFile(id);
+          eventBusApi.emit('recent_files_changed');
+        },
+        clearRecentFiles: () => {
+          RecentFilesManager.clearRecentFiles();
+          eventBusApi.emit('recent_files_changed');
+        },
+        loadNorthwindDemo: () => {
+          SQLiteEngine.getInstance().createDefaultDatabase();
+          RecentFilesManager.addRecentFile({
+            name: 'Northwind Commerce (Demo)',
+            source: 'demo',
+            path: 'northwind_commerce.db',
+          });
+          setSidebarOpen(true);
+          refreshDatabaseState();
+          setActiveView('plugin:plugin_crm');
+          toastApi.success('Northwind Demo database opened.');
+        },
+        closeDatabase: async () => {
+          storageEngine.closeFile();
+          SQLiteEngine.getInstance().createEmptyDatabase('untitled.db');
+          refreshDatabaseState();
+          toastApi.info('Active database closed.');
+        },
+      },
     };
   }, [
     plugins,
     activeView,
+    sidebarOpen,
     toastApi,
     dialogApi,
     eventBusApi,
@@ -867,6 +904,7 @@ export default function App() {
               refreshDatabaseState();
             }
           }}
+          onOpenFileWorkspace={() => setActiveView('plugin:plugin_file_manager')}
           onSaveFile={async () => {
             const ok = await storageEngine.save();
             if (ok) toastApi.success('Saved to disk file handle.');
