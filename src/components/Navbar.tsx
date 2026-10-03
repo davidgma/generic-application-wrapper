@@ -80,11 +80,15 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center justify-between px-3 py-1.5 gap-3">
         {/* Brand & Title */}
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-md font-black text-xs">
-            GAW
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg overflow-hidden shadow-md bg-amber-500/20 ring-1 ring-amber-400/50">
+            <img src="/gawkyy-cat-64x64.png" alt="Gawkyy" className="w-full h-full object-cover" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="font-bold text-xs tracking-tight text-white">{appTitle}</span>
+            <span className="font-bold text-xs tracking-tight text-white flex items-center gap-1.5">
+              <span className="text-amber-400 font-extrabold">Gawkyy</span>
+              <span className="text-slate-500 font-normal">|</span>
+              <span className="font-semibold text-slate-200">{appTitle}</span>
+            </span>
             <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
               [{storageMeta.fileName}]
             </span>
@@ -122,6 +126,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Settings & Storage Preferences"
           >
             <Settings className="w-4 h-4" />
+          </button>
+
+          {/* Gawkyy Mascot Icon at Top Right */}
+          <button
+            onClick={onOpenSettings}
+            className="flex items-center justify-center w-7 h-7 rounded-full overflow-hidden shadow-sm ring-1.5 ring-amber-400/60 hover:ring-amber-300 hover:scale-105 transition cursor-pointer ml-1 focus:outline-none"
+            title="Gawkyy Mascot & Preferences"
+          >
+            <img src="/gawkyy-cat-64x64.png" alt="Gawkyy Mascot" className="w-full h-full object-cover" />
           </button>
         </div>
       </div>
@@ -307,8 +320,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           {openMenu === 'help' && (
             <div className="absolute left-0 top-full mt-0.5 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 p-3 text-xs text-slate-300 space-y-2">
-              <div className="font-bold text-white border-b border-slate-800 pb-1">
-                GAW - Generic Application Wrapper
+              <div className="font-bold text-white border-b border-slate-800 pb-1 flex items-center gap-2">
+                <img src="/gawkyy-cat-64x64.png" alt="Gawkyy" className="w-4 h-4 rounded-full" />
+                <span>Gawkyy Workspace</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
                 Self-contained MS Access for the modern web. Every table, plugin, saved query, and report is stored directly inside your portable SQLite .db file.

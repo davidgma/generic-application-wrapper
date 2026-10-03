@@ -1176,7 +1176,7 @@ export default function DropboxSyncPlugin({ gaw }) {
 
   const handleLoadRemoteFile = async (file) => {
     const confirmed = await gaw.dialog.confirm(
-      'Load ' + file.name + ' into GAW? This will switch your active database.'
+      'Load ' + file.name + ' into Gawkyy? This will switch your active database.'
     );
     if (!confirmed) return;
 
@@ -1509,7 +1509,7 @@ export default function DropboxSyncPlugin({ gaw }) {
                     onClick={() => handleLoadRemoteFile(file)}
                     className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition active:scale-95"
                   >
-                    Open in GAW
+                    Open in Gawkyy
                   </button>
                 </div>
               ))}
@@ -1534,7 +1534,7 @@ export default function DropboxSyncPlugin({ gaw }) {
                 <span>Method 1: Direct Access Token (Instant)</span>
               </span>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Paste your Dropbox App Generated Access Token. This immediately connects GAW directly to your Dropbox app folder without OAuth redirects.
+                Paste your Dropbox App Generated Access Token. This immediately connects Gawkyy directly to your Dropbox app folder without OAuth redirects.
               </p>
 
               <div className="relative">
@@ -1913,7 +1913,7 @@ export default function LocalStoragePlugin({ gaw }) {
           </h2>
 
           <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-            When enabled and a file handle is attached, GAW automatically flushes unwritten SQLite transactions to disk at the chosen interval.
+            When enabled and a file handle is attached, Gawkyy automatically flushes unwritten SQLite transactions to disk at the chosen interval.
           </p>
 
           <div className="space-y-4 pt-2">
@@ -2932,7 +2932,7 @@ export default function FileManagerPlugin({ gaw }) {
                 </div>
                 <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
                   {dropboxConfig.connected
-                    ? 'Browse database files in your connected Dropbox storage and open them directly into GAW.'
+                    ? 'Browse database files in your connected Dropbox storage and open them directly into Gawkyy.'
                     : 'Connect your Dropbox account to browse, pull, and synchronize cloud databases anywhere.'}
                 </p>
               </div>

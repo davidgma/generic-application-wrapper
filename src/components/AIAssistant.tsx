@@ -77,7 +77,7 @@ export const AIAssistant: React.FC<AIAssistantProps> = ({
   const generatedPrompt = useMemo(() => {
     const schemaText = JSON.stringify(schemaDetails, null, 2);
 
-    return `You are an expert React and TypeScript engineer writing a dynamic runtime plugin for GAW (Generic Application Wrapper) — a modern, web-native MS Access in the browser powered by in-browser SQLite (sql.js).
+    return `You are an expert React and TypeScript engineer writing a dynamic runtime plugin for Gawkyy — a modern, web-native MS Access in the browser powered by in-browser SQLite (sql.js).
 
 ### OBJECTIVE
 ${customGoal}
@@ -435,7 +435,7 @@ export default function PricingSimulatorPlugin({ gaw }) {
                 <p>
                   1. Click <strong>Copy AI Prompt</strong> above.<br />
                   2. Paste into <strong>Google Gemini, Claude, or ChatGPT</strong>.<br />
-                  3. Paste the generated TSX code directly into GAW's <strong>internal IDE</strong> or click "New Plugin". It compiles instantly with 0 restart!
+                  3. Paste the generated TSX code directly into Gawkyy's <strong>internal IDE</strong> or click "New Plugin". It compiles instantly with 0 restart!
                 </p>
               </div>
             </div>

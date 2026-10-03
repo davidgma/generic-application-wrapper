@@ -747,7 +747,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         ? [
             {
               id: 'cmd_toggle_vscode',
-              title: isVSCodeMode ? 'View: Switch to GAW Application Shell' : 'View: Switch to Full VS Code Studio Mode',
+              title: isVSCodeMode ? 'View: Switch to Gawkyy Application Shell' : 'View: Switch to Full VS Code Studio Mode',
               shortcut: 'Ctrl+Shift+F',
               action: () => onToggleVSCodeMode(),
             },
@@ -872,7 +872,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               <button
                 onClick={onToggleVSCodeMode}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] shadow transition active:scale-95 ml-2"
-                title="Exit to standard GAW application view (Ctrl+Shift+F)"
+                title="Exit to standard Gawkyy application view (Ctrl+Shift+F)"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
                 <span>Exit VS Code Mode</span>
@@ -1355,7 +1355,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     <span className="font-bold text-white text-[11px]">Keyboard Shortcuts:</span>
                     <div className="space-y-1.5">
                       {[
-                        ['Ctrl + Shift + F', 'Toggle VS Code / GAW Shell'],
+                        ['Ctrl + Shift + F', 'Toggle VS Code / Gawkyy Shell'],
                         ['Shift + Alt + F', 'Format Document (Prettier)'],
                         ['Ctrl + Enter', 'Run Query / Test Plugin'],
                         ['Ctrl + S', 'Save File'],
@@ -1589,7 +1589,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               <button
                 onClick={onToggleVSCodeMode}
                 className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-800/80 hover:bg-blue-900 text-white font-bold text-[10px] cursor-pointer"
-                title="Toggle between VS Code and GAW mode (Ctrl+Shift+F)"
+                title="Toggle between VS Code and Gawkyy mode (Ctrl+Shift+F)"
               >
                 <span>⚡ VS Code: ON (Ctrl+Shift+F)</span>
               </button>

@@ -312,7 +312,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
 
           {/* Footer Branding & Disclaimer */}
           <div className="border-t border-slate-300 pt-4 mt-8 flex justify-between items-center text-[10px] text-slate-500">
-            <span>Generated securely via GAW (Generic Application Wrapper) • Embedded SQLite</span>
+            <span>Generated securely via Gawkyy • Embedded SQLite</span>
             <span>Confidential & Proprietary</span>
           </div>
         </div>

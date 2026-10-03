@@ -862,12 +862,12 @@ export default function App() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-2xl animate-pulse">
-            GAW
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-2xl ring-2 ring-amber-400/60 animate-pulse bg-slate-900 flex items-center justify-center p-1">
+            <img src="/gawkyy-cat-256x256.png" alt="Gawkyy" className="w-full h-full object-cover" />
           </div>
           <div className="text-center">
-            <h2 className="text-base font-bold text-white">Loading SQLite Engine (WebAssembly)</h2>
-            <p className="text-xs text-slate-400 mt-1">Mounting portable database runtime...</p>
+            <h2 className="text-base font-bold text-white">Loading Gawkyy...</h2>
+            <p className="text-xs text-slate-400 mt-1">Mounting portable database runtime (sql.js WebAssembly)...</p>
           </div>
         </div>
       </div>
@@ -1276,7 +1276,10 @@ export default function App() {
       {dialogConfig && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-xl p-5 shadow-2xl text-slate-100 space-y-4">
-            <h3 className="text-sm font-bold text-white">GAW Dialog</h3>
+            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <img src="/gawkyy-cat-64x64.png" alt="Gawkyy" className="w-4 h-4 rounded-full" />
+              <span>Gawkyy Dialog</span>
+            </h3>
             <p className="text-xs text-slate-300 leading-relaxed">{dialogConfig.message}</p>
             {dialogConfig.type === 'prompt' && (
               <input

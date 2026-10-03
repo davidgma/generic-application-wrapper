@@ -22,12 +22,12 @@ export default defineConfig(() => {
       },
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'sql-wasm.wasm'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'gawkyy-cat-64x64.png', 'gawkyy-cat-256x256.png', 'sql-wasm.wasm'],
         manifest: {
           id: '/',
-          name: 'GAW - Generic Application Wrapper',
-          short_name: 'GAW',
-          description: 'A modern, web-native offline-first MS Access in the browser. Portable SQLite apps with dynamic TSX plugins, interactive query grids, spreadsheets, and reports.',
+          name: 'Gawkyy',
+          short_name: 'Gawkyy',
+          description: 'Gawkyy - A modern, web-native offline-first MS Access in the browser. Portable SQLite apps with dynamic TSX plugins, interactive query grids, spreadsheets, and reports.',
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'standalone',

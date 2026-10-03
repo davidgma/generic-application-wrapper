@@ -40,7 +40,7 @@ export const PluginHost: React.FC<PluginHostProps> = ({
               onClick={onOpenInIDE}
               className="mt-4 w-full py-2 rounded bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition"
             >
-              Open in GAW IDE to Fix
+              Open in Gawkyy IDE to Fix
             </button>
           )}
         </div>

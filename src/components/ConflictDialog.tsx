@@ -24,13 +24,13 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
         </div>
 
         <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-          The underlying file <strong className="text-white font-mono">{conflict.fileName}</strong> was modified externally on your disk or cloud sync while GAW was running.
+          The underlying file <strong className="text-white font-mono">{conflict.fileName}</strong> was modified externally on your disk or cloud sync while Gawkyy was running.
         </p>
 
         {/* Visual Comparison Box */}
         <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs mb-5">
           <div className="p-2 rounded bg-slate-900/80 border border-slate-800">
-            <span className="text-[10px] uppercase font-bold text-indigo-400 block mb-1">Local GAW Memory</span>
+            <span className="text-[10px] uppercase font-bold text-indigo-400 block mb-1">Local Gawkyy Memory</span>
             <div className="text-slate-200 font-semibold">
               {(conflict.localSize / 1024).toFixed(1)} KB
             </div>

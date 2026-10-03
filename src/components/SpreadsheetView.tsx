@@ -432,7 +432,7 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
       <div className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'} text-xs`}>
         <div className="flex items-center gap-2">
           <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
-          <span className="font-bold text-sm">GAW Interactive Spreadsheet</span>
+          <span className="font-bold text-sm">Gawkyy Interactive Spreadsheet</span>
         </div>
 
         {/* Formatting controls */}
