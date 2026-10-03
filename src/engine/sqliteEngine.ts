@@ -192,8 +192,7 @@ export class SQLiteEngine {
     const now = new Date().toISOString();
     const settings = [
       ['app_title', 'Northwind Modern Commerce', now],
-      ['theme', 'vs-dark', now],
-      ['auto_sync_interval', '30', now],
+      ['auto_sync_interval', '0', now],
       ['version', '1.0.0', now],
       ['company_name', 'Northwind Global Corp', now],
       ['author', 'GAW Studio', now],

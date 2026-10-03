@@ -18,6 +18,23 @@ export default function CustomerCrmPlugin({ gaw }) {
     status: 'ACTIVE'
   });
 
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
+
   const loadCustomers = () => {
     try {
       const data = gaw.db.queryObjects(
@@ -110,17 +127,17 @@ export default function CustomerCrmPlugin({ gaw }) {
   };
 
   return (
-    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 p-6 pb-20">
+    <div className={'flex flex-col min-h-full p-6 pb-20 ' + (isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800')}>
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800">
+      <div className={'flex flex-wrap items-center justify-between gap-4 pb-5 border-b ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-white">Customer Directory & CRM</h1>
+            <h1 className={'text-xl font-bold tracking-tight ' + (isDark ? 'text-white' : 'text-slate-900')}>Customer Directory & CRM</h1>
             <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
               Native SQLite Plugin
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
             Manages client accounts, credit limits, and orders directly inside this .db file.
           </p>
         </div>
@@ -128,7 +145,9 @@ export default function CustomerCrmPlugin({ gaw }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => gaw.navigation.openQuery('SELECT * FROM customers;')}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+            className={'px-3 py-1.5 text-xs font-medium rounded border transition ' + (
+              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300 shadow-sm'
+            )}
           >
             Open in SQL IDE
           </button>
@@ -143,22 +162,22 @@ export default function CustomerCrmPlugin({ gaw }) {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-5">
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Accounts</span>
-          <div className="text-2xl font-bold text-white mt-1">{stats.count}</div>
-          <div className="text-[11px] text-emerald-400 mt-1">{stats.activeCount} active accounts</div>
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase tracking-wider ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Accounts</span>
+          <div className={'text-2xl font-bold mt-1 ' + (isDark ? 'text-white' : 'text-slate-900')}>{stats.count}</div>
+          <div className="text-[11px] text-emerald-500 mt-1">{stats.activeCount} active accounts</div>
         </div>
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Total Credit Limit</span>
-          <div className="text-2xl font-bold text-emerald-400 mt-1">\${stats.totalCredit.toLocaleString()}</div>
-          <div className="text-[11px] text-slate-400 mt-1">Authorized credit line pool</div>
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase tracking-wider ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Credit Limit</span>
+          <div className="text-2xl font-bold text-emerald-500 mt-1">{'$' + stats.totalCredit.toLocaleString()}</div>
+          <div className={'text-[11px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Authorized credit line pool</div>
         </div>
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Average Credit Line</span>
-          <div className="text-2xl font-bold text-indigo-400 mt-1">
-            \${stats.count ? Math.round(stats.totalCredit / stats.count).toLocaleString() : 0}
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase tracking-wider ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Average Credit Line</span>
+          <div className="text-2xl font-bold text-indigo-500 mt-1">
+            {'$' + (stats.count ? Math.round(stats.totalCredit / stats.count).toLocaleString() : 0)}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Per active enterprise account</div>
+          <div className={'text-[11px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Per active enterprise account</div>
         </div>
       </div>
 
@@ -170,20 +189,24 @@ export default function CustomerCrmPlugin({ gaw }) {
             placeholder="Search by company, contact, city, country..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-1.5 text-xs bg-slate-950 border border-slate-700 rounded text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            className={'w-full px-3 py-1.5 text-xs rounded border focus:outline-none focus:border-indigo-500 ' + (
+              isDark ? 'bg-slate-950 border-slate-700 text-slate-100 placeholder-slate-500' : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+            )}
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Status:</span>
+          <span className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Status:</span>
           {['ALL', 'ACTIVE', 'VIP', 'HOLD'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
               className={'px-2.5 py-1 text-xs rounded font-medium transition ' + (
                 statusFilter === st
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : isDark
+                  ? 'bg-slate-800 text-slate-400 hover:text-slate-200'
+                  : 'bg-slate-200 text-slate-600 hover:text-slate-900'
               )}
             >
               {st}
@@ -194,9 +217,9 @@ export default function CustomerCrmPlugin({ gaw }) {
 
       {/* Table & Detail Split */}
       <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
-        <div className="flex-1 bg-slate-950/60 rounded-lg border border-slate-800 overflow-auto">
+        <div className={'flex-1 rounded-xl border overflow-auto shadow-sm ' + (isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200')}>
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-800/90 sticky top-0 text-slate-300 font-semibold border-b border-slate-700">
+            <thead className={'sticky top-0 font-semibold border-b ' + (isDark ? 'bg-slate-800/90 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200')}>
               <tr>
                 <th className="py-2.5 px-3">Company</th>
                 <th className="py-2.5 px-3">Contact</th>
@@ -206,29 +229,33 @@ export default function CustomerCrmPlugin({ gaw }) {
                 <th className="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60 text-slate-300' : 'divide-slate-200 text-slate-700')}>
               {filtered.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => setSelectedCustomer(c)}
-                  className={'hover:bg-slate-800/50 cursor-pointer transition ' + (
-                    selectedCustomer?.id === c.id ? 'bg-indigo-950/40 border-l-2 border-indigo-500' : ''
+                  className={'cursor-pointer transition ' + (
+                    isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'
+                  ) + ' ' + (
+                    selectedCustomer?.id === c.id
+                      ? (isDark ? 'bg-indigo-950/40 border-l-2 border-indigo-500' : 'bg-indigo-50/70 border-l-2 border-indigo-500')
+                      : ''
                   )}
                 >
-                  <td className="py-2 px-3 font-medium text-white">{c.company_name}</td>
+                  <td className={'py-2 px-3 font-medium ' + (isDark ? 'text-white' : 'text-slate-900')}>{c.company_name}</td>
                   <td className="py-2 px-3">
                     <div>{c.contact_name}</div>
-                    <div className="text-[10px] text-slate-500">{c.contact_title}</div>
+                    <div className={'text-[10px] ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>{c.contact_title}</div>
                   </td>
-                  <td className="py-2 px-3 text-slate-400">{c.city}, {c.country}</td>
-                  <td className="py-2 px-3 font-mono text-emerald-400">{'$' + Number(c.credit_limit || 0).toLocaleString()}</td>
+                  <td className={'py-2 px-3 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{c.city}, {c.country}</td>
+                  <td className="py-2 px-3 font-mono text-emerald-500 font-semibold">{'$' + Number(c.credit_limit || 0).toLocaleString()}</td>
                   <td className="py-2 px-3">
                     <span className={'px-2 py-0.5 rounded text-[10px] font-semibold ' + (
                       c.status === 'ACTIVE'
-                        ? 'bg-emerald-500/20 text-emerald-400'
+                        ? 'bg-emerald-500/20 text-emerald-500'
                         : c.status === 'VIP'
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                        : 'bg-amber-500/20 text-amber-400'
+                        ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                        : 'bg-amber-500/20 text-amber-500'
                     )}>
                       {c.status}
                     </span>
@@ -239,7 +266,7 @@ export default function CustomerCrmPlugin({ gaw }) {
                         e.stopPropagation();
                         handleDelete(c);
                       }}
-                      className="px-2 py-1 text-[11px] text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded transition"
+                      className="px-2 py-1 text-[11px] text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded transition"
                     >
                       Delete
                     </button>
@@ -248,7 +275,7 @@ export default function CustomerCrmPlugin({ gaw }) {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500 text-xs">
+                  <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
                     No customers match the current filter.
                   </td>
                 </tr>
@@ -259,47 +286,49 @@ export default function CustomerCrmPlugin({ gaw }) {
 
         {/* Selected Customer Panel */}
         {selectedCustomer && (
-          <div className="w-80 flex-shrink-0 bg-slate-800/90 rounded-lg border border-slate-700/80 p-4 flex flex-col justify-between overflow-auto">
+          <div className={'w-80 flex-shrink-0 rounded-xl border p-4 flex flex-col justify-between overflow-auto shadow-sm ' + (
+            isDark ? 'bg-slate-800/90 border-slate-700/80' : 'bg-white border-slate-200'
+          )}>
             <div>
-              <div className="flex items-center justify-between border-b border-slate-700 pb-3">
-                <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Account Dossier</span>
+              <div className={'flex items-center justify-between border-b pb-3 ' + (isDark ? 'border-slate-700' : 'border-slate-200')}>
+                <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">Account Dossier</span>
                 <button
                   onClick={() => setSelectedCustomer(null)}
-                  className="text-slate-400 hover:text-white text-xs"
+                  className={'text-xs p-1 ' + (isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}
                 >
                   ✕
                 </button>
               </div>
               <div className="mt-3">
-                <h3 className="text-base font-bold text-white">{selectedCustomer.company_name}</h3>
-                <p className="text-xs text-slate-400">{selectedCustomer.contact_name} ({selectedCustomer.contact_title})</p>
+                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>{selectedCustomer.company_name}</h3>
+                <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{selectedCustomer.contact_name} ({selectedCustomer.contact_title})</p>
               </div>
 
               <div className="mt-4 space-y-2 text-xs">
-                <div className="flex justify-between py-1 border-b border-slate-700/50">
-                  <span className="text-slate-400">Account ID:</span>
-                  <span className="font-mono text-white">{selectedCustomer.id}</span>
+                <div className={'flex justify-between py-1 border-b ' + (isDark ? 'border-slate-700/50' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Account ID:</span>
+                  <span className={'font-mono font-medium ' + (isDark ? 'text-white' : 'text-slate-900')}>{selectedCustomer.id}</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700/50">
-                  <span className="text-slate-400">City / Country:</span>
-                  <span className="text-white">{selectedCustomer.city}, {selectedCustomer.country}</span>
+                <div className={'flex justify-between py-1 border-b ' + (isDark ? 'border-slate-700/50' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>City / Country:</span>
+                  <span className={isDark ? 'text-white' : 'text-slate-900'}>{selectedCustomer.city}, {selectedCustomer.country}</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700/50">
-                  <span className="text-slate-400">Phone:</span>
-                  <span className="text-white">{selectedCustomer.phone || 'N/A'}</span>
+                <div className={'flex justify-between py-1 border-b ' + (isDark ? 'border-slate-700/50' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Phone:</span>
+                  <span className={isDark ? 'text-white' : 'text-slate-900'}>{selectedCustomer.phone || 'N/A'}</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700/50">
-                  <span className="text-slate-400">Credit Limit:</span>
-                  <span className="font-mono text-emerald-400 font-bold">{'$' + Number(selectedCustomer.credit_limit || 0).toLocaleString()}</span>
+                <div className={'flex justify-between py-1 border-b ' + (isDark ? 'border-slate-700/50' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Credit Limit:</span>
+                  <span className="font-mono text-emerald-500 font-bold">{'$' + Number(selectedCustomer.credit_limit || 0).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700/50">
-                  <span className="text-slate-400">Account Status:</span>
-                  <span className="font-semibold text-indigo-300">{selectedCustomer.status}</span>
+                <div className={'flex justify-between py-1 border-b ' + (isDark ? 'border-slate-700/50' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Account Status:</span>
+                  <span className="font-semibold text-indigo-500">{selectedCustomer.status}</span>
                 </div>
               </div>
             </div>
 
-            <div className="mt-6 pt-3 border-t border-slate-700 space-y-2">
+            <div className={'mt-6 pt-3 border-t space-y-2 ' + (isDark ? 'border-slate-700' : 'border-slate-200')}>
               <button
                 onClick={() => {
                   gaw.navigation.openQuery(
@@ -308,7 +337,7 @@ export default function CustomerCrmPlugin({ gaw }) {
                       "' ORDER BY o.order_date DESC;"
                   );
                 }}
-                className="w-full py-1.5 text-xs font-semibold rounded bg-indigo-600 hover:bg-indigo-500 text-white transition text-center"
+                className="w-full py-1.5 text-xs font-semibold rounded bg-indigo-600 hover:bg-indigo-500 text-white transition text-center shadow"
               >
                 View Customer Orders in IDE
               </button>
@@ -320,75 +349,91 @@ export default function CustomerCrmPlugin({ gaw }) {
       {/* New Customer Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl text-slate-100">
-            <h2 className="text-lg font-bold text-white mb-4">Create New Customer</h2>
+          <div className={'w-full max-w-md rounded-xl p-6 shadow-2xl border ' + (
+            isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'
+          )}>
+            <h2 className={'text-lg font-bold mb-4 ' + (isDark ? 'text-white' : 'text-slate-900')}>Create New Customer</h2>
             <form onSubmit={handleCreateCustomer} className="space-y-3 text-xs">
               <div>
-                <label className="block text-slate-400 mb-1">Company Name *</label>
+                <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Company Name *</label>
                 <input
                   type="text"
                   required
                   value={newCustomer.company_name}
                   onChange={(e) => setNewCustomer({ ...newCustomer, company_name: e.target.value })}
-                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                  className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                    isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                  )}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">Contact Name</label>
+                  <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Contact Name</label>
                   <input
                     type="text"
                     value={newCustomer.contact_name}
                     onChange={(e) => setNewCustomer({ ...newCustomer, contact_name: e.target.value })}
-                    className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                    className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                      isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    )}
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Contact Title</label>
+                  <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Contact Title</label>
                   <input
                     type="text"
                     value={newCustomer.contact_title}
                     onChange={(e) => setNewCustomer({ ...newCustomer, contact_title: e.target.value })}
-                    className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                    className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                      isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    )}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">City</label>
+                  <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>City</label>
                   <input
                     type="text"
                     value={newCustomer.city}
                     onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
-                    className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                    className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                      isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    )}
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Country</label>
+                  <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Country</label>
                   <input
                     type="text"
                     value={newCustomer.country}
                     onChange={(e) => setNewCustomer({ ...newCustomer, country: e.target.value })}
-                    className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                    className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                      isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    )}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">Credit Limit ($)</label>
+                  <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Credit Limit ($)</label>
                   <input
                     type="number"
                     value={newCustomer.credit_limit}
                     onChange={(e) => setNewCustomer({ ...newCustomer, credit_limit: Number(e.target.value) })}
-                    className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                    className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                      isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    )}
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Status</label>
+                  <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Status</label>
                   <select
                     value={newCustomer.status}
                     onChange={(e) => setNewCustomer({ ...newCustomer, status: e.target.value })}
-                    className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100"
+                    className={'w-full px-3 py-1.5 rounded border focus:outline-none focus:border-indigo-500 ' + (
+                      isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                    )}
                   >
                     <option value="ACTIVE">ACTIVE</option>
                     <option value="VIP">VIP</option>
@@ -396,17 +441,19 @@ export default function CustomerCrmPlugin({ gaw }) {
                   </select>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+              <div className={'flex justify-end gap-2 pt-4 border-t ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                  className={'px-3 py-1.5 rounded transition ' + (
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  )}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 font-semibold text-white"
+                  className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow"
                 >
                   Save to SQLite
                 </button>
@@ -426,6 +473,23 @@ export default function InventoryValuatorPlugin({ gaw }) {
   const [products, setProducts] = useState([]);
   const [filterThreshold, setFilterThreshold] = useState(25);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
 
   const loadProducts = () => {
     try {
@@ -491,11 +555,11 @@ export default function InventoryValuatorPlugin({ gaw }) {
   };
 
   return (
-    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 p-6 pb-20">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+    <div className={'flex flex-col min-h-full p-6 pb-20 ' + (isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800')}>
+      <div className={'flex flex-wrap items-center justify-between gap-4 pb-4 border-b ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
         <div>
-          <h1 className="text-xl font-bold text-white">Inventory Valuation & Reorder Desk</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Inventory Valuation & Reorder Desk</h1>
+          <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
             Monitor real-time warehouse inventory value, low-stock triggers, and execute immediate batch restocks.
           </p>
         </div>
@@ -517,44 +581,48 @@ export default function InventoryValuatorPlugin({ gaw }) {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-5">
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase">Gross Inventory Value</span>
-          <div className="text-2xl font-bold text-emerald-400 mt-1">
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Gross Inventory Value</span>
+          <div className="text-2xl font-bold text-emerald-500 mt-1">
             {'$' + Math.round(valuationStats.totalValue).toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Current assets on hand</div>
+          <div className={'text-[11px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Current assets on hand</div>
         </div>
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase">Units In Stock</span>
-          <div className="text-2xl font-bold text-white mt-1">
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Units In Stock</span>
+          <div className={'text-2xl font-bold mt-1 ' + (isDark ? 'text-white' : 'text-slate-900')}>
             {valuationStats.totalItems.toLocaleString()}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Across {valuationStats.totalSkus} SKUs</div>
+          <div className={'text-[11px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Across {valuationStats.totalSkus} SKUs</div>
         </div>
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase">Low Stock Alerts</span>
-          <div className="text-2xl font-bold text-amber-400 mt-1">
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Low Stock Alerts</span>
+          <div className="text-2xl font-bold text-amber-500 mt-1">
             {valuationStats.lowStockCount}
           </div>
-          <div className="text-[11px] text-amber-400/80 mt-1">Below reorder safety mark</div>
+          <div className="text-[11px] text-amber-500 mt-1">Below reorder safety mark</div>
         </div>
-        <div className="p-4 rounded-lg bg-slate-800/80 border border-slate-700/60 shadow-sm">
-          <span className="text-[11px] font-medium text-slate-400 uppercase">Avg Unit Cost</span>
-          <div className="text-2xl font-bold text-indigo-400 mt-1">
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-medium uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Avg Unit Cost</span>
+          <div className="text-2xl font-bold text-indigo-500 mt-1">
             {'$' + (valuationStats.totalItems ? (valuationStats.totalValue / valuationStats.totalItems).toFixed(2) : '0.00')}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1">Weighted asset average</div>
+          <div className={'text-[11px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Weighted asset average</div>
         </div>
       </div>
 
       {/* Filter and threshold slider */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-3 bg-slate-950/80 rounded-lg border border-slate-800 mb-4 text-xs">
+      <div className={'flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border mb-4 text-xs shadow-sm ' + (
+        isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+      )}>
         <div className="flex items-center gap-3">
-          <span className="text-slate-400 font-medium">Category:</span>
+          <span className={isDark ? 'text-slate-400 font-medium' : 'text-slate-600 font-medium'}>Category:</span>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-2.5 py-1 bg-slate-800 border border-slate-700 rounded text-slate-200"
+            className={'px-2.5 py-1 rounded border focus:outline-none ' + (
+              isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
+            )}
           >
             {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -563,7 +631,9 @@ export default function InventoryValuatorPlugin({ gaw }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-slate-400 font-medium">Max Stock Threshold: <strong className="text-indigo-400">{filterThreshold}</strong> units</span>
+          <span className={isDark ? 'text-slate-400 font-medium' : 'text-slate-600 font-medium'}>
+            Max Stock Threshold: <strong className="text-indigo-500">{filterThreshold}</strong> units
+          </span>
           <input
             type="range"
             min="5"
@@ -576,9 +646,13 @@ export default function InventoryValuatorPlugin({ gaw }) {
       </div>
 
       {/* Product List */}
-      <div className="flex-1 bg-slate-950/60 rounded-lg border border-slate-800 overflow-auto">
+      <div className={'flex-1 rounded-xl border overflow-auto shadow-sm ' + (
+        isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200'
+      )}>
         <table className="w-full text-left text-xs border-collapse">
-          <thead className="bg-slate-800/90 sticky top-0 text-slate-300 font-semibold border-b border-slate-700">
+          <thead className={'sticky top-0 font-semibold border-b ' + (
+            isDark ? 'bg-slate-800/90 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'
+          )}>
             <tr>
               <th className="py-2.5 px-3">Product Name</th>
               <th className="py-2.5 px-3">SKU</th>
@@ -589,30 +663,30 @@ export default function InventoryValuatorPlugin({ gaw }) {
               <th className="py-2.5 px-3 text-right">Quick Restock</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/60 text-slate-300">
+          <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60 text-slate-300' : 'divide-slate-200 text-slate-700')}>
             {filtered.map((p) => {
               const isCritical = p.units_in_stock <= (p.reorder_level || 15);
               return (
-                <tr key={p.id} className="hover:bg-slate-800/50 transition">
-                  <td className="py-2.5 px-3 font-medium text-white">{p.name}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-400">{p.sku}</td>
-                  <td className="py-2.5 px-3 text-indigo-300">{p.category}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-200">{'$' + Number(p.unit_price).toFixed(2)}</td>
+                <tr key={p.id} className={'transition ' + (isDark ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50')}>
+                  <td className={'py-2.5 px-3 font-medium ' + (isDark ? 'text-white' : 'text-slate-900')}>{p.name}</td>
+                  <td className={'py-2.5 px-3 font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{p.sku}</td>
+                  <td className="py-2.5 px-3 text-indigo-500 font-medium">{p.category}</td>
+                  <td className={'py-2.5 px-3 font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{'$' + Number(p.unit_price).toFixed(2)}</td>
                   <td className="py-2.5 px-3">
                     <span className={'inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold ' + (
-                      isCritical ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-slate-800 text-slate-300'
+                      isCritical ? 'bg-red-500/20 text-red-500 border border-red-500/30' : (isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700')
                     )}>
                       {p.units_in_stock}
                       {isCritical && <span className="text-[10px]">⚠️ Low</span>}
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 font-mono text-emerald-400">
+                  <td className="py-2.5 px-3 font-mono text-emerald-500 font-semibold">
                     {'$' + (p.units_in_stock * p.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="py-2.5 px-3 text-right">
                     <button
                       onClick={() => handleRestock(p, 50)}
-                      className="px-2.5 py-1 text-[11px] font-semibold rounded bg-indigo-600/80 hover:bg-indigo-600 text-white transition shadow-sm"
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
                     >
                       +50 Units
                     </button>
@@ -638,6 +712,23 @@ export default function ExecutivePulsePlugin({ gaw }) {
     avgOrder: 0,
     recentOrders: []
   });
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
 
   const loadData = () => {
     try {
@@ -672,11 +763,11 @@ export default function ExecutivePulsePlugin({ gaw }) {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 p-6 pb-20">
-      <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+    <div className={'flex flex-col min-h-full p-6 pb-20 ' + (isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800')}>
+      <div className={'flex flex-wrap items-center justify-between gap-4 pb-4 border-b ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
         <div>
-          <h1 className="text-xl font-bold text-white">Executive Pulse & Financial Overview</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Executive Pulse & Financial Overview</h1>
+          <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
             Aggregated business KPIs computed directly from SQLite relational tables.
           </p>
         </div>
@@ -689,36 +780,40 @@ export default function ExecutivePulsePlugin({ gaw }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-6">
-        <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-900/40 to-slate-800 border border-indigo-500/20 shadow-md">
-          <span className="text-[11px] font-semibold text-indigo-300 uppercase">Gross Revenue</span>
-          <div className="text-3xl font-extrabold text-white mt-1">{'$' + metrics.revenue.toLocaleString()}</div>
-          <span className="text-[11px] text-emerald-400 mt-1 block">▲ +14.2% vs previous period</span>
+        <div className={'p-4 rounded-xl border shadow-sm ' + (
+          isDark
+            ? 'bg-gradient-to-br from-indigo-900/40 to-slate-800 border-indigo-500/20'
+            : 'bg-gradient-to-br from-indigo-50 to-white border-indigo-200'
+        )}>
+          <span className="text-[11px] font-semibold text-indigo-500 uppercase">Gross Revenue</span>
+          <div className={'text-3xl font-extrabold mt-1 ' + (isDark ? 'text-white' : 'text-slate-900')}>{'$' + metrics.revenue.toLocaleString()}</div>
+          <span className="text-[11px] text-emerald-500 mt-1 block">▲ +14.2% vs previous period</span>
         </div>
-        <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase">Total Orders</span>
-          <div className="text-3xl font-extrabold text-white mt-1">{metrics.orders}</div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Completed & in transit</span>
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-semibold uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Orders</span>
+          <div className={'text-3xl font-extrabold mt-1 ' + (isDark ? 'text-white' : 'text-slate-900')}>{metrics.orders}</div>
+          <span className={'text-[11px] mt-1 block ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Completed & in transit</span>
         </div>
-        <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase">Average Ticket</span>
-          <div className="text-3xl font-extrabold text-indigo-400 mt-1">{'$' + metrics.avgOrder}</div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Per closed order</span>
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-semibold uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Average Ticket</span>
+          <div className="text-3xl font-extrabold text-indigo-500 mt-1">{'$' + metrics.avgOrder}</div>
+          <span className={'text-[11px] mt-1 block ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Per closed order</span>
         </div>
-        <div className="p-4 rounded-xl bg-slate-800 border border-slate-700 shadow-md">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase">Customer Accounts</span>
-          <div className="text-3xl font-extrabold text-emerald-400 mt-1">{metrics.customers}</div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Active global partners</span>
+        <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200')}>
+          <span className={'text-[11px] font-semibold uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Customer Accounts</span>
+          <div className="text-3xl font-extrabold text-emerald-500 mt-1">{metrics.customers}</div>
+          <span className={'text-[11px] mt-1 block ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Active global partners</span>
         </div>
       </div>
 
-      <div className="mt-2 bg-slate-950/70 border border-slate-800 rounded-xl p-5 shadow">
+      <div className={'mt-2 rounded-xl p-5 border shadow-sm ' + (isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-white border-slate-200')}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-white">Recent Real-time Orders</h2>
-          <span className="text-xs text-slate-400 font-mono">SQLite View</span>
+          <h2 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Recent Real-time Orders</h2>
+          <span className={'text-xs font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>SQLite View</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="text-slate-400 border-b border-slate-800">
+            <thead className={'border-b ' + (isDark ? 'text-slate-400 border-slate-800' : 'text-slate-600 border-slate-200')}>
               <tr>
                 <th className="py-2 px-3">Order ID</th>
                 <th className="py-2 px-3">Customer</th>
@@ -728,16 +823,18 @@ export default function ExecutivePulsePlugin({ gaw }) {
                 <th className="py-2 px-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-300">
+            <tbody className={'divide-y ' + (isDark ? 'divide-slate-800 text-slate-300' : 'divide-slate-200 text-slate-700')}>
               {metrics.recentOrders.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-800/40 transition">
-                  <td className="py-2.5 px-3 font-mono text-indigo-300">{o.id}</td>
-                  <td className="py-2.5 px-3 font-medium text-white">{o.company_name}</td>
-                  <td className="py-2.5 px-3 text-slate-400">{o.order_date}</td>
+                <tr key={o.id} className={'transition ' + (isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50')}>
+                  <td className="py-2.5 px-3 font-mono text-indigo-500 font-semibold">{o.id}</td>
+                  <td className={'py-2.5 px-3 font-medium ' + (isDark ? 'text-white' : 'text-slate-900')}>{o.company_name}</td>
+                  <td className={'py-2.5 px-3 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{o.order_date}</td>
                   <td className="py-2.5 px-3">{o.ship_country}</td>
-                  <td className="py-2.5 px-3 font-mono text-emerald-400">{'$' + Number(o.total_amount).toFixed(2)}</td>
+                  <td className="py-2.5 px-3 font-mono text-emerald-500 font-semibold">{'$' + Number(o.total_amount).toFixed(2)}</td>
                   <td className="py-2.5 px-3">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-200 border border-slate-700">
+                    <span className={'px-2 py-0.5 rounded text-[10px] font-bold border ' + (
+                      isDark ? 'bg-slate-800 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300'
+                    )}>
                       {o.status}
                     </span>
                   </td>
@@ -774,6 +871,23 @@ export default function HelloWorldPlugin({ gaw }) {
   const [clickCount, setClickCount] = useState(0);
   const [dbGreeting, setDbGreeting] = useState('');
   const [tableCount, setTableCount] = useState(0);
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
 
   // 1. Run a query on the in-browser SQLite database
   const fetchDbGreeting = () => {
@@ -814,30 +928,38 @@ export default function HelloWorldPlugin({ gaw }) {
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-6 pb-24">
+    <div className={'p-8 max-w-4xl mx-auto space-y-6 pb-24 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border border-indigo-700/50 rounded-2xl p-6 shadow-xl backdrop-blur">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-indigo-300 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-700/50">
+      <div className={'border rounded-2xl p-6 shadow-xl backdrop-blur ' + (
+        isDark
+          ? 'bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border-indigo-700/50'
+          : 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200'
+      )}>
+        <span className={'text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded border ' + (
+          isDark ? 'text-indigo-300 bg-indigo-950/80 border-indigo-700/50' : 'text-indigo-700 bg-indigo-100 border-indigo-300'
+        )}>
           Starter Plugin Guide
         </span>
-        <h1 className="text-2xl font-bold text-white mt-2">
+        <h1 className={'text-2xl font-bold mt-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
           👋 Hello, {userName || 'World'}!
         </h1>
-        <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+        <p className={'text-xs mt-1 max-w-2xl leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
           Welcome to your first GAW plugin! This component is compiled on-the-fly inside your browser
           using Sucrase and runs locally with direct access to your SQLite database.
         </p>
       </div>
 
       {/* Interactive Controls Card */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 space-y-4 shadow-lg">
-        <h2 className="text-sm font-bold text-white flex items-center gap-2">
+      <div className={'border rounded-xl p-6 space-y-4 shadow-sm ' + (
+        isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+      )}>
+        <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
           <span>⚡ Interactive Plugin State Demo</span>
         </h2>
 
         <div className="flex flex-col sm:flex-row gap-3 items-center">
           <div className="flex-1 w-full">
-            <label className="block text-[11px] text-slate-400 mb-1 font-medium">
+            <label className={'block text-[11px] mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
               Enter your name:
             </label>
             <input
@@ -845,7 +967,9 @@ export default function HelloWorldPlugin({ gaw }) {
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
               placeholder="e.g. Alice"
-              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+              className={'w-full px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-indigo-500 border ' + (
+                isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+              )}
             />
           </div>
 
@@ -858,7 +982,9 @@ export default function HelloWorldPlugin({ gaw }) {
             </button>
             <button
               onClick={handleDialogDemo}
-              className="flex-1 sm:flex-none px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-lg border border-slate-700 transition"
+              className={'flex-1 sm:flex-none px-3 py-2 text-xs rounded-lg border transition ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+              )}
             >
               Test Dialog
             </button>
@@ -867,30 +993,36 @@ export default function HelloWorldPlugin({ gaw }) {
       </div>
 
       {/* SQLite Live Database Connection Card */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 space-y-3 shadow-lg">
-        <h2 className="text-sm font-bold text-white flex items-center justify-between">
+      <div className={'border rounded-xl p-6 space-y-3 shadow-sm ' + (
+        isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+      )}>
+        <h2 className={'text-sm font-bold flex items-center justify-between ' + (isDark ? 'text-white' : 'text-slate-900')}>
           <span>🗄️ Live SQLite Integration</span>
           <button
             onClick={fetchDbGreeting}
-            className="text-[11px] text-indigo-400 hover:text-indigo-300 font-normal transition"
+            className="text-[11px] text-indigo-500 hover:text-indigo-400 font-normal transition"
           >
             Re-run Query
           </button>
         </h2>
-        <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg space-y-1 font-mono text-xs">
-          <p className="text-slate-400 text-[11px]">Query Output:</p>
-          <p className="text-emerald-400 font-semibold">{dbGreeting || 'Querying database...'}</p>
-          <p className="text-slate-500 text-[10px] pt-1">
+        <div className={'p-3 rounded-lg space-y-1 font-mono text-xs border ' + (
+          isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
+        )}>
+          <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Query Output:</p>
+          <p className="text-emerald-500 font-semibold">{dbGreeting || 'Querying database...'}</p>
+          <p className={'text-[10px] pt-1 ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
             Database contains {tableCount} active tables.
           </p>
         </div>
       </div>
 
       {/* Quick Reference Code Explanation */}
-      <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-5 space-y-2 text-xs text-slate-400">
-        <h3 className="font-semibold text-slate-200">How to edit this plugin:</h3>
+      <div className={'border rounded-xl p-5 space-y-2 text-xs ' + (
+        isDark ? 'bg-slate-950/60 border-slate-800/80 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+      )}>
+        <h3 className={'font-semibold ' + (isDark ? 'text-slate-200' : 'text-slate-800')}>How to edit this plugin:</h3>
         <p>
-          Click the three dots <strong className="text-slate-200">(···)</strong> next to "Hello World Starter" in the left sidebar and choose <strong className="text-indigo-400">Edit in IDE</strong>. Any changes you make will instantly hot-reload here!
+          Click the three dots <strong className={isDark ? 'text-slate-200' : 'text-slate-800'}>(···)</strong> next to "Hello World Starter" in the left sidebar and choose <strong className="text-indigo-500">Edit in IDE</strong>. Any changes you make will instantly hot-reload here!
         </p>
       </div>
     </div>
@@ -931,6 +1063,23 @@ export default function DropboxSyncPlugin({ gaw }) {
   const [remoteFiles, setRemoteFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [activeTab, setActiveTab] = useState('sync');
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
 
   // Keep state in sync with external changes
   useEffect(() => {
@@ -1016,6 +1165,7 @@ export default function DropboxSyncPlugin({ gaw }) {
     setIsPulling(true);
     try {
       await gaw.dropbox.downloadFile(remote);
+      gaw.workspace?.setSidebarOpen(true);
       gaw.toast.success('Successfully pulled ' + remote.name + ' from Dropbox!');
     } catch (err) {
       gaw.toast.error('Pull failed: ' + (err.message || String(err)));
@@ -1032,6 +1182,7 @@ export default function DropboxSyncPlugin({ gaw }) {
 
     try {
       await gaw.dropbox.downloadFile(file);
+      gaw.workspace?.setSidebarOpen(true);
       gaw.toast.success('Loaded ' + file.name + ' from Dropbox!');
     } catch (err) {
       gaw.toast.error('Failed to load file: ' + (err.message || String(err)));
@@ -1068,27 +1219,33 @@ export default function DropboxSyncPlugin({ gaw }) {
   const lastSyncDate = config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleString() : 'Never synced in this session';
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100 pb-28">
+    <div className={'p-6 max-w-5xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Top Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border border-blue-800/50 rounded-2xl shadow-xl backdrop-blur">
+      <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-xl backdrop-blur border ' + (
+        isDark
+          ? 'bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border-blue-800/50'
+          : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'
+      )}>
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-blue-400">
+          <div className={'w-12 h-12 rounded-xl flex items-center justify-center ' + (
+            isDark ? 'bg-blue-600/30 border border-blue-500/40 text-blue-400' : 'bg-blue-100 border border-blue-300 text-blue-600'
+          )}>
             <Cloud className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white">Dropbox Cloud Synchronization</h1>
+              <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Dropbox Cloud Synchronization</h1>
               {config.connected ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 border border-emerald-700/60 text-emerald-400 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> Connected
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-950 border border-amber-700/60 text-amber-400 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 border border-amber-500/40 text-amber-500 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" /> Disconnected
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-300 mt-0.5">
+            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
               Securely synchronize your SQLite database file with your personal or enterprise Dropbox storage.
             </p>
           </div>
@@ -1098,12 +1255,12 @@ export default function DropboxSyncPlugin({ gaw }) {
         {config.connected && (
           <div className="flex items-center gap-3">
             <div className="text-right text-xs">
-              <p className="font-semibold text-white">{config.accountName || 'Dropbox User'}</p>
-              <p className="text-[11px] text-slate-400">{config.accountEmail || ''}</p>
+              <p className={'font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{config.accountName || 'Dropbox User'}</p>
+              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{config.accountEmail || ''}</p>
             </div>
             <button
               onClick={handleDisconnect}
-              className="px-3 py-1.5 rounded-lg border border-red-800/60 bg-red-950/40 hover:bg-red-900/60 text-red-300 text-xs font-medium transition"
+              className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-medium transition"
             >
               Disconnect
             </button>
@@ -1112,9 +1269,9 @@ export default function DropboxSyncPlugin({ gaw }) {
       </div>
 
       {/* Target Coordination Status Banner */}
-      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (isDropboxActive ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-200' : 'bg-amber-950/30 border-amber-700/50 text-amber-200')}>
+      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (isDropboxActive ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' : 'bg-amber-500/10 border-amber-500/30 text-amber-600')}>
         <div className="flex items-center gap-2.5">
-          {isDropboxActive ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <HardDrive className="w-4 h-4 text-amber-400" />}
+          {isDropboxActive ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <HardDrive className="w-4 h-4 text-amber-500" />}
           <div>
             <p className="font-bold">
               {isDropboxActive
@@ -1139,22 +1296,40 @@ export default function DropboxSyncPlugin({ gaw }) {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-2 text-xs">
+      <div className={'flex items-center gap-2 border-b pb-2 text-xs ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
         <button
           onClick={() => setActiveTab('sync')}
-          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (activeTab === 'sync' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800')}
+          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (
+            activeTab === 'sync'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDark
+              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          )}
         >
           Database Sync & Telemetry
         </button>
         <button
           onClick={() => setActiveTab('browser')}
-          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (activeTab === 'browser' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800')}
+          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (
+            activeTab === 'browser'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDark
+              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          )}
         >
           Dropbox File Browser ({remoteFiles.length})
         </button>
         <button
           onClick={() => setActiveTab('settings')}
-          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (activeTab === 'settings' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800')}
+          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (
+            activeTab === 'settings'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : isDark
+              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          )}
         >
           Connection & API Keys
         </button>
@@ -1164,34 +1339,40 @@ export default function DropboxSyncPlugin({ gaw }) {
       {activeTab === 'sync' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Card A: Active Database Status */}
-          <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Database className="w-4 h-4 text-blue-400" />
+          <div className={'p-5 rounded-xl space-y-4 border shadow-sm ' + (
+            isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+          )}>
+            <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+              <Database className="w-4 h-4 text-blue-500" />
               <span>Active Database Telemetry</span>
             </h2>
 
             <div className="space-y-2.5 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-                <span className="text-slate-400">Database Name:</span>
-                <span className="font-mono font-semibold text-white">{storageMeta.fileName}</span>
+              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Database Name:</span>
+                <span className={'font-mono font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{storageMeta.fileName}</span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-                <span className="text-slate-400">Remote Dropbox Path:</span>
-                <span className="font-mono text-blue-300">
+              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Remote Dropbox Path:</span>
+                <span className="font-mono text-blue-500 font-medium">
                   {gaw.dropbox.getCurrentRemoteFile()?.path_display || '/' + storageMeta.fileName}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-                <span className="text-slate-400">Database Size:</span>
-                <span className="font-mono text-slate-200">{(storageMeta.fileSize / 1024).toFixed(1)} KB</span>
+              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Database Size:</span>
+                <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{(storageMeta.fileSize / 1024).toFixed(1)} KB</span>
               </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-                <span className="text-slate-400">Last Synced to Dropbox:</span>
-                <span className="font-mono text-emerald-400">{lastSyncDate}</span>
+              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Last Synced to Dropbox:</span>
+                <span className="font-mono text-emerald-500 font-medium">{lastSyncDate}</span>
               </div>
               <div className="flex justify-between items-center py-1">
-                <span className="text-slate-400">Sync Status:</span>
-                <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (storageMeta.syncStatus === 'dirty' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800')}>
+                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Sync Status:</span>
+                <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
+                  storageMeta.syncStatus === 'dirty'
+                    ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+                    : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
+                )}>
                   {storageMeta.syncStatus === 'dirty' ? 'Unsynced Local Edits' : 'Clean / Synced'}
                 </span>
               </div>
@@ -1474,6 +1655,23 @@ export default function LocalStoragePlugin({ gaw }) {
   const [isSaving, setIsSaving] = useState(false);
   const [tableCount, setTableCount] = useState(0);
 
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
+
   useEffect(() => {
     const unsub = gaw.storage.onStatusChange((newMeta) => {
       setMeta(newMeta);
@@ -1518,6 +1716,7 @@ export default function LocalStoragePlugin({ gaw }) {
     try {
       const ok = await gaw.storage.openFile();
       if (ok) {
+        gaw.workspace?.setSidebarOpen?.(true);
         gaw.toast.success('Opened local database file successfully!');
       }
     } catch (err) {
@@ -1554,27 +1753,37 @@ export default function LocalStoragePlugin({ gaw }) {
     : 'Not yet saved in this session';
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-slate-100 pb-28">
+    <div className={'p-6 max-w-5xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Top Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-emerald-950/70 to-slate-900 border border-emerald-800/50 rounded-2xl shadow-xl backdrop-blur">
+      <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-xl backdrop-blur border ' + (
+        isDark
+          ? 'bg-gradient-to-r from-emerald-950/70 to-slate-900 border-emerald-800/50'
+          : 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200'
+      )}>
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600/30 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+          <div className={'w-12 h-12 rounded-xl flex items-center justify-center ' + (
+            isDark ? 'bg-emerald-600/30 border border-emerald-500/40 text-emerald-400' : 'bg-emerald-100 border border-emerald-300 text-emerald-600'
+          )}>
             <HardDrive className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white">Local File Storage & Disk Sync</h1>
+              <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Local File Storage & Disk Sync</h1>
               {meta.hasFileHandle ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-950 border border-emerald-700/60 text-emerald-400 flex items-center gap-1">
+                <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 border ' + (
+                  isDark ? 'bg-emerald-950 border-emerald-700/60 text-emerald-400' : 'bg-emerald-100 border-emerald-300 text-emerald-700'
+                )}>
                   <FileCheck className="w-3 h-3" /> Disk Handle Attached
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-1">
+                <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 border ' + (
+                  isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-200 border-slate-300 text-slate-700'
+                )}>
                   Session Only
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-300 mt-0.5">
+            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
               Directly synchronize SQLite changes with your local file system, configure auto-save intervals, and open databases.
             </p>
           </div>
@@ -1590,9 +1799,13 @@ export default function LocalStoragePlugin({ gaw }) {
       </div>
 
       {/* Target Coordination Banner */}
-      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (isLocalActive ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-200' : 'bg-blue-950/30 border-blue-700/50 text-blue-200')}>
+      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (
+        isLocalActive
+          ? isDark ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          : isDark ? 'bg-blue-950/30 border-blue-700/50 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-800'
+      )}>
         <div className="flex items-center gap-2.5">
-          {isLocalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Cloud className="w-4 h-4 text-blue-400" />}
+          {isLocalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Cloud className="w-4 h-4 text-blue-500" />}
           <div>
             <p className="font-bold">
               {isLocalActive
@@ -1619,38 +1832,42 @@ export default function LocalStoragePlugin({ gaw }) {
       {/* Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Card 1: Storage Telemetry */}
-        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Database className="w-4 h-4 text-emerald-400" />
+        <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+            <Database className="w-4 h-4 text-emerald-500" />
             <span>Database Storage Telemetry</span>
           </h2>
 
           <div className="space-y-2.5 text-xs">
-            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-              <span className="text-slate-400">File Name:</span>
-              <span className="font-mono font-semibold text-white">{meta.fileName}</span>
+            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+              <span>File Name:</span>
+              <span className={'font-mono font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{meta.fileName}</span>
             </div>
-            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-              <span className="text-slate-400">File Handle Path:</span>
-              <span className="font-mono text-emerald-300 truncate max-w-[220px]">
+            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+              <span>File Handle Path:</span>
+              <span className="font-mono text-emerald-500 truncate max-w-[220px]">
                 {meta.filePath || (meta.hasFileHandle ? 'Active OS File Handle' : 'In-Memory WebAssembly')}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-              <span className="text-slate-400">File Size on Disk:</span>
-              <span className="font-mono text-slate-200">{(meta.fileSize / 1024).toFixed(1)} KB</span>
+            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+              <span>File Size on Disk:</span>
+              <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{(meta.fileSize / 1024).toFixed(1)} KB</span>
             </div>
-            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-              <span className="text-slate-400">Active Tables:</span>
-              <span className="font-mono text-slate-200">{tableCount} tables</span>
+            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+              <span>Active Tables:</span>
+              <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{tableCount} tables</span>
             </div>
-            <div className="flex justify-between items-center py-1 border-b border-slate-800/80">
-              <span className="text-slate-400">Last Saved to Disk:</span>
-              <span className="font-mono text-emerald-400">{lastSavedFormatted}</span>
+            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+              <span>Last Saved to Disk:</span>
+              <span className="font-mono text-emerald-500">{lastSavedFormatted}</span>
             </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-slate-400">Sync Status:</span>
-              <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (meta.syncStatus === 'dirty' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800')}>
+            <div className={'flex justify-between items-center py-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+              <span>Sync Status:</span>
+              <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
+                meta.syncStatus === 'dirty'
+                  ? isDark ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  : isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+              )}>
                 {meta.syncStatus === 'dirty' ? 'Unsaved Edits in Memory' : 'All Changes Saved to Disk'}
               </span>
             </div>
@@ -1668,14 +1885,18 @@ export default function LocalStoragePlugin({ gaw }) {
             </button>
             <button
               onClick={handleSaveAs}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+              className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
+              )}
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Save As...</span>
             </button>
             <button
               onClick={handleExportDownload}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+              className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
+              )}
               title="Download raw .db binary file directly"
             >
               <Download className="w-3.5 h-3.5" />
@@ -1685,21 +1906,23 @@ export default function LocalStoragePlugin({ gaw }) {
         </div>
 
         {/* Card 2: Auto-Save Engine Configuration */}
-        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Clock className="w-4 h-4 text-emerald-400" />
+        <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+            <Clock className="w-4 h-4 text-emerald-500" />
             <span>Local Auto-Save Engine</span>
           </h2>
 
-          <p className="text-xs text-slate-400">
+          <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
             When enabled and a file handle is attached, GAW automatically flushes unwritten SQLite transactions to disk at the chosen interval.
           </p>
 
           <div className="space-y-4 pt-2">
-            <label className="flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
+            <label className={'flex items-center justify-between p-3 rounded-lg border cursor-pointer ' + (
+              isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+            )}>
               <div>
-                <p className="text-xs font-semibold text-white">Enable Auto-Save to Disk</p>
-                <p className="text-[11px] text-slate-400">Automatically persist memory writes to file</p>
+                <p className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>Enable Auto-Save to Disk</p>
+                <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Automatically persist memory writes to file</p>
               </div>
               <input
                 type="checkbox"
@@ -1710,11 +1933,13 @@ export default function LocalStoragePlugin({ gaw }) {
             </label>
 
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-300 font-medium">Auto-Save Frequency:</label>
+              <label className={'text-xs font-medium ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>Auto-Save Frequency:</label>
               <select
                 value={autoInterval}
                 onChange={(e) => handleIntervalChange(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                className={'w-full px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-emerald-500 border ' + (
+                  isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                )}
               >
                 <option value={5}>Every 5 seconds (Real-time safety)</option>
                 <option value={10}>Every 10 seconds</option>
@@ -1724,8 +1949,10 @@ export default function LocalStoragePlugin({ gaw }) {
               </select>
             </div>
 
-            <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-lg text-[11px] text-slate-400 space-y-1">
-              <p className="font-semibold text-slate-300">File System Access Note:</p>
+            <div className={'p-3 rounded-lg text-[11px] space-y-1 border ' + (
+              isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+            )}>
+              <p className={'font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>File System Access Note:</p>
               <p>
                 Browsers maintain an active write lock on your selected file handle during your session. If you switch to Dropbox mode, local auto-saves pause automatically.
               </p>
@@ -1766,6 +1993,23 @@ export default function PluginManagerPlugin({ gaw }) {
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [deleteModalPlugin, setDeleteModalPlugin] = useState(null);
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
 
   const loadPlugins = () => {
     try {
@@ -1906,7 +2150,7 @@ export default function PluginManagerPlugin({ gaw }) {
       '    </div>',
       '  );',
       '}'
-    ].join('\\n');
+    ].join('\n');
 
     gaw.plugins.importPlugin({
       id,
@@ -1925,16 +2169,22 @@ export default function PluginManagerPlugin({ gaw }) {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 text-slate-100 pb-28">
+    <div className={'p-6 max-w-6xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5 bg-gradient-to-r from-purple-950/70 to-indigo-950/70 border border-purple-800/50 rounded-2xl shadow-xl backdrop-blur">
+      <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-xl backdrop-blur border ' + (
+        isDark
+          ? 'bg-gradient-to-r from-purple-950/70 to-indigo-950/70 border-purple-800/50'
+          : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200'
+      )}>
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-400">
+          <div className={'w-12 h-12 rounded-xl flex items-center justify-center ' + (
+            isDark ? 'bg-purple-600/30 border border-purple-500/40 text-purple-400' : 'bg-purple-100 border border-purple-300 text-purple-600'
+          )}>
             <Puzzle className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">Dynamic Plugin Registry & Manager</h1>
-            <p className="text-xs text-slate-300 mt-0.5">
+            <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Dynamic Plugin Registry & Manager</h1>
+            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
               Manage runtime TSX plugins, toggle active/inactive visibility, import from disk or Dropbox, and edit code.
             </p>
           </div>
@@ -1953,18 +2203,22 @@ export default function PluginManagerPlugin({ gaw }) {
           </label>
           <button
             onClick={handleCreateBlankPlugin}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow transition active:scale-95"
+            className={'flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold shadow transition active:scale-95 ' + (
+              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+            )}
             title="Create a new blank plugin and edit in IDE"
           >
-            <Plus className="w-4 h-4 text-emerald-400" />
+            <Plus className="w-4 h-4 text-emerald-500" />
             <span>New Blank Plugin</span>
           </button>
           <button
             onClick={() => gaw.plugins.openAddModal()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold shadow transition active:scale-95"
+            className={'flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold shadow transition active:scale-95 ' + (
+              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+            )}
             title="Open Guided Import Wizard"
           >
-            <Sparkles className="w-4 h-4 text-purple-400" />
+            <Sparkles className="w-4 h-4 text-purple-500" />
             <span>Import Wizard...</span>
           </button>
         </div>
@@ -1972,55 +2226,73 @@ export default function PluginManagerPlugin({ gaw }) {
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
-          <span className="text-[11px] text-slate-400 font-medium">Total Plugins</span>
-          <p className="text-xl font-bold text-white">{plugins.length}</p>
+        <div className={'p-3.5 rounded-xl space-y-1 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <span className={'text-[11px] font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Plugins</span>
+          <p className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>{plugins.length}</p>
         </div>
-        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
-          <span className="text-[11px] text-emerald-400 font-medium">Active Plugins</span>
-          <p className="text-xl font-bold text-emerald-400">{activeCount}</p>
+        <div className={'p-3.5 rounded-xl space-y-1 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <span className="text-[11px] text-emerald-500 font-medium">Active Plugins</span>
+          <p className="text-xl font-bold text-emerald-500">{activeCount}</p>
         </div>
-        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
-          <span className="text-[11px] text-slate-400 font-medium">Inactive (Hidden)</span>
-          <p className="text-xl font-bold text-slate-300">{inactiveCount}</p>
+        <div className={'p-3.5 rounded-xl space-y-1 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <span className={'text-[11px] font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Inactive (Hidden)</span>
+          <p className={'text-xl font-bold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>{inactiveCount}</p>
         </div>
-        <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-1">
-          <span className="text-[11px] text-purple-400 font-medium">Categories</span>
-          <p className="text-xl font-bold text-purple-400">{categories.length}</p>
+        <div className={'p-3.5 rounded-xl space-y-1 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <span className="text-[11px] text-purple-500 font-medium">Categories</span>
+          <p className="text-xl font-bold text-purple-500">{categories.length}</p>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-xs">
+      <div className={'flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl text-xs border ' + (
+        isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+      )}>
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+          <Search className={'w-3.5 h-3.5 absolute left-3 top-2.5 ' + (isDark ? 'text-slate-500' : 'text-slate-400')} />
           <input
             type="text"
             placeholder="Search plugins by name, category, or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-indigo-500"
+            className={'w-full pl-9 pr-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 border ' + (
+              isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+            )}
           />
         </div>
 
         <div className="flex items-center gap-2">
           {/* Status Filter */}
-          <div className="flex items-center rounded-lg bg-slate-900 border border-slate-800 p-0.5">
+          <div className={'flex items-center rounded-lg p-0.5 border ' + (
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+          )}>
             <button
               onClick={() => setStatusFilter('ALL')}
-              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (statusFilter === 'ALL' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white')}
+              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (
+                statusFilter === 'ALL'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+              )}
             >
               All
             </button>
             <button
               onClick={() => setStatusFilter('ACTIVE')}
-              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (statusFilter === 'ACTIVE' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white')}
+              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (
+                statusFilter === 'ACTIVE'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+              )}
             >
               Active ({activeCount})
             </button>
             <button
               onClick={() => setStatusFilter('INACTIVE')}
-              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (statusFilter === 'INACTIVE' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white')}
+              className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (
+                statusFilter === 'INACTIVE'
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+              )}
             >
               Inactive ({inactiveCount})
             </button>
@@ -2030,7 +2302,9 @@ export default function PluginManagerPlugin({ gaw }) {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs focus:outline-none"
+            className={'px-2.5 py-1.5 rounded-lg text-xs focus:outline-none border ' + (
+              isDark ? 'bg-slate-900 border-slate-700 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
+            )}
           >
             <option value="ALL">All Categories</option>
             {categories.map((c) => (
@@ -2048,19 +2322,31 @@ export default function PluginManagerPlugin({ gaw }) {
           return (
             <div
               key={p.id}
-              className={'p-5 rounded-xl border transition-all flex flex-col justify-between ' + (isActive ? 'bg-slate-950/80 border-slate-800/90 shadow-md hover:border-indigo-500/50' : 'bg-slate-950/40 border-slate-800/40 opacity-70')}
+              className={'p-5 rounded-xl border transition-all flex flex-col justify-between ' + (
+                isActive
+                  ? isDark
+                    ? 'bg-slate-950/80 border-slate-800/90 shadow-md hover:border-indigo-500/50'
+                    : 'bg-white border-slate-200 shadow-sm hover:border-indigo-400'
+                  : isDark
+                  ? 'bg-slate-950/40 border-slate-800/40 opacity-70'
+                  : 'bg-slate-50 border-slate-200 opacity-70'
+              )}
             >
               <div className="space-y-3">
                 {/* Header: Title, Category, Toggle */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-sm text-white">{p.name}</h3>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-slate-400">
+                      <h3 className={'font-bold text-sm ' + (isDark ? 'text-white' : 'text-slate-900')}>{p.name}</h3>
+                      <span className={'text-[10px] font-mono px-1.5 py-0.2 rounded border ' + (
+                        isDark ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
+                      )}>
                         v{p.version || '1.0.0'}
                       </span>
                     </div>
-                    <span className="inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-950/80 border border-indigo-700/50 text-indigo-300">
+                    <span className={'inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ' + (
+                      isDark ? 'bg-indigo-950/80 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                    )}>
                       {p.menu_category || 'Custom'}
                     </span>
                   </div>
@@ -2071,10 +2357,10 @@ export default function PluginManagerPlugin({ gaw }) {
                     disabled={isProtected}
                     className={'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition ' + (
                       isProtected
-                        ? 'bg-emerald-950/40 border-emerald-700/40 text-emerald-400 cursor-not-allowed opacity-90'
+                        ? isDark ? 'bg-emerald-950/40 border-emerald-700/40 text-emerald-400 cursor-not-allowed opacity-90' : 'bg-emerald-50 border-emerald-200 text-emerald-700 cursor-not-allowed'
                         : isActive
-                        ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300 active:scale-95'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 active:scale-95'
+                        ? isDark ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300 active:scale-95' : 'bg-emerald-100 border-emerald-400 text-emerald-800 active:scale-95'
+                        : isDark ? 'bg-slate-900 border-slate-700 text-slate-400 active:scale-95' : 'bg-slate-200 border-slate-300 text-slate-600 active:scale-95'
                     )}
                     title={isProtected ? 'Core system plugin must remain active' : isActive ? 'Click to make Inactive (hide from sidebar)' : 'Click to make Active (show in sidebar)'}
                   >
@@ -2084,12 +2370,12 @@ export default function PluginManagerPlugin({ gaw }) {
                 </div>
 
                 {/* Description */}
-                <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                <p className={'text-xs line-clamp-2 leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
                   {p.description || 'Dynamic client-compiled TSX plugin component.'}
                 </p>
 
                 {/* Route & Metadata */}
-                <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500">
+                <div className={'flex items-center gap-2 text-[10px] font-mono ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
                   <span>ID: {p.id}</span>
                   <span>•</span>
                   <span>Route: {p.route || '/' + p.id}</span>
@@ -2097,7 +2383,7 @@ export default function PluginManagerPlugin({ gaw }) {
               </div>
 
               {/* Actions Footer */}
-              <div className="pt-4 mt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+              <div className={'pt-4 mt-3 border-t flex items-center justify-between gap-2 ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => gaw.navigation.openPlugin(p.id)}
@@ -2108,7 +2394,9 @@ export default function PluginManagerPlugin({ gaw }) {
                   </button>
                   <button
                     onClick={() => gaw.plugins.openInIDE(p.id, p.name)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-indigo-300 border border-slate-700 hover:border-indigo-500/50 text-xs font-semibold transition active:scale-95"
+                    className={'flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-semibold transition active:scale-95 ' + (
+                      isDark ? 'bg-slate-900 hover:bg-slate-800 text-indigo-300 border-slate-700 hover:border-indigo-500/50' : 'bg-slate-50 hover:bg-slate-100 text-indigo-700 border-slate-300 hover:border-indigo-400'
+                    )}
                   >
                     <Edit3 className="w-3 h-3" />
                     <span>Edit in IDE</span>
@@ -2117,16 +2405,20 @@ export default function PluginManagerPlugin({ gaw }) {
 
                 {isProtected ? (
                   <span
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-950/60 border border-indigo-700/50 text-[10px] font-semibold text-indigo-300 select-none"
+                    className={'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold select-none ' + (
+                      isDark ? 'bg-indigo-950/60 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                    )}
                     title="Core System Plugin - Cannot be deleted to ensure application remains operational"
                   >
-                    <Shield className="w-3.5 h-3.5 text-indigo-400" />
+                    <Shield className="w-3.5 h-3.5 text-indigo-500" />
                     <span>Protected</span>
                   </span>
                 ) : (
                   <button
                     onClick={() => setDeleteModalPlugin(p)}
-                    className="p-1.5 rounded-lg hover:bg-red-950/60 text-slate-500 hover:text-red-400 transition"
+                    className={'p-1.5 rounded-lg transition ' + (
+                      isDark ? 'hover:bg-red-950/60 text-slate-500 hover:text-red-400' : 'hover:bg-red-50 text-slate-400 hover:text-red-600'
+                    )}
                     title="Delete plugin from app database"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -2141,23 +2433,29 @@ export default function PluginManagerPlugin({ gaw }) {
       {/* Delete Confirmation Modal */}
       {deleteModalPlugin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-red-800/80 rounded-2xl shadow-2xl p-6 space-y-4">
-            <div className="flex items-center gap-3 text-red-400">
-              <div className="w-10 h-10 rounded-full bg-red-950/80 border border-red-800/80 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+          <div className={'w-full max-w-md border rounded-2xl shadow-2xl p-6 space-y-4 ' + (
+            isDark ? 'bg-slate-900 border-red-800/80 text-slate-100' : 'bg-white border-red-200 text-slate-900'
+          )}>
+            <div className="flex items-center gap-3 text-red-500">
+              <div className={'w-10 h-10 rounded-full border flex items-center justify-center flex-shrink-0 ' + (
+                isDark ? 'bg-red-950/80 border-red-800/80' : 'bg-red-50 border-red-200'
+              )}>
+                <AlertTriangle className="w-5 h-5 text-red-500" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">Delete Plugin from App?</h3>
-                <p className="text-xs text-slate-400">{deleteModalPlugin.name}</p>
+                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Delete Plugin from App?</h3>
+                <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{deleteModalPlugin.name}</p>
               </div>
             </div>
 
-            <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300">
-              <p className="font-semibold text-amber-300">Safe Deletion Guarantee:</p>
+            <div className={'p-3.5 border rounded-xl text-xs space-y-2 ' + (
+              isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+            )}>
+              <p className="font-semibold text-amber-500">Safe Deletion Guarantee:</p>
               <p className="leading-relaxed">
-                Only the plugin record inside this application's SQLite database (<code className="text-slate-100 font-mono">t_plugins</code>) will be removed.
+                Only the plugin record inside this application's SQLite database (<code className={'font-mono ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>t_plugins</code>) will be removed.
               </p>
-              <p className="text-slate-400 text-[11px]">
+              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                 Your original source file on local disk or Dropbox will <strong>NOT</strong> be deleted or touched.
               </p>
             </div>
@@ -2165,7 +2463,9 @@ export default function PluginManagerPlugin({ gaw }) {
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={() => setDeleteModalPlugin(null)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+                className={'px-4 py-2 rounded-lg text-xs font-semibold transition ' + (
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                )}
               >
                 Cancel
               </button>
@@ -2221,6 +2521,23 @@ export default function FileManagerPlugin({ gaw }) {
   const [isLoadingDropbox, setIsLoadingDropbox] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
+
   useEffect(() => {
     const unsubStorage = gaw.storage.onStatusChange((meta) => {
       setStorageMeta(meta);
@@ -2256,6 +2573,8 @@ export default function FileManagerPlugin({ gaw }) {
     try {
       const ok = await gaw.storage.openFile();
       if (ok) {
+        gaw.workspace?.setSidebarOpen(true);
+        setSidebarOpen(true);
         setRecentFiles(gaw.workspace.getRecentFiles());
         gaw.toast.success('Local database opened successfully.');
       }
@@ -2286,6 +2605,8 @@ export default function FileManagerPlugin({ gaw }) {
       setShowDropboxPicker(false);
       const ok = await gaw.dropbox.downloadFile(fileItem);
       if (ok) {
+        gaw.workspace?.setSidebarOpen(true);
+        setSidebarOpen(true);
         setRecentFiles(gaw.workspace.getRecentFiles());
         gaw.toast.success('Loaded ' + fileItem.name + ' from Dropbox.');
       }
@@ -2296,6 +2617,8 @@ export default function FileManagerPlugin({ gaw }) {
 
   const handleOpenNorthwindDemo = () => {
     gaw.workspace.loadNorthwindDemo();
+    gaw.workspace?.setSidebarOpen(true);
+    setSidebarOpen(true);
   };
 
   const handleCloseActiveDatabase = async () => {
@@ -2338,6 +2661,8 @@ export default function FileManagerPlugin({ gaw }) {
           path_display: file.path || '/' + file.name,
         });
         if (ok) {
+          gaw.workspace?.setSidebarOpen(true);
+          setSidebarOpen(true);
           setRecentFiles(gaw.workspace.getRecentFiles());
           gaw.toast.success('Loaded ' + file.name + ' from Dropbox.');
         }
@@ -2379,19 +2704,25 @@ export default function FileManagerPlugin({ gaw }) {
   }
 
   return (
-    <div className='p-6 max-w-6xl mx-auto space-y-6 pb-28 text-slate-100'>
+    <div className={'p-6 max-w-6xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Top Header */}
-      <div className='flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5'>
+      <div className={'flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b ' + (
+        isDark ? 'border-slate-800' : 'border-slate-200'
+      )}>
         <div>
           <div className='flex items-center gap-3'>
-            <div className='w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400'>
+            <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
+              isDark ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border border-indigo-200 text-indigo-600'
+            )}>
               <FolderOpen className='w-5 h-5' />
             </div>
             <div>
-              <h1 className='text-xl font-bold tracking-tight text-white flex items-center gap-2'>
+              <h1 className={'text-xl font-bold tracking-tight flex items-center gap-2 ' + (
+                isDark ? 'text-white' : 'text-slate-900'
+              )}>
                 File & Workspace Manager
               </h1>
-              <p className='text-xs text-slate-400'>
+              <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                 Open local databases, sync with Dropbox, manage recent files, or explore the Northwind demo.
               </p>
             </div>
@@ -2402,28 +2733,34 @@ export default function FileManagerPlugin({ gaw }) {
         <div className='flex items-center gap-2 flex-wrap'>
           {/* Dropbox Status Badge */}
           {dropboxConfig.connected ? (
-            <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-300'>
-              <CheckCircle2 className='w-3.5 h-3.5 text-emerald-400' />
+            <div className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ' + (
+              isDark ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'
+            )}>
+              <CheckCircle2 className='w-3.5 h-3.5 text-emerald-500' />
               <span>Dropbox Connected</span>
               {dropboxConfig.accountName && (
-                <span className='text-emerald-400/80 font-mono text-[11px]'>
+                <span className='opacity-80 font-mono text-[11px]'>
                   ({dropboxConfig.accountName})
                 </span>
               )}
               <button
                 onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className='ml-1 text-[11px] text-emerald-400 underline hover:text-emerald-200'
+                className={'ml-1 text-[11px] underline ' + (isDark ? 'text-emerald-400 hover:text-emerald-200' : 'text-emerald-700 hover:text-emerald-900')}
               >
                 Sync Settings
               </button>
             </div>
           ) : (
-            <div className='flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-400'>
-              <Cloud className='w-3.5 h-3.5 text-slate-400' />
+            <div className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ' + (
+              isDark ? 'bg-slate-800/80 border border-slate-700 text-slate-400' : 'bg-slate-100 border border-slate-300 text-slate-600'
+            )}>
+              <Cloud className='w-3.5 h-3.5 opacity-70' />
               <span>Dropbox Disconnected</span>
               <button
                 onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className='ml-1 text-[11px] text-indigo-400 underline hover:text-indigo-300 font-medium'
+                className={'ml-1 text-[11px] underline font-medium ' + (
+                  isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800'
+                )}
               >
                 Connect Cloud Sync
               </button>
@@ -2431,34 +2768,42 @@ export default function FileManagerPlugin({ gaw }) {
           )}
 
           {/* Storage Mode Badge */}
-          <div className='flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-xs text-slate-300'>
-            <HardDrive className='w-3.5 h-3.5 text-indigo-400' />
+          <div className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (
+            isDark ? 'bg-slate-800 border border-slate-700 text-slate-300' : 'bg-slate-100 border border-slate-300 text-slate-700'
+          )}>
+            <HardDrive className={'w-3.5 h-3.5 ' + (isDark ? 'text-indigo-400' : 'text-indigo-600')} />
             <span>Target: {storageMeta.activeTarget === 'dropbox' ? 'Dropbox' : 'Local Disk'}</span>
           </div>
         </div>
       </div>
 
       {/* Active Database Overview & File Closing Card */}
-      <div className='bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3'>
+      <div className={'rounded-2xl p-5 shadow-lg space-y-4 border ' + (
+        isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+      )}>
+        <div className={'flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ' + (
+          isDark ? 'border-slate-800/80' : 'border-slate-100'
+        )}>
           <div className='flex items-center gap-3'>
-            <div className='w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400'>
+            <div className={'w-8 h-8 rounded-lg flex items-center justify-center ' + (
+              isDark ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
+            )}>
               <Database className='w-4 h-4' />
             </div>
             <div>
               <div className='flex items-center gap-2'>
-                <span className='text-xs font-semibold text-slate-400 uppercase tracking-wider'>
+                <span className={'text-xs font-semibold uppercase tracking-wider ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                   Active Loaded Database
                 </span>
                 <span className={'px-2 py-0.5 rounded text-[10px] font-semibold ' + (
                   storageMeta.syncStatus === 'dirty'
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    ? isDark ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    : isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                 )}>
                   {storageMeta.syncStatus === 'dirty' ? 'Modified (Unsaved)' : 'Synchronized'}
                 </span>
               </div>
-              <h2 className='text-base font-bold text-white font-mono mt-0.5'>
+              <h2 className={'text-base font-bold font-mono mt-0.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
                 {storageMeta.fileName || 'northwind_commerce.db'}
               </h2>
             </div>
@@ -2474,50 +2819,56 @@ export default function FileManagerPlugin({ gaw }) {
             </button>
             <button
               onClick={() => gaw.storage.saveAs()}
-              className='px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition'
+              className={'px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm'
+              )}
             >
               Save As...
             </button>
             <button
               onClick={() => gaw.storage.exportDownload()}
-              className='px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition'
+              className={'px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm'
+              )}
               title='Export direct file download'
             >
               Export .db
             </button>
             <button
               onClick={handleCloseActiveDatabase}
-              className='px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 border border-red-800/40 text-red-300 text-xs font-medium transition flex items-center gap-1.5'
+              className={'px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ' + (
+                isDark ? 'bg-red-950/40 hover:bg-red-900/60 border-red-800/40 text-red-300' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'
+              )}
               title='Close active file and unload database'
             >
-              <X className='w-3.5 h-3.5 text-red-400' />
+              <X className='w-3.5 h-3.5 text-red-500' />
               <span>Close Active Database</span>
             </button>
           </div>
         </div>
 
         <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs'>
-          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
-            <span className='text-slate-400 block text-[11px]'>File Size</span>
-            <span className='font-mono font-semibold text-white mt-0.5 block'>
+          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>File Size</span>
+            <span className={'font-mono font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
               {formatBytes(storageMeta.fileSize)}
             </span>
           </div>
-          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
-            <span className='text-slate-400 block text-[11px]'>Storage Target</span>
-            <span className='font-semibold text-white mt-0.5 block capitalize'>
+          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Storage Target</span>
+            <span className={'font-semibold mt-0.5 block capitalize ' + (isDark ? 'text-white' : 'text-slate-900')}>
               {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}
             </span>
           </div>
-          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
-            <span className='text-slate-400 block text-[11px]'>Last Saved</span>
-            <span className='font-semibold text-white mt-0.5 block'>
+          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Last Saved</span>
+            <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
               {storageMeta.lastSavedAt ? formatDate(storageMeta.lastSavedAt.toISOString()) : 'Not saved yet'}
             </span>
           </div>
-          <div className='p-3 bg-slate-950/60 border border-slate-800/60 rounded-xl'>
-            <span className='text-slate-400 block text-[11px]'>Database Tables</span>
-            <span className='font-semibold text-white mt-0.5 block'>
+          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Database Tables</span>
+            <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
               {gaw.db.getTables().length + ' user tables'}
             </span>
           </div>
@@ -2526,19 +2877,23 @@ export default function FileManagerPlugin({ gaw }) {
 
       {/* Main 3 File Opening Options */}
       <div>
-        <h2 className='text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3'>
+        <h2 className={'text-xs font-semibold uppercase tracking-wider mb-3 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
           Open or Launch Database
         </h2>
         <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
           {/* Card 1: Local File */}
-          <div className='bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group'>
+          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+            isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+          )}>
             <div className='space-y-3'>
-              <div className='w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover:scale-105 transition'>
+              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                isDark ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
+              )}>
                 <HardDrive className='w-6 h-6' />
               </div>
               <div>
-                <h3 className='text-base font-bold text-white'>Open Local File</h3>
-                <p className='text-xs text-slate-400 mt-1 leading-relaxed'>
+                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Local File</h3>
+                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
                   Open any SQLite database file (.db, .sqlite, .sqlite3) stored directly on your computer's local hard drive.
                 </p>
               </div>
@@ -2555,21 +2910,27 @@ export default function FileManagerPlugin({ gaw }) {
           </div>
 
           {/* Card 2: Dropbox Cloud */}
-          <div className='bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group'>
+          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+            isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+          )}>
             <div className='space-y-3'>
-              <div className='w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition'>
+              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                isDark ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border border-indigo-200 text-indigo-600'
+              )}>
                 <Cloud className='w-6 h-6' />
               </div>
               <div>
                 <div className='flex items-center gap-2'>
-                  <h3 className='text-base font-bold text-white'>Open from Dropbox</h3>
+                  <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open from Dropbox</h3>
                   {dropboxConfig.connected && (
-                    <span className='px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'>
+                    <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
+                      isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    )}>
                       Connected
                     </span>
                   )}
                 </div>
-                <p className='text-xs text-slate-400 mt-1 leading-relaxed'>
+                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
                   {dropboxConfig.connected
                     ? 'Browse database files in your connected Dropbox storage and open them directly into GAW.'
                     : 'Connect your Dropbox account to browse, pull, and synchronize cloud databases anywhere.'}
@@ -2588,7 +2949,9 @@ export default function FileManagerPlugin({ gaw }) {
               ) : (
                 <button
                   onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                  className='w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-700/40 text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98'
+                  className={'w-full py-2.5 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98 border ' + (
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border-indigo-700/40' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                  )}
                 >
                   <ExternalLink className='w-4 h-4' />
                   <span>Open Dropbox Cloud Sync</span>
@@ -2598,19 +2961,27 @@ export default function FileManagerPlugin({ gaw }) {
           </div>
 
           {/* Card 3: Northwind Demo */}
-          <div className='bg-slate-900 border border-indigo-900/40 hover:border-indigo-600/50 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30'>
+          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+            isDark
+              ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30 border-indigo-900/40 hover:border-indigo-600/50'
+              : 'bg-gradient-to-br from-white via-white to-indigo-50/50 border-indigo-200 hover:border-indigo-300 shadow-sm'
+          )}>
             <div className='space-y-3'>
-              <div className='w-12 h-12 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-105 transition'>
+              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                isDark ? 'bg-purple-600/20 border border-purple-500/30 text-purple-400' : 'bg-purple-50 border border-purple-200 text-purple-600'
+              )}>
                 <Sparkles className='w-6 h-6' />
               </div>
               <div>
                 <div className='flex items-center gap-2'>
-                  <h3 className='text-base font-bold text-white'>Open Northwind Demo</h3>
-                  <span className='px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30'>
+                  <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Northwind Demo</h3>
+                  <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
+                    isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-800 border border-purple-300'
+                  )}>
                     Demo Template
                   </span>
                 </div>
-                <p className='text-xs text-slate-400 mt-1 leading-relaxed'>
+                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
                   Open the full Northwind Modern Commerce sample suite with orders, inventory, CRM, and interactive reports.
                 </p>
               </div>
@@ -2629,19 +3000,25 @@ export default function FileManagerPlugin({ gaw }) {
       </div>
 
       {/* Recent Files Log Section */}
-      <div className='bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4'>
-        <div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3'>
+      <div className={'rounded-2xl p-5 shadow-lg space-y-4 border ' + (
+        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+      )}>
+        <div className={'flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ' + (
+          isDark ? 'border-slate-800' : 'border-slate-100'
+        )}>
           <div>
             <div className='flex items-center gap-2'>
-              <h2 className='text-base font-bold text-white flex items-center gap-2'>
-                <Clock className='w-4 h-4 text-indigo-400' />
+              <h2 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                <Clock className='w-4 h-4 text-indigo-500' />
                 <span>Recent Files Log</span>
               </h2>
-              <span className='px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700'>
+              <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + (
+                isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'
+              )}>
                 {recentFiles.length + ' recorded'}
               </span>
             </div>
-            <p className='text-xs text-slate-400 mt-0.5'>
+            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
               Maintained in your browser's private local storage. Blank in new incognito browser windows.
             </p>
           </div>
@@ -2649,7 +3026,9 @@ export default function FileManagerPlugin({ gaw }) {
           {recentFiles.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
-              className='px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-red-950/40 text-slate-300 hover:text-red-300 border border-slate-700 hover:border-red-800/40 text-xs font-medium transition flex items-center gap-1.5 self-start sm:self-auto'
+              className={'px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 self-start sm:self-auto ' + (
+                isDark ? 'bg-slate-800 hover:bg-red-950/40 text-slate-300 hover:text-red-300 border-slate-700 hover:border-red-800/40' : 'bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border-slate-300 hover:border-red-200'
+              )}
               title='Delete recent files log from local browser storage'
             >
               <Trash2 className='w-3.5 h-3.5' />
@@ -2659,13 +3038,17 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
 
         {recentFiles.length === 0 ? (
-          <div className='py-12 flex flex-col items-center justify-center text-center space-y-3 bg-slate-950/40 rounded-xl border border-dashed border-slate-800'>
-            <div className='w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500'>
+          <div className={'py-12 flex flex-col items-center justify-center text-center space-y-3 rounded-xl border border-dashed ' + (
+            isDark ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-300'
+          )}>
+            <div className={'w-12 h-12 rounded-2xl flex items-center justify-center ' + (
+              isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'
+            )}>
               <FolderOpen className='w-6 h-6' />
             </div>
             <div className='max-w-sm'>
-              <h4 className='text-sm font-semibold text-slate-300'>No Recent Files Recorded</h4>
-              <p className='text-xs text-slate-500 mt-1 leading-relaxed'>
+              <h4 className={'text-sm font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>No Recent Files Recorded</h4>
+              <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
                 Open a local file, pull a database from Dropbox, or launch the Northwind Demo above to track files here.
               </p>
             </div>
@@ -2674,7 +3057,9 @@ export default function FileManagerPlugin({ gaw }) {
           <div className='overflow-x-auto'>
             <table className='w-full text-left text-xs'>
               <thead>
-                <tr className='border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px] font-semibold'>
+                <tr className={'border-b uppercase tracking-wider text-[10px] font-semibold ' + (
+                  isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-slate-50/50'
+                )}>
                   <th className='py-2.5 px-3'>Database File</th>
                   <th className='py-2.5 px-3'>Source</th>
                   <th className='py-2.5 px-3'>Size</th>
@@ -2682,24 +3067,24 @@ export default function FileManagerPlugin({ gaw }) {
                   <th className='py-2.5 px-3 text-right'>Actions</th>
                 </tr>
               </thead>
-              <tbody className='divide-y divide-slate-800/60'>
+              <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60' : 'divide-slate-200')}>
                 {recentFiles.map((file) => {
                   const isDemo = file.source === 'demo';
                   const isDropbox = file.source === 'dropbox';
                   return (
                     <tr
                       key={file.id}
-                      className='hover:bg-slate-800/40 transition group cursor-pointer'
+                      className={'transition group cursor-pointer ' + (isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50')}
                       onClick={() => handleOpenRecent(file)}
                     >
                       <td className='py-3 px-3'>
                         <div className='flex items-center gap-2.5'>
                           <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
                             isDemo
-                              ? 'bg-purple-600/20 text-purple-400'
+                              ? isDark ? 'bg-purple-600/20 text-purple-400' : 'bg-purple-100 text-purple-600'
                               : isDropbox
-                              ? 'bg-indigo-600/20 text-indigo-400'
-                              : 'bg-blue-600/20 text-blue-400'
+                              ? isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'
+                              : isDark ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-600'
                           )}>
                             {isDemo ? (
                               <Sparkles className='w-3.5 h-3.5' />
@@ -2710,10 +3095,12 @@ export default function FileManagerPlugin({ gaw }) {
                             )}
                           </div>
                           <div>
-                            <span className='font-semibold text-white block group-hover:text-indigo-300 transition'>
+                            <span className={'font-semibold block transition ' + (
+                              isDark ? 'text-white group-hover:text-indigo-300' : 'text-slate-900 group-hover:text-indigo-600'
+                            )}>
                               {file.name}
                             </span>
-                            <span className='text-[10px] text-slate-500 font-mono'>
+                            <span className={'text-[10px] font-mono ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
                               {file.path || (isDropbox ? 'Dropbox Cloud' : 'Local Disk')}
                             </span>
                           </div>
@@ -2723,20 +3110,20 @@ export default function FileManagerPlugin({ gaw }) {
                       <td className='py-3 px-3'>
                         <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ' + (
                           isDemo
-                            ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                            ? isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-800 border border-purple-200'
                             : isDropbox
-                            ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                            : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            ? isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                            : isDark ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
                         )}>
                           {isDemo ? 'Demo Template' : isDropbox ? 'Dropbox' : 'Local Disk'}
                         </span>
                       </td>
 
-                      <td className='py-3 px-3 font-mono text-slate-400'>
+                      <td className={'py-3 px-3 font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                         {file.size ? formatBytes(file.size) : '—'}
                       </td>
 
-                      <td className='py-3 px-3 text-slate-400 whitespace-nowrap'>
+                      <td className={'py-3 px-3 whitespace-nowrap ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                         {formatDate(file.lastOpened)}
                       </td>
 
@@ -2747,13 +3134,15 @@ export default function FileManagerPlugin({ gaw }) {
                               e.stopPropagation();
                               handleOpenRecent(file);
                             }}
-                            className='px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition shadow'
+                            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition shadow"
                           >
                             Open
                           </button>
                           <button
                             onClick={(e) => handleRemoveRecentFile(file.id, e)}
-                            className='p-1 rounded text-slate-500 hover:text-red-400 hover:bg-slate-800 transition'
+                            className={'p-1 rounded transition ' + (
+                              isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-400 hover:text-red-600 hover:bg-slate-100'
+                            )}
                             title='Remove from recent list'
                           >
                             <Trash2 className='w-3.5 h-3.5' />
@@ -2770,27 +3159,33 @@ export default function FileManagerPlugin({ gaw }) {
       </div>
 
       {/* Bottom Option Bar: Toggle Side Panel */}
-      <div className='bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4'>
+      <div className={'rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ' + (
+        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+      )}>
         <div className='flex items-center gap-3'>
-          <div className='w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400'>
+          <div className={'w-9 h-9 rounded-xl border flex items-center justify-center ' + (
+            isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
+          )}>
             {sidebarOpen ? (
-              <PanelLeftClose className='w-5 h-5 text-indigo-400' />
+              <PanelLeftClose className='w-5 h-5 text-indigo-500' />
             ) : (
               <PanelLeftOpen className='w-5 h-5 text-slate-400' />
             )}
           </div>
           <div>
             <div className='flex items-center gap-2'>
-              <span className='text-xs font-semibold text-white'>
+              <span className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>
                 Workspace Side Navigation Pane
               </span>
               <span className={'px-1.5 py-0.2 rounded text-[10px] font-semibold ' + (
-                sidebarOpen ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-400'
+                sidebarOpen
+                  ? isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-50 border border-indigo-200 text-indigo-700'
+                  : isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 border border-slate-200 text-slate-600'
               )}>
                 {sidebarOpen ? 'Visible' : 'Hidden'}
               </span>
             </div>
-            <p className='text-xs text-slate-400 mt-0.5'>
+            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
               {sidebarOpen
                 ? 'The side navigation panel is visible. You can browse tables, queries, reports, and plugins.'
                 : 'The side navigation panel is hidden for a clean, focused initial view.'}
@@ -2819,23 +3214,29 @@ export default function FileManagerPlugin({ gaw }) {
       {/* Confirmation Modal: Delete Recent Files Log */}
       {showClearConfirm && (
         <div className='fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4'>
-          <div className='max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4'>
+          <div className={'max-w-md w-full rounded-2xl p-6 shadow-2xl space-y-4 border ' + (
+            isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+          )}>
             <div className='flex items-center gap-3'>
-              <div className='w-10 h-10 rounded-xl bg-red-600/20 border border-red-500/30 flex items-center justify-center text-red-400'>
+              <div className={'w-10 h-10 rounded-xl flex items-center justify-center text-red-500 ' + (
+                isDark ? 'bg-red-600/20 border border-red-500/30' : 'bg-red-50 border border-red-200'
+              )}>
                 <Trash2 className='w-5 h-5' />
               </div>
               <div>
-                <h3 className='text-base font-bold text-white'>Clear Recent Files Log?</h3>
-                <p className='text-xs text-slate-400'>This action is safe and non-destructive.</p>
+                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Clear Recent Files Log?</h3>
+                <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>This action is safe and non-destructive.</p>
               </div>
             </div>
 
-            <div className='p-3.5 bg-slate-950 border border-slate-800 rounded-xl text-xs space-y-2 text-slate-300'>
-              <p className='font-semibold text-emerald-400'>Non-Destructive Guarantee:</p>
+            <div className={'p-3.5 border rounded-xl text-xs space-y-2 ' + (
+              isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+            )}>
+              <p className="font-semibold text-emerald-500">Non-Destructive Guarantee:</p>
               <p className='leading-relaxed'>
                 Clearing the log removes only your session history from this browser's local storage.
               </p>
-              <p className='text-slate-400 text-[11px]'>
+              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                 Your actual database files on local disk or Dropbox will <strong>NOT</strong> be deleted or modified.
               </p>
             </div>
@@ -2843,7 +3244,9 @@ export default function FileManagerPlugin({ gaw }) {
             <div className='flex items-center justify-end gap-2 pt-2'>
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className='px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition'
+                className={'px-4 py-2 rounded-lg text-xs font-semibold transition ' + (
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                )}
               >
                 Cancel
               </button>
@@ -2861,63 +3264,69 @@ export default function FileManagerPlugin({ gaw }) {
       {/* Dropbox File Picker Modal */}
       {showDropboxPicker && (
         <div className='fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4'>
-          <div className='max-w-lg w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4'>
-            <div className='flex items-center justify-between border-b border-slate-800 pb-3'>
+          <div className={'max-w-lg w-full rounded-2xl p-6 shadow-2xl space-y-4 border ' + (
+            isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+          )}>
+            <div className={'flex items-center justify-between border-b pb-3 ' + (isDark ? 'border-slate-800' : 'border-slate-100')}>
               <div className='flex items-center gap-2.5'>
-                <div className='w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 flex items-center justify-center'>
+                <div className={'w-8 h-8 rounded-lg flex items-center justify-center ' + (
+                  isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
+                )}>
                   <Cloud className='w-4 h-4' />
                 </div>
                 <div>
-                  <h3 className='text-sm font-bold text-white'>Select Database from Dropbox</h3>
-                  <p className='text-[11px] text-slate-400'>Showing .db and .sqlite files in your Dropbox</p>
+                  <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Select Database from Dropbox</h3>
+                  <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Showing .db and .sqlite files in your Dropbox</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowDropboxPicker(false)}
-                className='p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition'
+                className={'p-1 rounded transition ' + (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100')}
               >
                 <X className='w-4 h-4' />
               </button>
             </div>
 
             {isLoadingDropbox ? (
-              <div className='py-8 flex flex-col items-center justify-center space-y-2 text-slate-400'>
-                <RefreshCw className='w-5 h-5 animate-spin text-indigo-400' />
+              <div className={'py-8 flex flex-col items-center justify-center space-y-2 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                <RefreshCw className='w-5 h-5 animate-spin text-indigo-500' />
                 <span className='text-xs'>Scanning Dropbox for databases...</span>
               </div>
             ) : dropboxFiles.length === 0 ? (
               <div className='py-8 text-center space-y-2'>
-                <p className='text-xs text-slate-400'>No database files (.db, .sqlite) found in Dropbox.</p>
+                <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>No database files (.db, .sqlite) found in Dropbox.</p>
                 <button
                   onClick={() => {
                     setShowDropboxPicker(false);
                     gaw.navigation.openPlugin('plugin_dropbox_sync');
                   }}
-                  className='text-xs text-indigo-400 underline hover:text-indigo-300'
+                  className={'text-xs underline ' + (isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800')}
                 >
                   Open Dropbox Cloud Sync to push the active database
                 </button>
               </div>
             ) : (
-              <div className='max-h-64 overflow-y-auto divide-y divide-slate-800/80'>
+              <div className={'max-h-64 overflow-y-auto divide-y ' + (isDark ? 'divide-slate-800/80' : 'divide-slate-100')}>
                 {dropboxFiles.map((file) => (
                   <button
                     key={file.id || file.path_display}
                     onClick={() => handleSelectDropboxFile(file)}
-                    className='w-full text-left py-2.5 px-3 hover:bg-slate-800/60 rounded-lg flex items-center justify-between group transition'
+                    className={'w-full text-left py-2.5 px-3 rounded-lg flex items-center justify-between group transition ' + (
+                      isDark ? 'hover:bg-slate-800/60' : 'hover:bg-slate-50'
+                    )}
                   >
                     <div className='flex items-center gap-2.5 min-w-0'>
-                      <Database className='w-4 h-4 text-indigo-400 flex-shrink-0' />
+                      <Database className='w-4 h-4 text-indigo-500 flex-shrink-0' />
                       <div className='truncate'>
-                        <span className='text-xs font-semibold text-white group-hover:text-indigo-300 block truncate'>
+                        <span className={'text-xs font-semibold block truncate group-hover:text-indigo-500 ' + (isDark ? 'text-white' : 'text-slate-900')}>
                           {file.name}
                         </span>
-                        <span className='text-[10px] text-slate-400 block truncate font-mono'>
+                        <span className={'text-[10px] block truncate font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                           {file.path_display}
                         </span>
                       </div>
                     </div>
-                    <span className='text-[11px] font-mono text-slate-400 flex-shrink-0 ml-2'>
+                    <span className={'text-[11px] font-mono flex-shrink-0 ml-2 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                       {formatBytes(file.size)}
                     </span>
                   </button>
@@ -2925,10 +3334,12 @@ export default function FileManagerPlugin({ gaw }) {
               </div>
             )}
 
-            <div className='flex items-center justify-end pt-2 border-t border-slate-800'>
+            <div className={'flex items-center justify-end pt-2 border-t ' + (isDark ? 'border-slate-800' : 'border-slate-100')}>
               <button
                 onClick={() => setShowDropboxPicker(false)}
-                className='px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition'
+                className={'px-4 py-2 rounded-lg text-xs font-semibold transition ' + (
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                )}
               >
                 Close
               </button>
@@ -2940,5 +3351,3 @@ export default function FileManagerPlugin({ gaw }) {
   );
 }
 `;
-
-

@@ -22,8 +22,8 @@ export class DropboxSyncEngine {
   };
   private currentRemoteFile: DropboxFileItem | null = null;
   private lastSyncTime: Date | null = null;
-  private autoSyncIntervalSec: number = 60;
-  private isAutoSyncEnabled: boolean = true;
+  private autoSyncIntervalSec: number = 0;
+  private isAutoSyncEnabled: boolean = false;
   private activeTarget: StorageTarget =
     typeof window !== 'undefined'
       ? ((localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local')
@@ -145,14 +145,9 @@ export class DropboxSyncEngine {
           this.validateToken().catch(() => {});
         }
       }
-      const savedInterval = localStorage.getItem('gaw_dropbox_auto_sync_interval');
-      if (savedInterval) {
-        this.autoSyncIntervalSec = parseInt(savedInterval, 10);
-      }
-      const savedAuto = localStorage.getItem('gaw_dropbox_auto_sync_enabled');
-      if (savedAuto !== null) {
-        this.isAutoSyncEnabled = savedAuto === 'true';
-      }
+      // On initial load or refresh, set saving to manual only
+      this.autoSyncIntervalSec = 0;
+      this.isAutoSyncEnabled = false;
       const savedTarget = localStorage.getItem('gaw_active_storage_target');
       if (savedTarget === 'local' || savedTarget === 'dropbox') {
         this.activeTarget = savedTarget as StorageTarget;

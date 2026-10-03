@@ -271,16 +271,18 @@ export default function App() {
 
       const title = engine.getSetting('app_title', 'Northwind Modern Commerce');
       setAppTitle(title);
-
-      const th = engine.getSetting('theme', '') as 'vs-dark' | 'vs-light';
-      if (th === 'vs-dark' || th === 'vs-light') {
-        setTheme(th);
-        localStorage.setItem('gaw_theme', th);
-      }
     } catch (e) {
       console.error('Failed to refresh database state:', e);
     }
   }, []);
+
+  // On initial load or refresh, set saving to manual only
+  useEffect(() => {
+    storageEngine.setAutoSyncEnabled(false);
+    storageEngine.setAutoSyncInterval(0);
+    dropboxEngine.setAutoSyncEnabled(false);
+    dropboxEngine.setAutoSyncInterval(0);
+  }, [storageEngine, dropboxEngine]);
 
   // Automatically connect to previous active storage target on startup (remember local or dropbox)
   useEffect(() => {
@@ -519,6 +521,7 @@ export default function App() {
         storageEngine.openFile().then((ok) => {
           if (ok) {
             toastApi.success('Database opened successfully!');
+            setSidebarOpen(true);
             refreshDatabaseState();
           }
         });
@@ -637,6 +640,7 @@ export default function App() {
           const ok = await storageEngine.openFile();
           if (ok) {
             toastApi.success('Database opened successfully.');
+            setSidebarOpen(true);
             refreshDatabaseState();
           }
           return ok;
@@ -669,6 +673,7 @@ export default function App() {
         downloadFile: async (fileItem) => {
           const ok = await dropboxEngine.downloadFile(fileItem);
           if (ok) {
+            setSidebarOpen(true);
             refreshDatabaseState();
             toastApi.success(`Loaded ${fileItem.name} from Dropbox.`);
           }
@@ -733,6 +738,8 @@ export default function App() {
       },
       workspace: {
         toggleSidebar: () => setSidebarOpen((prev) => !prev),
+        openSidebar: () => setSidebarOpen(true),
+        setSidebarOpen: (open: boolean) => setSidebarOpen(open),
         isSidebarOpen: () => sidebarOpen,
         getRecentFiles: () => RecentFilesManager.getRecentFiles(),
         addRecentFile: (item) => {
@@ -885,15 +892,12 @@ export default function App() {
             const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
             setTheme(next);
             localStorage.setItem('gaw_theme', next);
-            try {
-              SQLiteEngine.getInstance().setSetting('theme', next);
-            } catch (e) {
-              console.error('Failed to save theme in t_settings', e);
-            }
+            eventBusApi.emit('theme_changed', next);
           }}
           onNewDatabase={() => {
             SQLiteEngine.getInstance().createDefaultDatabase();
             toastApi.info('Created new database.');
+            setSidebarOpen(true);
             refreshDatabaseState();
             setActiveView('ide');
           }}
@@ -901,6 +905,7 @@ export default function App() {
             const ok = await storageEngine.openFile();
             if (ok) {
               toastApi.success('Opened database file successfully.');
+              setSidebarOpen(true);
               refreshDatabaseState();
             }
           }}
@@ -921,6 +926,7 @@ export default function App() {
           onResetDefault={() => {
             SQLiteEngine.getInstance().createDefaultDatabase();
             toastApi.success('Reset database to Northwind Modern template.');
+            setSidebarOpen(true);
             refreshDatabaseState();
             setActiveView('plugin:plugin_crm');
           }}
@@ -961,7 +967,7 @@ export default function App() {
         )}
 
         {/* Center Canvas */}
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0 bg-slate-900">
+        <main className={`flex-1 flex flex-col overflow-hidden min-w-0 ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
           {/* View 1: Active Dynamic TSX Plugin */}
           {activeView.startsWith('plugin:') && currentPlugin && (
             <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col">
@@ -1115,11 +1121,7 @@ export default function App() {
           onThemeChange={(newTheme) => {
             setTheme(newTheme);
             localStorage.setItem('gaw_theme', newTheme);
-            try {
-              SQLiteEngine.getInstance().setSetting('theme', newTheme);
-            } catch (e) {
-              console.error('Failed to save theme in t_settings', e);
-            }
+            eventBusApi.emit('theme_changed', newTheme);
           }}
         />
       )}

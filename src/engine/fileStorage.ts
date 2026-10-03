@@ -13,8 +13,8 @@ export class FileStorageEngine {
   private pollingTimer: any = null;
   private conflictCallback: ((conflict: ConflictDetails) => void) | null = null;
   private statusListeners: Set<(meta: StorageMetadata) => void> = new Set();
-  private autoSyncIntervalSec: number = 30;
-  private isAutoSyncEnabled: boolean = true;
+  private autoSyncIntervalSec: number = 0;
+  private isAutoSyncEnabled: boolean = false;
   private activeTarget: StorageTarget =
     typeof window !== 'undefined'
       ? ((localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local')

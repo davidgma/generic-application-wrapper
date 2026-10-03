@@ -94,6 +94,8 @@ export interface GAWPluginsApi {
 
 export interface GAWWorkspaceApi {
   toggleSidebar: () => void;
+  openSidebar: () => void;
+  setSidebarOpen: (open: boolean) => void;
   isSidebarOpen: () => boolean;
   getRecentFiles: () => RecentFileItem[];
   addRecentFile: (item: Omit<RecentFileItem, 'id' | 'lastOpened'> & { id?: string; lastOpened?: string }) => void;
