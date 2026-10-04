@@ -289,7 +289,7 @@ export const QueryGrid: React.FC<QueryGridProps> = ({
   const isDark = theme === 'vs-dark';
 
   return (
-    <div className={`flex flex-col h-full border ${isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'} overflow-hidden select-none`}>
+    <div className={`flex flex-col h-full border ${isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'} overflow-hidden select-text`}>
       {/* Top Toolbar */}
       <div className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b ${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'} text-xs`}>
         <div className="flex items-center gap-3">

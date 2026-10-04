@@ -22,6 +22,7 @@ export interface StorageMetadata {
   isAutoSyncEnabled: boolean;
   activeTarget: StorageTarget;
   filePath?: string;
+  hasUserModifications?: boolean;
 }
 
 export interface ConflictDetails {

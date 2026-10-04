@@ -15,6 +15,7 @@ import {
   Lock,
   Sliders,
   Shield,
+  X,
 } from 'lucide-react';
 import { TableSchema, SavedQuery } from '../types/sqlite';
 import { PluginRecord } from '../types/plugin';
@@ -147,14 +148,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      style={{ width: `${sidebarWidth}px` }}
-      className={`relative flex-shrink-0 flex flex-col border-r select-none transition-colors ${
+      style={typeof window !== 'undefined' && window.innerWidth >= 768 ? { width: `${sidebarWidth}px` } : undefined}
+      className={`relative flex-shrink-0 flex flex-col select-text transition-colors w-full md:w-auto h-full border-t md:border-t-0 md:border-r ${
         isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
       }`}
     >
       {/* Search Header */}
-      <div className="p-2 border-b border-slate-800/80">
-        <div className="relative">
+      <div className="p-2 border-b border-slate-800/80 flex items-center gap-2">
+        <div className="relative flex-1">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-500" />
           <input
             type="text"
@@ -166,6 +167,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           />
         </div>
+        <button
+          onClick={onToggle}
+          className="md:hidden p-1.5 rounded-lg border text-slate-400 hover:text-white"
+          title="Close Navigation Pane"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Object Groups Navigation Pane */}
@@ -629,7 +637,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           e.preventDefault();
           setIsResizing(true);
         }}
-        className={`absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/80 transition-colors z-30 ${
+        className={`hidden md:block absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/80 transition-colors z-30 ${
           isResizing ? 'bg-indigo-500 w-2 shadow-lg shadow-indigo-500/50' : 'bg-transparent'
         }`}
         title="Drag left or right to adjust sidebar width"

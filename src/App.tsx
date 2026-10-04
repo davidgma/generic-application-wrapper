@@ -24,6 +24,11 @@ import { DropboxModal } from './components/DropboxModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ConflictDialog } from './components/ConflictDialog';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { FilePane } from './components/panes/FilePane';
+import { ViewPane } from './components/panes/ViewPane';
+import { DatabasePane } from './components/panes/DatabasePane';
+import { PluginsPane } from './components/panes/PluginsPane';
+import { HelpPane } from './components/panes/HelpPane';
 
 import {
   AlertCircle,
@@ -55,10 +60,47 @@ export default function App() {
     return 'vs-dark';
   });
 
-  // Navigation & Active View
-  // Values: 'table:customers', 'query:q_active_customers', 'report:report_exec_overview', 'plugin:plugin_file_manager', 'ide', 'spreadsheet'
-  const [activeView, setActiveView] = useState<string>('plugin:plugin_file_manager');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Navigation: Active Route & Active View
+  // Routes: 'file' | 'view' | 'database' | 'plugins' | 'help'
+  // Views: 'file', 'view', 'database', 'plugins', 'help', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
+  const [activeRoute, setActiveRoute] = useState<'file' | 'view' | 'database' | 'plugins' | 'help'>('file');
+  const [activeView, setActiveView] = useState<string>('file');
+
+  // Sidebar state loaded from & persisted to localStorage
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    const saved = localStorage.getItem('gaw_sidebar_open');
+    if (saved !== null) return saved === 'true';
+    return false;
+  });
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem('gaw_sidebar_open', String(next));
+      return next;
+    });
+  }, []);
+
+  const setSidebarOpenWithStorage = useCallback((open: boolean) => {
+    setSidebarOpen(open);
+    localStorage.setItem('gaw_sidebar_open', String(open));
+  }, []);
+
+  // Hash Navigation Helper
+  const navigateTo = useCallback((route: string, view?: string) => {
+    let targetHash = `#${route}`;
+    if (view && view !== route) {
+      if (view.startsWith('table:')) targetHash = `#table/${view.replace('table:', '')}`;
+      else if (view.startsWith('query:')) targetHash = `#query/${view.replace('query:', '')}`;
+      else if (view.startsWith('report:')) targetHash = `#report/${view.replace('report:', '')}`;
+      else if (view.startsWith('plugin:')) targetHash = `#plugin/${view.replace('plugin:', '')}`;
+      else if (view === 'spreadsheet') targetHash = '#spreadsheet';
+      else if (view === 'ide') targetHash = '#ide';
+    }
+    if (window.location.hash !== targetHash) {
+      window.location.hash = targetHash;
+    }
+  }, []);
 
   // Database metadata & collections
   const [tables, setTables] = useState<TableSchema[]>([]);
@@ -182,6 +224,11 @@ export default function App() {
         }),
     }),
     []
+  );
+
+  const handleConfirmDialog = useCallback(
+    (message: string) => dialogApi.confirm(message),
+    [dialogApi]
   );
 
   // Simple event bus
@@ -415,8 +462,10 @@ export default function App() {
         });
       }
       setActiveView('ide');
+      setActiveRoute('view');
+      navigateTo('view', 'ide');
     },
-    []
+    [navigateTo]
   );
 
   // Trigger two-stage deletion confirmation
@@ -536,7 +585,7 @@ export default function App() {
   }, [storageEngine, toastApi, refreshDatabaseState]);
 
   // Navigate to Table View
-  const handleSelectTable = (tableName: string) => {
+  const handleSelectTable = useCallback((tableName: string, updateHash: boolean = true) => {
     const engine = SQLiteEngine.getInstance();
     try {
       const startTime = performance.now();
@@ -551,13 +600,17 @@ export default function App() {
       });
       setActiveQueryTitle(`Table: ${tableName}`);
       setActiveView(`table:${tableName}`);
+      setActiveRoute('view');
+      if (updateHash) {
+        navigateTo('view', `table:${tableName}`);
+      }
     } catch (err: any) {
       toastApi.error('Error opening table: ' + err.message);
     }
-  };
+  }, [navigateTo, toastApi]);
 
   // Navigate to Query View
-  const handleSelectQuery = (q: SavedQuery) => {
+  const handleSelectQuery = useCallback((q: SavedQuery, updateHash: boolean = true) => {
     const engine = SQLiteEngine.getInstance();
     try {
       const results = engine.exec(q.query);
@@ -565,22 +618,87 @@ export default function App() {
         setActiveQueryResult(results[0]);
         setActiveQueryTitle(q.name);
         setActiveView(`query:${q.id}`);
+        setActiveRoute('view');
+        if (updateHash) {
+          navigateTo('view', `query:${q.id}`);
+        }
       }
     } catch (err: any) {
       toastApi.error('Error running query: ' + err.message);
     }
-  };
+  }, [navigateTo, toastApi]);
 
   // Open Spreadsheet with specific data
-  const handleOpenSpreadsheet = (
+  const handleOpenSpreadsheet = useCallback((
     data?: { columns: string[]; values: any[][] },
-    sheetName: string = 'Data'
+    sheetName: string = 'Data',
+    updateHash: boolean = true
   ) => {
     if (data) {
       setSpreadsheetInitialSheets([{ name: sheetName, columns: data.columns, values: data.values }]);
     }
     setActiveView('spreadsheet');
-  };
+    setActiveRoute('view');
+    if (updateHash) {
+      navigateTo('view', 'spreadsheet');
+    }
+  }, [navigateTo]);
+
+  // Hash route parsing and synchronization
+  useEffect(() => {
+    const parseHash = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '').trim();
+      if (!hash || hash === 'file') {
+        setActiveRoute('file');
+        setActiveView('file');
+        if (!window.location.hash || window.location.hash === '#') {
+          window.location.hash = '#file';
+        }
+      } else if (hash === 'view') {
+        setActiveRoute('view');
+        setActiveView('view');
+      } else if (hash === 'database') {
+        setActiveRoute('database');
+        setActiveView('database');
+      } else if (hash === 'plugins') {
+        setActiveRoute('plugins');
+        setActiveView('plugins');
+      } else if (hash === 'help') {
+        setActiveRoute('help');
+        setActiveView('help');
+      } else if (hash === 'spreadsheet') {
+        setActiveRoute('view');
+        setActiveView('spreadsheet');
+      } else if (hash.startsWith('ide')) {
+        setActiveRoute('view');
+        setActiveView('ide');
+      } else if (hash.startsWith('table/')) {
+        const tName = hash.replace('table/', '');
+        handleSelectTable(tName, false);
+      } else if (hash.startsWith('query/')) {
+        const qId = hash.replace('query/', '');
+        const q = queries.find((item) => item.id === qId);
+        if (q) {
+          handleSelectQuery(q, false);
+        } else {
+          setActiveRoute('view');
+          setActiveView(`query:${qId}`);
+        }
+      } else if (hash.startsWith('report/')) {
+        const rId = hash.replace('report/', '');
+        setActiveRoute('view');
+        setActiveView(`report:${rId}`);
+      } else if (hash.startsWith('plugin/')) {
+        const pId = hash.replace('plugin/', '');
+        setActiveRoute('plugins');
+        setActiveView(`plugin:${pId}`);
+      }
+    };
+
+    parseHash();
+    window.addEventListener('hashchange', parseHash);
+    return () => window.removeEventListener('hashchange', parseHash);
+  }, [queries, tables, handleSelectTable, handleSelectQuery]);
 
   // Build GAW Context passed to dynamic plugins
   const gawContext: GAWContext = useMemo(() => {
@@ -885,92 +1003,207 @@ export default function App() {
       {/* Top Application Header & Menus (Hidden in full VS Code mode) */}
       {!isFullVSCode && (
         <Navbar
-          appTitle={appTitle}
-          storageMeta={storageMeta}
           theme={theme}
+          activeRoute={activeRoute}
+          onSelectRoute={(route) => {
+            setActiveRoute(route as any);
+            setActiveView(route);
+            navigateTo(route, route);
+          }}
           onThemeToggle={() => {
             const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
             setTheme(next);
             localStorage.setItem('gaw_theme', next);
             eventBusApi.emit('theme_changed', next);
           }}
-          onNewDatabase={() => {
-            SQLiteEngine.getInstance().createDefaultDatabase();
-            toastApi.info('Created new database.');
-            setSidebarOpen(true);
-            refreshDatabaseState();
-            setActiveView('ide');
-          }}
-          onOpenFile={async () => {
-            const ok = await storageEngine.openFile();
-            if (ok) {
-              toastApi.success('Opened database file successfully.');
-              setSidebarOpen(true);
-              refreshDatabaseState();
-            }
-          }}
-          onOpenFileWorkspace={() => setActiveView('plugin:plugin_file_manager')}
-          onSaveFile={async () => {
-            const ok = await storageEngine.save();
-            if (ok) toastApi.success('Saved to disk file handle.');
-          }}
-          onSaveAsFile={async () => {
-            await storageEngine.saveAs();
-          }}
-          onOpenDropbox={() => setShowDropboxModal(true)}
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarOpen={sidebarOpen}
           onOpenSettings={() => setShowSettingsModal(true)}
-          onOpenAI={() => setShowAIModal(true)}
-          onOpenIDE={handleOpenInIDE}
-          onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          onResetDefault={() => {
-            SQLiteEngine.getInstance().createDefaultDatabase();
-            toastApi.success('Reset database to Northwind Modern template.');
-            setSidebarOpen(true);
-            refreshDatabaseState();
-            setActiveView('plugin:plugin_crm');
-          }}
         />
       )}
 
       {/* Main Workspace Area (Sidebar + Active View) */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* MS Access Object Navigation Pane (Hidden in full VS Code mode) */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0 relative">
+        {/* Desktop Sidebar: rendered before main on desktop */}
         {!isFullVSCode && (
-          <Sidebar
-            isOpen={sidebarOpen}
-            onToggle={() => setSidebarOpen(!sidebarOpen)}
-            tables={tables}
-            queries={queries}
-            reports={reports}
-            plugins={plugins}
-            activeView={activeView}
-            onSelectTable={handleSelectTable}
-            onSelectQuery={handleSelectQuery}
-            onSelectReport={(r) => setActiveView(`report:${r.id}`)}
-            onSelectPlugin={(p) => setActiveView(`plugin:${p.id}`)}
-            onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-            onOpenIDE={handleOpenInIDE}
-            onNewReport={() => {
-              setReportToEdit(null);
-              setShowReportBuilder(true);
-            }}
-            onEditReportVisual={(r) => {
-              setReportToEdit(r);
-              setShowReportBuilder(true);
-            }}
-            onDeleteObject={handleDeleteObject}
-            onAddPlugin={() => setShowAddPluginModal(true)}
-            onOpenAI={() => setShowAIModal(true)}
-            theme={theme}
-          />
+          <div className="hidden md:flex h-full">
+            <Sidebar
+              isOpen={sidebarOpen}
+              onToggle={handleToggleSidebar}
+              tables={tables}
+              queries={queries}
+              reports={reports}
+              plugins={plugins}
+              activeView={activeView}
+              onSelectTable={(tableName) => {
+                handleSelectTable(tableName);
+              }}
+              onSelectQuery={(q) => {
+                handleSelectQuery(q);
+              }}
+              onSelectReport={(r) => {
+                setActiveView(`report:${r.id}`);
+                setActiveRoute('view');
+                navigateTo('view', `report:${r.id}`);
+              }}
+              onSelectPlugin={(p) => {
+                setActiveView(`plugin:${p.id}`);
+                setActiveRoute('plugins');
+                navigateTo('plugins', `plugin:${p.id}`);
+              }}
+              onOpenSpreadsheet={() => handleOpenSpreadsheet()}
+              onOpenIDE={handleOpenInIDE}
+              onNewReport={() => {
+                setReportToEdit(null);
+                setShowReportBuilder(true);
+              }}
+              onEditReportVisual={(r) => {
+                setReportToEdit(r);
+                setShowReportBuilder(true);
+              }}
+              onDeleteObject={handleDeleteObject}
+              onAddPlugin={() => setShowAddPluginModal(true)}
+              onOpenAI={() => setShowAIModal(true)}
+              theme={theme}
+            />
+          </div>
         )}
 
         {/* Center Canvas */}
-        <main className={`flex-1 flex flex-col overflow-hidden min-w-0 ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+        <main
+          className={`flex-1 flex flex-col overflow-hidden min-w-0 select-text ${
+            sidebarOpen ? 'max-md:portrait:hidden' : ''
+          } ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}
+        >
+          {/* Pane 1: File Route */}
+          {activeRoute === 'file' && activeView === 'file' && (
+            <FilePane
+              storageMeta={storageMeta}
+              theme={theme}
+              onNewDatabase={() => {
+                SQLiteEngine.getInstance().createDefaultDatabase();
+                toastApi.info('Created new database.');
+                setSidebarOpenWithStorage(true);
+                refreshDatabaseState();
+                setActiveView('view');
+                navigateTo('view', 'view');
+              }}
+              onOpenFile={async () => {
+                const ok = await storageEngine.openFile();
+                if (ok) {
+                  toastApi.success('Opened database file successfully.');
+                  setSidebarOpenWithStorage(true);
+                  refreshDatabaseState();
+                  setActiveView('view');
+                  navigateTo('view', 'view');
+                }
+              }}
+              onOpenDropbox={() => setShowDropboxModal(true)}
+              onOpenFileManager={() => {
+                setActiveView('plugin:plugin_file_manager');
+                setActiveRoute('plugins');
+                navigateTo('plugins', 'plugin:plugin_file_manager');
+              }}
+              onOpenDemo={() => {
+                SQLiteEngine.getInstance().createDefaultDatabase();
+                toastApi.success('Reset database to Northwind Modern template.');
+                setSidebarOpenWithStorage(true);
+                refreshDatabaseState();
+                setActiveView('plugin:plugin_crm');
+                setActiveRoute('plugins');
+                navigateTo('plugins', 'plugin:plugin_crm');
+              }}
+              onOpenSettings={() => setShowSettingsModal(true)}
+              onOpenPlugin={(pId) => {
+                setActiveView(`plugin:${pId}`);
+                setActiveRoute('plugins');
+                navigateTo('plugins', `plugin:${pId}`);
+              }}
+              onToast={addToast}
+              onConfirm={handleConfirmDialog}
+            />
+          )}
+
+          {/* Pane 2: View Hub */}
+          {activeRoute === 'view' && activeView === 'view' && (
+            <ViewPane
+              theme={theme}
+              tables={tables}
+              queries={queries}
+              reports={reports}
+              plugins={plugins}
+              isVSCodeMode={isVSCodeMode}
+              onOpenSpreadsheet={() => handleOpenSpreadsheet()}
+              onOpenIDE={handleOpenInIDE}
+              onToggleVSCodeMode={handleToggleVSCodeMode}
+              onSelectView={(v) => {
+                setActiveView(v);
+                navigateTo('view', v);
+              }}
+            />
+          )}
+
+          {/* Pane 3: Database Hub */}
+          {activeRoute === 'database' && activeView === 'database' && (
+            <DatabasePane
+              theme={theme}
+              tables={tables}
+              onOpenIDE={handleOpenInIDE}
+              onOpenSettings={() => setShowSettingsModal(true)}
+              onResetDefault={() => {
+                SQLiteEngine.getInstance().createDefaultDatabase();
+                toastApi.success('Reset database to Northwind Modern template.');
+                setSidebarOpenWithStorage(true);
+                refreshDatabaseState();
+                setActiveView('plugin:plugin_crm');
+                setActiveRoute('plugins');
+                navigateTo('plugins', 'plugin:plugin_crm');
+              }}
+              onSelectView={(v) => {
+                setActiveView(v);
+                navigateTo('view', v);
+              }}
+              onToast={addToast}
+            />
+          )}
+
+          {/* Pane 4: Plugins Marketplace / Hub */}
+          {activeRoute === 'plugins' && activeView === 'plugins' && (
+            <PluginsPane
+              theme={theme}
+              plugins={plugins}
+              onOpenIDE={handleOpenInIDE}
+              onAddPlugin={() => setShowAddPluginModal(true)}
+              onSelectView={(v) => {
+                setActiveView(v);
+                navigateTo('plugins', v);
+              }}
+              onTogglePlugin={(plugin) => {
+                const newEnabled = plugin.enabled === 1 ? false : true;
+                SQLiteEngine.getInstance().setPluginEnabled(plugin.id, newEnabled);
+                refreshDatabaseState();
+                toastApi.info(`${plugin.name} is now ${newEnabled ? 'enabled' : 'disabled'}.`);
+              }}
+            />
+          )}
+
+          {/* Pane 5: Help Route */}
+          {activeRoute === 'help' && activeView === 'help' && (
+            <HelpPane
+              theme={theme}
+              onOpenAI={() => setShowAIModal(true)}
+              onOpenSettings={() => setShowSettingsModal(true)}
+              onOpenPlugin={(pId) => {
+                setActiveView(`plugin:${pId}`);
+                setActiveRoute('plugins');
+                navigateTo('plugins', `plugin:${pId}`);
+              }}
+            />
+          )}
+
           {/* View 1: Active Dynamic TSX Plugin */}
           {activeView.startsWith('plugin:') && currentPlugin && (
-            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
               <PluginHost
                 code={currentPlugin.code}
                 pluginName={currentPlugin.name}
@@ -984,9 +1217,22 @@ export default function App() {
 
           {/* View 2: Table or Query Grid */}
           {(activeView.startsWith('table:') || activeView.startsWith('query:')) && activeQueryResult && (
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col overflow-hidden select-text">
               <div className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs">
-                <span className="font-bold text-white">{activeQueryTitle}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setActiveView('view');
+                      navigateTo('view', 'view');
+                    }}
+                    className="text-slate-400 hover:text-white transition"
+                    title="Back to View Hub"
+                  >
+                    ← View
+                  </button>
+                  <span className="text-slate-600">/</span>
+                  <span className="font-bold text-white">{activeQueryTitle}</span>
+                </div>
                 {activeView.startsWith('query:') && (
                   <button
                     onClick={() => {
@@ -1024,14 +1270,17 @@ export default function App() {
 
           {/* View 3: Publication Report Viewer */}
           {activeView.startsWith('report:') && currentReport && (
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden select-text">
               <ReportViewer
                 report={currentReport}
                 onEdit={() => {
                   setReportToEdit(currentReport);
                   setShowReportBuilder(true);
                 }}
-                onBack={() => setActiveView('plugin:plugin_crm')}
+                onBack={() => {
+                  setActiveView('view');
+                  navigateTo('view', 'view');
+                }}
                 theme={theme}
               />
             </div>
@@ -1039,10 +1288,13 @@ export default function App() {
 
           {/* View 4: Embedded Spreadsheet Studio */}
           {activeView === 'spreadsheet' && (
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden select-text">
               <SpreadsheetView
                 initialSheets={spreadsheetInitialSheets}
-                onClose={() => setActiveView('plugin:plugin_crm')}
+                onClose={() => {
+                  setActiveView('view');
+                  navigateTo('view', 'view');
+                }}
                 theme={theme}
               />
             </div>
@@ -1050,7 +1302,7 @@ export default function App() {
 
           {/* View 5: Internal Monaco Editor IDE */}
           {activeView === 'ide' && (
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden select-text">
               <GAWIDE
                 targetTab={ideTargetTab}
                 onClearTargetTab={() => setIdeTargetTab(null)}
@@ -1064,6 +1316,64 @@ export default function App() {
             </div>
           )}
         </main>
+
+        {/* Mobile Side Panel: rendered at the end AFTER plugin/pane output, but BEFORE bottom status bar! */}
+        {/* If mobile is in portrait mode, it takes up the whole screen height! */}
+        {!isFullVSCode && sidebarOpen && (
+          <div className="flex md:hidden w-full max-md:portrait:h-full max-md:portrait:flex-1 max-md:landscape:h-72 border-t border-slate-800 overflow-hidden">
+            <Sidebar
+              isOpen={sidebarOpen}
+              onToggle={handleToggleSidebar}
+              tables={tables}
+              queries={queries}
+              reports={reports}
+              plugins={plugins}
+              activeView={activeView}
+              onSelectTable={(tableName) => {
+                handleSelectTable(tableName);
+                setSidebarOpenWithStorage(false);
+              }}
+              onSelectQuery={(q) => {
+                handleSelectQuery(q);
+                setSidebarOpenWithStorage(false);
+              }}
+              onSelectReport={(r) => {
+                setActiveView(`report:${r.id}`);
+                setActiveRoute('view');
+                navigateTo('view', `report:${r.id}`);
+                setSidebarOpenWithStorage(false);
+              }}
+              onSelectPlugin={(p) => {
+                setActiveView(`plugin:${p.id}`);
+                setActiveRoute('plugins');
+                navigateTo('plugins', `plugin:${p.id}`);
+                setSidebarOpenWithStorage(false);
+              }}
+              onOpenSpreadsheet={() => {
+                handleOpenSpreadsheet();
+                setSidebarOpenWithStorage(false);
+              }}
+              onOpenIDE={(tab) => {
+                handleOpenInIDE(tab);
+                setSidebarOpenWithStorage(false);
+              }}
+              onNewReport={() => {
+                setReportToEdit(null);
+                setShowReportBuilder(true);
+                setSidebarOpenWithStorage(false);
+              }}
+              onEditReportVisual={(r) => {
+                setReportToEdit(r);
+                setShowReportBuilder(true);
+                setSidebarOpenWithStorage(false);
+              }}
+              onDeleteObject={handleDeleteObject}
+              onAddPlugin={() => setShowAddPluginModal(true)}
+              onOpenAI={() => setShowAIModal(true)}
+              theme={theme}
+            />
+          </div>
+        )}
       </div>
 
       {/* Bottom Status Bar */}

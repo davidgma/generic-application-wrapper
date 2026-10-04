@@ -29,7 +29,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const isDark = theme === 'vs-dark';
 
   return (
-    <footer className={`flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono select-none ${
+    <footer className={`flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono select-text ${
       isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-600'
     }`}>
       {/* Left Diagnostics */}
@@ -90,10 +90,17 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         {/* Sync Status Badge */}
         <div className="flex items-center gap-1">
           {storageMeta.syncStatus === 'dirty' && (
-            <span className="inline-flex items-center gap-1 text-amber-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              Unsaved
-            </span>
+            storageMeta.hasUserModifications ? (
+              <span className="inline-flex items-center gap-1 text-amber-400 font-bold" title="Unsaved user modifications">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                Unsaved
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-slate-500 font-medium" title="No uncommitted user modifications">
+                <span className="w-2 h-2 rounded-full bg-slate-500" />
+                Unsaved
+              </span>
+            )
           )}
           {storageMeta.syncStatus === 'saving' && (
             <span className="text-indigo-400 font-medium">Syncing...</span>

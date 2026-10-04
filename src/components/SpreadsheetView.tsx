@@ -427,7 +427,7 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
   const isDark = theme === 'vs-dark';
 
   return (
-    <div className={`flex flex-col h-full ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'} overflow-hidden select-none`}>
+    <div className={`flex flex-col h-full ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'} overflow-hidden select-text`}>
       {/* Top Toolbar */}
       <div className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'} text-xs`}>
         <div className="flex items-center gap-2">

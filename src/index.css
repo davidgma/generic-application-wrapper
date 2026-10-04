@@ -1,10 +1,31 @@
 @import "tailwindcss";
 
 @layer base {
-  body {
-    overflow: hidden;
-    user-select: none;
+  *, ::before, ::after {
+    user-select: text;
+    -webkit-user-select: text;
   }
+  html, body, #root {
+    overflow: hidden;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+}
+
+/* Ensure text elements, tables, plugin outputs, reports are freely selectable */
+p, span, td, th, h1, h2, h3, h4, h5, h6, pre, code, blockquote, label, div {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.select-all {
+  user-select: all !important;
+  -webkit-user-select: all !important;
+}
+
+.select-none {
+  user-select: auto !important;
+  -webkit-user-select: auto !important;
 }
 
 @media print {

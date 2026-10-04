@@ -1,339 +1,149 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React from 'react';
 import {
-  Database,
-  FileCode,
-  FileSpreadsheet,
-  FileText,
   FolderOpen,
-  HardDrive,
-  Save,
-  Settings,
-  Sparkles,
-  Cloud,
-  Layers,
-  ChevronDown,
-  RotateCcw,
-  Check,
-  Moon,
+  LayoutGrid,
+  Database,
+  Puzzle,
+  HelpCircle,
   Sun,
-  Plus,
+  Moon,
+  Settings,
+  PanelLeft
 } from 'lucide-react';
-import { StorageMetadata } from '../types/storage';
-import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
-  appTitle: string;
-  storageMeta: StorageMetadata;
   theme: 'vs-dark' | 'vs-light';
+  activeRoute: 'file' | 'view' | 'database' | 'plugins' | 'help' | string;
+  onSelectRoute: (route: string) => void;
   onThemeToggle: () => void;
-  onNewDatabase: () => void;
-  onOpenFile: () => void;
-  onOpenFileWorkspace?: () => void;
-  onSaveFile?: () => void;
-  onSaveAsFile?: () => void;
-  onOpenDropbox?: () => void;
-  onOpenSettings: () => void;
-  onOpenAI: () => void;
-  onOpenIDE: (tab?: any) => void;
-  onOpenSpreadsheet: () => void;
   onToggleSidebar: () => void;
-  onResetDefault: () => void;
+  isSidebarOpen: boolean;
+  onOpenSettings: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  appTitle,
-  storageMeta,
   theme,
+  activeRoute,
+  onSelectRoute,
   onThemeToggle,
-  onNewDatabase,
-  onOpenFile,
-  onOpenFileWorkspace,
-  onSaveFile,
-  onSaveAsFile,
-  onOpenDropbox,
-  onOpenSettings,
-  onOpenAI,
-  onOpenIDE,
-  onOpenSpreadsheet,
   onToggleSidebar,
-  onResetDefault,
+  isSidebarOpen,
+  onOpenSettings,
 }) => {
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const menuBarRef = useRef<HTMLDivElement>(null);
-
-  // Close menus when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
-        setOpenMenu(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const isDark = theme === 'vs-dark';
 
+  const navItems = [
+    { id: 'file', label: 'File', icon: FolderOpen },
+    { id: 'view', label: 'View', icon: LayoutGrid },
+    { id: 'database', label: 'Database', icon: Database },
+    { id: 'plugins', label: 'Plugins', icon: Puzzle },
+    { id: 'help', label: 'Help', icon: HelpCircle },
+  ];
+
   return (
-    <header className={`border-b select-none ${isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'}`}>
+    <header className={`border-b select-text transition-colors ${
+      isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
+    }`}>
       {/* Top Application Bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 gap-3">
-        {/* Brand & Title */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg overflow-hidden shadow-md bg-amber-500/20 ring-1 ring-amber-400/50">
-            <img src="/gawkyy-cat-64x64.png" alt="Gawkyy" className="w-full h-full object-cover" />
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="font-bold text-xs tracking-tight text-white flex items-center gap-1.5">
-              <span className="text-amber-400 font-extrabold">Gawkyy</span>
-              <span className="text-slate-500 font-normal">|</span>
-              <span className="font-semibold text-slate-200">{appTitle}</span>
+      <div className={`flex items-center justify-between px-3 py-1.5 gap-2 border-b ${
+        isDark ? 'border-slate-850 border-slate-800/60' : 'border-slate-250 border-slate-300/80'
+      }`}>
+        {/* Left: Transparent Cat Icon + Gawkyy + Generic Application Wrapper */}
+        <div className="flex items-center gap-2 min-w-0">
+          <img
+            src="/gawkyy-cat-64x64.png"
+            alt="Gawkyy"
+            className="w-7 h-7 object-contain bg-transparent flex-shrink-0"
+          />
+          <div className="flex items-baseline gap-1.5 min-w-0 truncate">
+            <span className={`font-black text-sm md:text-base tracking-tight ${
+              isDark ? 'text-sky-300' : 'text-blue-950'
+            }`}>
+              Gawkyy
             </span>
-            <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
-              [{storageMeta.fileName}]
+            <span className={`text-[11px] md:text-xs truncate font-medium ${
+              isDark ? 'text-sky-300/80' : 'text-blue-900/80'
+            }`}>
+              Generic Application Wrapper
             </span>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {/* AI Assistant Button */}
+        {/* Right Action Icons: Toggle Side Panel + Theme Toggle + Settings Cog */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Toggle Navigation Pane Icon */}
           <button
-            onClick={onOpenAI}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/60 text-indigo-300 text-xs transition"
-            title="AI Specification Exporter"
+            onClick={onToggleSidebar}
+            className={`p-1.5 rounded-lg border transition active:scale-95 ${
+              isSidebarOpen
+                ? isDark ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                : isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850' : 'bg-slate-50 border-slate-300 text-slate-600 hover:text-slate-900'
+            }`}
+            title={isSidebarOpen ? 'Hide Navigation Side Panel' : 'Show Navigation Side Panel'}
+            aria-label="Toggle Navigation Pane"
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden sm:inline">AI Generator</span>
+            <PanelLeft className="w-4 h-4" />
           </button>
 
-          {/* PWA Install Button */}
-          <PWAInstallButton />
-
-          {/* Theme Toggle */}
+          {/* Theme Toggle Button */}
           <button
             onClick={onThemeToggle}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className={`p-1.5 rounded-lg border transition active:scale-95 ${
+              isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850' : 'bg-slate-50 border-slate-300 text-slate-600 hover:text-slate-900'
+            }`}
             title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+            aria-label="Toggle Light/Dark Theme"
           >
-            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-slate-700" />}
           </button>
 
-          {/* Settings */}
+          {/* Settings Cog Button */}
           <button
             onClick={onOpenSettings}
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className={`p-1.5 rounded-lg border transition active:scale-95 ${
+              isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850' : 'bg-slate-50 border-slate-300 text-slate-600 hover:text-slate-900'
+            }`}
             title="Settings & Storage Preferences"
+            aria-label="Settings"
           >
             <Settings className="w-4 h-4" />
           </button>
-
-          {/* Gawkyy Mascot Icon at Top Right */}
-          <button
-            onClick={onOpenSettings}
-            className="flex items-center justify-center w-7 h-7 rounded-full overflow-hidden shadow-sm ring-1.5 ring-amber-400/60 hover:ring-amber-300 hover:scale-105 transition cursor-pointer ml-1 focus:outline-none"
-            title="Gawkyy Mascot & Preferences"
-          >
-            <img src="/gawkyy-cat-64x64.png" alt="Gawkyy Mascot" className="w-full h-full object-cover" />
-          </button>
         </div>
       </div>
 
-      {/* Desktop Menu Bar (File, Edit, View, Database, Plugins, Tools, Help) */}
-      <div ref={menuBarRef} className={`flex items-center gap-1 px-2.5 py-1 border-t text-xs ${isDark ? 'border-slate-800/80 bg-slate-950' : 'border-slate-300 bg-slate-200/60'}`}>
-        {/* File Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === 'file' ? null : 'file')}
-            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'file' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
-          >
-            File
-          </button>
-          {openMenu === 'file' && (
-            <div className="absolute left-0 top-full mt-0.5 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
-              <button
-                onClick={() => {
-                  onNewDatabase();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>New Database</span>
-                <span className="text-[10px] text-slate-500">Blank</span>
-              </button>
-              <button
-                onClick={() => {
-                  onOpenFile();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Open File...</span>
-                <span className="text-[10px] text-slate-500">Ctrl+O</span>
-              </button>
-              {onOpenFileWorkspace && (
-                <button
-                  onClick={() => {
-                    onOpenFileWorkspace();
-                    setOpenMenu(null);
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white text-indigo-300 hover:text-white transition"
-                >
-                  <span>File & Workspace Manager</span>
-                  <span className="text-[10px] text-indigo-400">Hub</span>
-                </button>
-              )}
-              <div className="h-px bg-slate-800 my-1" />
-              <button
-                onClick={() => {
-                  onResetDefault();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-300 transition"
-              >
-                <span>Reset to Northwind Demo</span>
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* View Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === 'view' ? null : 'view')}
-            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'view' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
-          >
-            View
-          </button>
-          {openMenu === 'view' && (
-            <div className="absolute left-0 top-full mt-0.5 w-52 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
-              <button
-                onClick={() => {
-                  onToggleSidebar();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Toggle Navigation Pane</span>
-                <span className="text-[10px] text-slate-500">Access Pane</span>
-              </button>
-              <button
-                onClick={() => {
-                  onOpenSpreadsheet();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Spreadsheet Studio</span>
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-              </button>
-              <button
-                onClick={() => {
-                  onOpenIDE();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Internal Monaco IDE</span>
-                <FileCode className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Database Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === 'db' ? null : 'db')}
-            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'db' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
-          >
-            Database
-          </button>
-          {openMenu === 'db' && (
-            <div className="absolute left-0 top-full mt-0.5 w-56 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
-              <button
-                onClick={() => {
-                  onOpenIDE({ type: 'sql' });
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Open SQL Query Editor</span>
-                <span className="text-[10px] text-slate-500">Ctrl+E</span>
-              </button>
-              <button
-                onClick={() => {
-                  onOpenSettings();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Schema & Engine Diagnostics</span>
-                <Database className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Plugins Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === 'plugins' ? null : 'plugins')}
-            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'plugins' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
-          >
-            Plugins
-          </button>
-          {openMenu === 'plugins' && (
-            <div className="absolute left-0 top-full mt-0.5 w-60 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
-              <button
-                onClick={() => {
-                  onOpenAI();
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>AI Prompt Exporter & Assistant</span>
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              </button>
-              <button
-                onClick={() => {
-                  onOpenIDE({ type: 'plugin' });
-                  setOpenMenu(null);
-                }}
-                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-              >
-                <span>Plugin IDE Editor (.tsx)</span>
-                <FileCode className="w-3.5 h-3.5 text-emerald-400" />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Help Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === 'help' ? null : 'help')}
-            className={`px-2.5 py-1 rounded font-medium text-xs transition ${openMenu === 'help' ? 'bg-indigo-600 text-white shadow-sm' : isDark ? 'text-slate-100 hover:text-white hover:bg-slate-800/90' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80'}`}
-          >
-            Help
-          </button>
-          {openMenu === 'help' && (
-            <div className="absolute left-0 top-full mt-0.5 w-64 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 p-3 text-xs text-slate-300 space-y-2">
-              <div className="font-bold text-white border-b border-slate-800 pb-1 flex items-center gap-2">
-                <img src="/gawkyy-cat-64x64.png" alt="Gawkyy" className="w-4 h-4 rounded-full" />
-                <span>Gawkyy Workspace</span>
+      {/* Row 2: 5 Mobile-like Navigation Icons with words shown just below */}
+      <nav aria-label="Main Navigation" className={`flex items-center px-2 py-1 md:justify-start justify-around gap-1 md:gap-3 ${
+        isDark ? 'bg-slate-950 text-slate-300' : 'bg-slate-200/50 text-slate-700'
+      }`}>
+        {navItems.map((item) => {
+          const isActive = activeRoute === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onSelectRoute(item.id)}
+              className={`flex flex-col items-center justify-center py-1 px-3 md:px-4 rounded-xl transition-all cursor-pointer min-w-[56px] md:min-w-[64px] active:scale-95 ${
+                isActive
+                  ? isDark
+                    ? 'bg-indigo-600/30 text-white border border-indigo-500/50 shadow-sm'
+                    : 'bg-white text-indigo-900 border border-slate-300 shadow-sm'
+                  : isDark
+                  ? 'hover:bg-slate-900 hover:text-white text-slate-400 border border-transparent'
+                  : 'hover:bg-slate-200/80 hover:text-slate-900 text-slate-600 border border-transparent'
+              }`}
+            >
+              {/* Same height as the cat icon above (w-7 h-7) */}
+              <div className="w-7 h-7 flex items-center justify-center">
+                <item.icon className={`w-5 h-5 ${isActive ? isDark ? 'text-sky-300' : 'text-indigo-600' : 'opacity-80'}`} />
               </div>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Self-contained MS Access for the modern web. Every table, plugin, saved query, and report is stored directly inside your portable SQLite .db file.
-              </p>
-              <div className="text-[10px] text-indigo-400 font-mono pt-1 border-t border-slate-800">
-                PWA • sql.js WebAssembly • Sucrase TSX
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+              <span className={`text-[10px] md:text-[11px] font-semibold tracking-tight ${
+                isActive ? isDark ? 'text-white' : 'text-indigo-950 font-bold' : ''
+              }`}>
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
     </header>
   );
 };

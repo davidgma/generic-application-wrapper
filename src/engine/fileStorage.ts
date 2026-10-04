@@ -8,6 +8,7 @@ export class FileStorageEngine {
   private lastModifiedDisk: number | null = null;
   private lastSavedAt: Date | null = null;
   private isDirty: boolean = false;
+  private hasUserModifications: boolean = false;
   private syncStatus: SyncStatus = 'saved';
   private autoSyncTimer: any = null;
   private pollingTimer: any = null;
@@ -54,12 +55,26 @@ export class FileStorageEngine {
     });
   }
 
-  public markDirty(): void {
+  public markDirty(isUserAction: boolean = false): void {
+    if (isUserAction) {
+      this.hasUserModifications = true;
+    }
     if (this.syncStatus !== 'dirty' && this.syncStatus !== 'saving') {
       this.isDirty = true;
       this.syncStatus = 'dirty';
       this.notifyStatus();
+    } else if (isUserAction) {
+      this.notifyStatus();
     }
+  }
+
+  public setUserModified(val: boolean = true): void {
+    this.hasUserModifications = val;
+    if (val && this.syncStatus !== 'dirty') {
+      this.isDirty = true;
+      this.syncStatus = 'dirty';
+    }
+    this.notifyStatus();
   }
 
   public getActiveTarget(): StorageTarget {
@@ -113,6 +128,7 @@ export class FileStorageEngine {
       isAutoSyncEnabled: this.isAutoSyncEnabled,
       activeTarget: this.activeTarget,
       filePath: (this.fileHandle as any)?.name || engine.activeDbName,
+      hasUserModifications: this.hasUserModifications,
     };
   }
 
@@ -261,6 +277,7 @@ export class FileStorageEngine {
         this.lastModifiedDisk = updatedFile.lastModified;
         this.lastSavedAt = new Date();
         this.isDirty = false;
+        this.hasUserModifications = false;
         this.syncStatus = 'saved';
         this.notifyStatus();
         return true;
@@ -303,6 +320,7 @@ export class FileStorageEngine {
         this.lastModifiedDisk = file.lastModified;
         this.lastSavedAt = new Date();
         this.isDirty = false;
+        this.hasUserModifications = false;
         this.syncStatus = 'saved';
         engine.activeDbName = file.name;
 
@@ -325,6 +343,7 @@ export class FileStorageEngine {
       this.downloadBinary(binary, defaultName);
       this.lastSavedAt = new Date();
       this.isDirty = false;
+      this.hasUserModifications = false;
       this.syncStatus = 'saved';
       this.notifyStatus();
       return true;
