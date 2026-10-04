@@ -6,7 +6,6 @@ import {
   Cloud,
   Layers,
   Sparkles,
-  Save,
   Download,
   Trash2,
   Clock,
@@ -76,10 +75,6 @@ export const FilePane: React.FC<FilePaneProps> = ({
   // Field being edited inline
   const [editingField, setEditingField] = useState<'dbName' | 'appTitle' | 'companyName' | null>(null);
   const [tempValue, setTempValue] = useState<string>('');
-
-  // Save As modal state ('local' | 'dropbox' | null)
-  const [saveAsTarget, setSaveAsTarget] = useState<'local' | 'dropbox' | null>(null);
-  const [saveAsNewName, setSaveAsNewName] = useState<string>('');
 
   useEffect(() => {
     const unsubDropbox = DropboxSyncEngine.getInstance().subscribe((cfg) => {
@@ -163,116 +158,11 @@ export const FilePane: React.FC<FilePaneProps> = ({
     setTempValue('');
   };
 
-  // --- Save Operations ---
-  const handleSaveLocal = async () => {
-    try {
-      const ok = await FileStorageEngine.getInstance().save();
-      if (ok) {
-        refreshRecent();
-        onToast('success', 'Database saved as local file.');
-      }
-    } catch (err: any) {
-      onToast('error', `Failed to save local file: ${err.message || String(err)}`);
-    }
-  };
-
-  const handleSaveDropbox = async () => {
-    if (!dropboxConfig.connected) {
-      onToast('warning', 'Dropbox is not connected. Opening Dropbox connection...');
-      onOpenDropbox();
-      return;
-    }
-
-    try {
-      const item = await DropboxSyncEngine.getInstance().uploadActiveDatabase();
-      FileStorageEngine.getInstance().markSaved();
-      RecentFilesManager.addRecentFile({
-        name: item.name,
-        source: 'dropbox',
-        path: item.path_display,
-        size: item.size,
-      });
-      refreshRecent();
-      onToast('success', `Saved ${item.name} in Dropbox.`);
-    } catch (err: any) {
-      onToast('error', `Failed to save in Dropbox: ${err.message || String(err)}`);
-    }
-  };
-
-  // --- Save As Operations ---
-  const handleOpenSaveAs = (target: 'local' | 'dropbox') => {
-    if (target === 'dropbox' && !dropboxConfig.connected) {
-      onToast('warning', 'Dropbox is not connected. Please connect to Dropbox first.');
-      onOpenDropbox();
-      return;
-    }
-    const baseName = dbName.replace(/\.(db|sqlite3?)$/i, '');
-    setSaveAsNewName(`${baseName}_copy.sqlite`);
-    setSaveAsTarget(target);
-  };
-
-  const handleConfirmSaveAsLocal = async () => {
-    const clean = saveAsNewName.trim();
-    if (!clean) {
-      onToast('warning', 'Please provide a valid file name.');
-      return;
-    }
-
-    const finalName = clean.endsWith('.sqlite') || clean.endsWith('.db') || clean.endsWith('.sqlite3')
-      ? clean
-      : `${clean}.sqlite`;
-
-    try {
-      const ok = await FileStorageEngine.getInstance().saveAs(finalName);
-      if (ok) {
-        setDbName(finalName);
-        FileStorageEngine.getInstance().setActiveTarget('local');
-        refreshRecent();
-        onToast('success', `Saved copy "${finalName}" as local file and updated active database.`);
-        setSaveAsTarget(null);
-      }
-    } catch (err: any) {
-      onToast('error', `Failed to save copy: ${err.message || String(err)}`);
-    }
-  };
-
-  const handleConfirmSaveAsDropbox = async () => {
-    const clean = saveAsNewName.trim();
-    if (!clean) {
-      onToast('warning', 'Please provide a valid file name.');
-      return;
-    }
-
-    const finalName = clean.endsWith('.sqlite') || clean.endsWith('.db') || clean.endsWith('.sqlite3')
-      ? clean
-      : `${clean}.sqlite`;
-
-    try {
-      const item = await DropboxSyncEngine.getInstance().uploadActiveDatabase('/' + finalName);
-      FileStorageEngine.getInstance().setFileName(item.name);
-      FileStorageEngine.getInstance().markSaved();
-      FileStorageEngine.getInstance().setActiveTarget('dropbox');
-      DropboxSyncEngine.getInstance().setActiveTarget('dropbox');
-      RecentFilesManager.addRecentFile({
-        name: item.name,
-        source: 'dropbox',
-        path: item.path_display,
-        size: item.size,
-      });
-      setDbName(item.name);
-      refreshRecent();
-      onToast('success', `Saved copy "${item.name}" in Dropbox and updated active database.`);
-      setSaveAsTarget(null);
-    } catch (err: any) {
-      onToast('error', `Failed to save copy in Dropbox: ${err.message || String(err)}`);
-    }
-  };
-
   const handleOpenRecent = async (file: RecentFileItem) => {
     if (file.source === 'demo') {
       onOpenDemo();
       RecentFilesManager.addRecentFile({
-        name: 'Northwind Commerce Demo',
+        name: 'Northwind Modern Commerce Demo',
         source: 'demo',
       });
       refreshRecent();
@@ -356,7 +246,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
         <div className={`p-4 md:p-5 rounded-2xl border shadow-sm transition-all ${
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         }`}>
-          {/* Top Row: Title + Sync Status + Save Actions */}
+          {/* Top Row: Title + Sync Status + Quick Access to Plugins */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/40">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -389,61 +279,40 @@ export const FilePane: React.FC<FilePaneProps> = ({
               </div>
             </div>
 
-            {/* Save Buttons & Save As Options */}
+            {/* Direct Links to Plugins for Saving & Sync */}
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Save as local file */}
               <button
-                onClick={handleSaveLocal}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow transition active:scale-95"
-                title="Save changes to local file or native disk handle"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save as local file</span>
-              </button>
-
-              {/* Save in dropbox */}
-              <button
-                onClick={handleSaveDropbox}
-                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow transition active:scale-95"
-                title={dropboxConfig.connected ? "Upload and save current database to Dropbox" : "Connect to Dropbox to save"}
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>Save in dropbox</span>
-              </button>
-
-              {/* Save As Local File */}
-              <button
-                onClick={() => handleOpenSaveAs('local')}
+                onClick={() => onOpenPlugin('plugin_local_storage')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 ${
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-emerald-700 border-slate-300'
                 }`}
-                title="Save a copy of the database under a new name locally"
+                title="Open Local File Storage & Disk Sync to Save, Save As..., or configure auto-sync"
               >
-                <HardDrive className="w-3.5 h-3.5" />
-                <span>Save As Local File...</span>
+                <HardDrive className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Local Storage & Sync</span>
               </button>
 
-              {/* Save As Dropbox */}
               <button
-                onClick={() => handleOpenSaveAs('dropbox')}
+                onClick={() => onOpenPlugin('plugin_dropbox_sync')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 ${
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-sky-700 border-slate-300'
                 }`}
-                title="Save a copy of the database under a new name in Dropbox"
+                title="Open Dropbox Cloud Sync to Save, Save As..., or configure auto-sync"
               >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>Save As Dropbox...</span>
+                <Cloud className="w-3.5 h-3.5 text-sky-500" />
+                <span>Dropbox Cloud Sync</span>
               </button>
 
               {/* Export raw .db */}
               <button
                 onClick={() => FileStorageEngine.getInstance().exportDownload()}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1 ${
                   isDark ? 'bg-slate-850 hover:bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
                 }`}
                 title="Download raw SQLite .db file directly"
               >
                 <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline text-[11px]">Export .db</span>
               </button>
             </div>
           </div>
@@ -643,7 +512,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
             <div>
               <span className={`block text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Storage Target</span>
               <span className="font-semibold capitalize">
-                {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}
+                {storageMeta.hasFileHandle ? 'Local Disk Handle Attached' : 'In-Memory WebAssembly'}
               </span>
             </div>
             <div>
@@ -681,7 +550,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
                 <div>
                   <h4 className="text-sm font-bold text-slate-900 dark:text-white">Create New Database</h4>
                   <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Creates a fresh database named "new_database.sqlite" with the minimal starting set (System tables, Hello World, Dropbox, Local Storage, File & Plugin Managers). You can customize defaults and save locally or in Dropbox.
+                    Creates a fresh database named "new_database.sqlite" with the minimal starting set. You can customize defaults and save locally or in Dropbox using their plugins.
                   </p>
                 </div>
               </div>
@@ -938,95 +807,6 @@ export const FilePane: React.FC<FilePaneProps> = ({
           )}
         </div>
       </div>
-
-      {/* Save As... Modal Dialog for Local or Dropbox */}
-      {saveAsTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-text">
-          <div className={`w-full max-w-md rounded-2xl border shadow-2xl p-5 space-y-4 transition ${
-            isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-900'
-          }`}>
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                {saveAsTarget === 'dropbox' ? (
-                  <div className="w-8 h-8 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center justify-center">
-                    <Cloud className="w-4 h-4" />
-                  </div>
-                ) : (
-                  <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
-                    <HardDrive className="w-4 h-4" />
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-bold text-sm">
-                    {saveAsTarget === 'dropbox' ? 'Save As Dropbox Copy' : 'Save As Local File'}
-                  </h3>
-                  <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    A copy of the database will be saved under this new name, and active database updated.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSaveAsTarget(null)}
-                className="p-1 text-slate-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold">
-                Database Copy File Name:
-              </label>
-              <input
-                type="text"
-                value={saveAsNewName}
-                onChange={(e) => setSaveAsNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    if (saveAsTarget === 'dropbox') handleConfirmSaveAsDropbox();
-                    else handleConfirmSaveAsLocal();
-                  }
-                }}
-                placeholder="my_database_copy.sqlite"
-                className={`w-full px-3 py-2 rounded-xl text-xs border font-mono font-medium focus:outline-none focus:border-indigo-500 ${
-                  isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-                }`}
-                autoFocus
-              />
-              <p className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                {saveAsTarget === 'dropbox'
-                  ? 'File will be uploaded to your connected Dropbox root folder.'
-                  : 'File will be saved to your local drive or downloaded.'}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-              <button
-                onClick={() => setSaveAsTarget(null)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${
-                  isDark ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                }`}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (saveAsTarget === 'dropbox') handleConfirmSaveAsDropbox();
-                  else handleConfirmSaveAsLocal();
-                }}
-                className={`px-4 py-1.5 rounded-xl text-xs font-semibold text-white shadow flex items-center gap-1.5 ${
-                  saveAsTarget === 'dropbox'
-                    ? 'bg-sky-600 hover:bg-sky-500'
-                    : 'bg-indigo-600 hover:bg-indigo-500'
-                }`}
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Copy</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

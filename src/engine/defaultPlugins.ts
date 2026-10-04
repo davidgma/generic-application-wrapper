@@ -1126,6 +1126,20 @@ export default function DropboxSyncPlugin({ gaw }) {
     }
   }, [activeTab, config.connected]);
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedIntervalOption, setSelectedIntervalOption] = useState(() => {
+    const std = [5, 10, 30, 60, 300];
+    const sec = config.autoSyncIntervalSec || 60;
+    return std.includes(sec) ? String(sec) : 'custom';
+  });
+  const [customIntervalSeconds, setCustomIntervalSeconds] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gaw_dropbox_auto_sync_custom');
+      if (saved) return saved;
+    }
+    return String(config.autoSyncIntervalSec || 45);
+  });
+
   const handleSaveToken = async () => {
     if (!tokenInput.trim()) {
       gaw.toast.warning('Please enter a valid Dropbox access token.');
@@ -1139,15 +1153,42 @@ export default function DropboxSyncPlugin({ gaw }) {
     }
   };
 
-  const handlePushNow = async () => {
-    setIsPushing(true);
+  const handleSave = async () => {
+    if (!config.connected) {
+      gaw.toast.warning('Please connect your Dropbox account in the "Connection & API Keys" tab first.');
+      return;
+    }
+    setIsSaving(true);
     try {
-      const res = await gaw.dropbox.uploadActiveDatabase();
-      gaw.toast.success('Pushed database to Dropbox (' + res.name + ')');
-    } catch (err) {
-      gaw.toast.error('Push failed: ' + (err.message || String(err)));
+      const res = await gaw.dropbox.save();
+      gaw.toast.success('Saved active database to Dropbox (' + (res?.name || storageMeta.fileName) + ')');
+    } catch (err: any) {
+      gaw.toast.error('Save failed: ' + (err.message || String(err)));
     } finally {
-      setIsPushing(false);
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAs = async () => {
+    if (!config.connected) {
+      gaw.toast.warning('Please connect your Dropbox account in the "Connection & API Keys" tab first.');
+      return;
+    }
+    const defaultName = storageMeta.fileName || 'new_database.sqlite';
+    const chosen = await gaw.dialog.prompt('Save a copy to Dropbox under new file name:', defaultName);
+    if (!chosen) return;
+    const finalName = chosen.trim().endsWith('.sqlite') || chosen.trim().endsWith('.db') || chosen.trim().endsWith('.sqlite3')
+      ? chosen.trim()
+      : chosen.trim() + '.sqlite';
+
+    setIsSaving(true);
+    try {
+      const res = await gaw.dropbox.saveAs(finalName);
+      gaw.toast.success('Saved new copy to Dropbox as ' + (res?.name || finalName) + '!');
+    } catch (err: any) {
+      gaw.toast.error('Save As failed: ' + (err.message || String(err)));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1165,16 +1206,16 @@ export default function DropboxSyncPlugin({ gaw }) {
     setIsPulling(true);
     try {
       await gaw.dropbox.downloadFile(remote);
-      gaw.workspace?.setSidebarOpen(true);
+      gaw.workspace?.setSidebarOpen?.(true);
       gaw.toast.success('Successfully pulled ' + remote.name + ' from Dropbox!');
-    } catch (err) {
+    } catch (err: any) {
       gaw.toast.error('Pull failed: ' + (err.message || String(err)));
     } finally {
       setIsPulling(false);
     }
   };
 
-  const handleLoadRemoteFile = async (file) => {
+  const handleLoadRemoteFile = async (file: any) => {
     const confirmed = await gaw.dialog.confirm(
       'Load ' + file.name + ' into Gawkyy? This will switch your active database.'
     );
@@ -1182,9 +1223,9 @@ export default function DropboxSyncPlugin({ gaw }) {
 
     try {
       await gaw.dropbox.downloadFile(file);
-      gaw.workspace?.setSidebarOpen(true);
+      gaw.workspace?.setSidebarOpen?.(true);
       gaw.toast.success('Loaded ' + file.name + ' from Dropbox!');
-    } catch (err) {
+    } catch (err: any) {
       gaw.toast.error('Failed to load file: ' + (err.message || String(err)));
     }
   };
@@ -1197,25 +1238,41 @@ export default function DropboxSyncPlugin({ gaw }) {
     }
   };
 
-  const handleIntervalChange = (val) => {
-    const num = parseInt(val, 10);
+  const handleFrequencySelect = (val: string) => {
+    setSelectedIntervalOption(val);
+    if (val === 'custom') {
+      const num = parseInt(customIntervalSeconds, 10) || 45;
+      setAutoInterval(num);
+      gaw.dropbox.setAutoSyncInterval(num);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gaw_dropbox_auto_sync_custom', String(num));
+      }
+      gaw.toast.info('Dropbox auto-sync custom interval set to ' + num + ' seconds');
+    } else {
+      const num = parseInt(val, 10);
+      setAutoInterval(num);
+      gaw.dropbox.setAutoSyncInterval(num);
+      gaw.toast.info('Dropbox auto-sync interval set to ' + num + ' seconds');
+    }
+  };
+
+  const handleApplyCustomInterval = () => {
+    const num = Math.max(1, parseInt(customIntervalSeconds, 10) || 10);
+    setCustomIntervalSeconds(String(num));
     setAutoInterval(num);
     gaw.dropbox.setAutoSyncInterval(num);
-    gaw.toast.info('Dropbox auto-sync interval set to ' + (num === 0 ? 'Off' : num + ' seconds'));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_dropbox_auto_sync_custom', String(num));
+    }
+    gaw.toast.success('Dropbox auto-sync custom interval set to ' + num + ' seconds');
   };
 
-  const handleToggleAuto = (enabled) => {
+  const handleToggleAuto = (enabled: boolean) => {
     setAutoEnabled(enabled);
     gaw.dropbox.setAutoSyncEnabled(enabled);
-    gaw.toast.info('Dropbox auto-sync ' + (enabled ? 'enabled' : 'disabled'));
+    gaw.toast.info('Dropbox cloud auto-sync ' + (enabled ? 'enabled' : 'disabled'));
   };
 
-  const handleSetAsActiveTarget = () => {
-    gaw.dropbox.setActiveTarget('dropbox');
-    gaw.toast.success('Dropbox is now the primary active sync target!');
-  };
-
-  const isDropboxActive = storageMeta.activeTarget === 'dropbox';
   const lastSyncDate = config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleString() : 'Never synced in this session';
 
   return (
@@ -1260,38 +1317,11 @@ export default function DropboxSyncPlugin({ gaw }) {
             </div>
             <button
               onClick={handleDisconnect}
-              className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-medium transition"
+              className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-medium transition active:scale-95"
             >
               Disconnect
             </button>
           </div>
-        )}
-      </div>
-
-      {/* Target Coordination Status Banner */}
-      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (isDropboxActive ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' : 'bg-amber-500/10 border-amber-500/30 text-amber-600')}>
-        <div className="flex items-center gap-2.5">
-          {isDropboxActive ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <HardDrive className="w-4 h-4 text-amber-500" />}
-          <div>
-            <p className="font-bold">
-              {isDropboxActive
-                ? 'Dropbox is currently your Primary Active Sync Target'
-                : 'Current syncing is with a Local Disk File, not Dropbox'}
-            </p>
-            <p className="text-[11px] opacity-80">
-              {isDropboxActive
-                ? 'Automatic background sync periodically flushes database mutations to Dropbox.'
-                : 'Dropbox automatic background sync is paused so it will not overwrite your local disk edits.'}
-            </p>
-          </div>
-        </div>
-        {!isDropboxActive && (
-          <button
-            onClick={handleSetAsActiveTarget}
-            className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow transition active:scale-95"
-          >
-            Set Dropbox as Primary Sync Target
-          </button>
         )}
       </div>
 
@@ -1367,34 +1397,49 @@ export default function DropboxSyncPlugin({ gaw }) {
                 <span className="font-mono text-emerald-500 font-medium">{lastSyncDate}</span>
               </div>
               <div className="flex justify-between items-center py-1">
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Sync Status:</span>
+                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Internal State Tally:</span>
                 <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
-                  storageMeta.syncStatus === 'dirty'
+                  storageMeta.hasUserModifications
                     ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
                     : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
                 )}>
-                  {storageMeta.syncStatus === 'dirty' ? 'Unsynced Local Edits' : 'Clean / Synced'}
+                  {storageMeta.hasUserModifications ? 'Modified' : 'Unchanged'}
                 </span>
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="pt-2 flex flex-col sm:flex-row gap-2">
+            {/* Quick Actions: Save, Save as..., and Pull */}
+            <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
               <button
-                onClick={handlePushNow}
-                disabled={isPushing || !config.connected}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
+                onClick={handleSave}
+                disabled={isSaving || !config.connected}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
+                title="Save database directly to Dropbox"
               >
-                <ArrowUpRight className="w-4 h-4" />
-                <span>{isPushing ? 'Pushing...' : 'Push to Dropbox Now'}</span>
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSaving ? 'Saving...' : 'Save'}</span>
+              </button>
+              <button
+                onClick={handleSaveAs}
+                disabled={isSaving || !config.connected}
+                className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
+                )}
+                title="Save a copy of the database to Dropbox under a new name"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Save as...</span>
               </button>
               <button
                 onClick={handlePullNow}
                 disabled={isPulling || !config.connected}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 font-semibold text-xs border border-slate-700 transition active:scale-95"
+                className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
+                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
+                )}
+                title="Pull and reconcile remote version from Dropbox"
               >
-                <ArrowDownLeft className="w-4 h-4" />
-                <span>{isPulling ? 'Pulling...' : 'Pull from Dropbox'}</span>
+                <ArrowDownLeft className="w-3.5 h-3.5" />
+                <span>{isPulling ? 'Pulling...' : 'Pull'}</span>
               </button>
             </div>
           </div>
@@ -1407,14 +1452,14 @@ export default function DropboxSyncPlugin({ gaw }) {
             </h2>
 
             <p className="text-xs text-slate-400">
-              When Dropbox is the primary active target, the background sync engine automatically pushes local changes to your cloud folder.
+              When enabled and connected, background sync periodically checks external metrics, overwriting when internal has changes, reloading remote edits, and reconciling concurrent mutations.
             </p>
 
             <div className="space-y-4 pt-2">
               <label className="flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
                 <div>
                   <p className="text-xs font-semibold text-white">Enable Cloud Auto-Sync</p>
-                  <p className="text-[11px] text-slate-400">Periodically upload changes while you work</p>
+                  <p className="text-[11px] text-slate-400">Periodically upload and reconcile changes while you work</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1424,26 +1469,49 @@ export default function DropboxSyncPlugin({ gaw }) {
                 />
               </label>
 
-              <div className="space-y-1.5">
-                <label className="text-xs text-slate-300 font-medium">Sync Frequency Interval:</label>
-                <select
-                  value={autoInterval}
-                  onChange={(e) => handleIntervalChange(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
-                >
-                  <option value={10}>Every 10 seconds (High frequency)</option>
-                  <option value={30}>Every 30 seconds (Standard)</option>
-                  <option value={60}>Every 60 seconds (Recommended)</option>
-                  <option value={300}>Every 5 minutes</option>
-                  <option value={900}>Every 15 minutes</option>
-                  <option value={0}>Manual only (Off)</option>
-                </select>
-              </div>
+              {autoEnabled && (
+                <div className="space-y-2 pt-1">
+                  <label className="text-xs text-slate-300 font-medium">Sync Frequency Interval:</label>
+                  <select
+                    value={selectedIntervalOption}
+                    onChange={(e) => handleFrequencySelect(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="5">Every 5 seconds</option>
+                    <option value="10">Every 10 seconds</option>
+                    <option value="30">Every 30 seconds</option>
+                    <option value="60">Every 60 seconds (1 minute)</option>
+                    <option value="300">Every 5 minutes</option>
+                    <option value="custom">Custom frequency...</option>
+                  </select>
+
+                  {selectedIntervalOption === 'custom' && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="86400"
+                        value={customIntervalSeconds}
+                        onChange={(e) => setCustomIntervalSeconds(e.target.value)}
+                        placeholder="e.g. 15"
+                        className="w-24 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                      />
+                      <span className="text-xs text-slate-400">seconds</span>
+                      <button
+                        onClick={handleApplyCustomInterval}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition active:scale-95"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="p-3 bg-blue-950/30 border border-blue-800/40 rounded-lg text-[11px] text-blue-300 flex items-start gap-2">
                 <RefreshCw className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>
-                  Automatic sync applies seamless overwrite to <code className="text-white font-mono">/{storageMeta.fileName}</code>.
+                  Automatic sync applies seamless overwrite to <code className="text-white font-mono">/{storageMeta.fileName}</code> if internal changes occurred without remote modifications.
                 </span>
               </div>
             </div>
@@ -1655,6 +1723,19 @@ export default function LocalStoragePlugin({ gaw }) {
   const [isSaving, setIsSaving] = useState(false);
   const [tableCount, setTableCount] = useState(0);
 
+  const [selectedIntervalOption, setSelectedIntervalOption] = useState(() => {
+    const std = [5, 10, 30, 60, 300];
+    const sec = meta.autoSyncIntervalSec || 30;
+    return std.includes(sec) ? String(sec) : 'custom';
+  });
+  const [customIntervalSeconds, setCustomIntervalSeconds] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gaw_local_auto_sync_custom');
+      if (saved) return saved;
+    }
+    return String(meta.autoSyncIntervalSec || 15);
+  });
+
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('gaw_theme');
@@ -1687,14 +1768,14 @@ export default function LocalStoragePlugin({ gaw }) {
     return unsub;
   }, []);
 
-  const handleSaveNow = async () => {
+  const handleSave = async () => {
     setIsSaving(true);
     try {
       const ok = await gaw.storage.save();
       if (ok) {
         gaw.toast.success('Saved database changes to local file!');
       }
-    } catch (err) {
+    } catch (err: any) {
       gaw.toast.error('Save failed: ' + (err.message || String(err)));
     } finally {
       setIsSaving(false);
@@ -1707,7 +1788,7 @@ export default function LocalStoragePlugin({ gaw }) {
       if (ok) {
         gaw.toast.success('Saved new database copy to disk!');
       }
-    } catch (err) {
+    } catch (err: any) {
       gaw.toast.error('Save As failed: ' + (err.message || String(err)));
     }
   };
@@ -1719,7 +1800,7 @@ export default function LocalStoragePlugin({ gaw }) {
         gaw.workspace?.setSidebarOpen?.(true);
         gaw.toast.success('Opened local database file successfully!');
       }
-    } catch (err) {
+    } catch (err: any) {
       gaw.toast.error('Failed to open file: ' + (err.message || String(err)));
     }
   };
@@ -1729,25 +1810,41 @@ export default function LocalStoragePlugin({ gaw }) {
     gaw.toast.success('Exported and downloaded SQLite binary file.');
   };
 
-  const handleSetPrimaryTarget = () => {
-    gaw.storage.setActiveTarget('local');
-    gaw.toast.success('Local File Storage is now your primary sync target!');
+  const handleFrequencySelect = (val: string) => {
+    setSelectedIntervalOption(val);
+    if (val === 'custom') {
+      const num = parseInt(customIntervalSeconds, 10) || 15;
+      setAutoInterval(num);
+      gaw.storage.setAutoSyncInterval(num);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('gaw_local_auto_sync_custom', String(num));
+      }
+      gaw.toast.info('Local auto-sync custom interval set to ' + num + ' seconds');
+    } else {
+      const num = parseInt(val, 10);
+      setAutoInterval(num);
+      gaw.storage.setAutoSyncInterval(num);
+      gaw.toast.info('Local auto-sync interval set to ' + num + ' seconds');
+    }
   };
 
-  const handleIntervalChange = (val) => {
-    const num = parseInt(val, 10);
+  const handleApplyCustomInterval = () => {
+    const num = Math.max(1, parseInt(customIntervalSeconds, 10) || 10);
+    setCustomIntervalSeconds(String(num));
     setAutoInterval(num);
     gaw.storage.setAutoSyncInterval(num);
-    gaw.toast.info('Auto-save interval updated to ' + (num === 0 ? 'Off' : num + ' seconds'));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_local_auto_sync_custom', String(num));
+    }
+    gaw.toast.success('Local auto-sync custom interval set to ' + num + ' seconds');
   };
 
-  const handleToggleAuto = (enabled) => {
+  const handleToggleAuto = (enabled: boolean) => {
     setAutoEnabled(enabled);
     gaw.storage.setAutoSyncEnabled(enabled);
-    gaw.toast.info('Local file auto-save ' + (enabled ? 'enabled' : 'disabled'));
+    gaw.toast.info('Local file auto-sync ' + (enabled ? 'enabled' : 'disabled'));
   };
 
-  const isLocalActive = meta.activeTarget === 'local';
   const lastSavedFormatted = meta.lastSavedAt
     ? new Date(meta.lastSavedAt).toLocaleString()
     : 'Not yet saved in this session';
@@ -1784,7 +1881,7 @@ export default function LocalStoragePlugin({ gaw }) {
               )}
             </div>
             <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
-              Directly synchronize SQLite changes with your local file system, configure auto-save intervals, and open databases.
+              Directly synchronize SQLite changes with your local file system, configure auto-sync intervals, and open databases.
             </p>
           </div>
         </div>
@@ -1796,37 +1893,6 @@ export default function LocalStoragePlugin({ gaw }) {
           <FolderOpen className="w-4 h-4" />
           <span>Open Local Database...</span>
         </button>
-      </div>
-
-      {/* Target Coordination Banner */}
-      <div className={'p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs ' + (
-        isLocalActive
-          ? isDark ? 'bg-emerald-950/30 border-emerald-700/50 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          : isDark ? 'bg-blue-950/30 border-blue-700/50 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-800'
-      )}>
-        <div className="flex items-center gap-2.5">
-          {isLocalActive ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Cloud className="w-4 h-4 text-blue-500" />}
-          <div>
-            <p className="font-bold">
-              {isLocalActive
-                ? 'Local File Storage is currently your Primary Active Sync Target'
-                : 'Dropbox connection is currently in active use'}
-            </p>
-            <p className="text-[11px] opacity-80">
-              {isLocalActive
-                ? 'Automatic background saves write directly to your local database file handle.'
-                : 'Assumption: No automatic local syncing is needed while Dropbox is active. You can still save or open local files.'}
-            </p>
-          </div>
-        </div>
-        {!isLocalActive && (
-          <button
-            onClick={handleSetPrimaryTarget}
-            className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95"
-          >
-            Switch Primary Sync to Local File
-          </button>
-        )}
       </div>
 
       {/* Content Grid */}
@@ -1862,35 +1928,37 @@ export default function LocalStoragePlugin({ gaw }) {
               <span className="font-mono text-emerald-500">{lastSavedFormatted}</span>
             </div>
             <div className={'flex justify-between items-center py-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-              <span>Sync Status:</span>
+              <span>Internal State Tally:</span>
               <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
-                meta.syncStatus === 'dirty'
+                meta.hasUserModifications
                   ? isDark ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-800 border border-amber-300'
                   : isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
               )}>
-                {meta.syncStatus === 'dirty' ? 'Unsaved Edits in Memory' : 'All Changes Saved to Disk'}
+                {meta.hasUserModifications ? 'Modified' : 'Unchanged'}
               </span>
             </div>
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions: Save, Save as..., and Export */}
           <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
-              onClick={handleSaveNow}
+              onClick={handleSave}
               disabled={isSaving}
               className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
+              title="Save active database to disk without holding a write lock"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{isSaving ? 'Saving...' : 'Save Now'}</span>
+              <span>{isSaving ? 'Saving...' : 'Save'}</span>
             </button>
             <button
               onClick={handleSaveAs}
               className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
                 isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
               )}
+              title="Save a copy of the database to disk under a new name"
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Save As...</span>
+              <span>Save as...</span>
             </button>
             <button
               onClick={handleExportDownload}
@@ -1909,11 +1977,11 @@ export default function LocalStoragePlugin({ gaw }) {
         <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
           <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
             <Clock className="w-4 h-4 text-emerald-500" />
-            <span>Local Auto-Save Engine</span>
+            <span>Local Auto-Sync Engine</span>
           </h2>
 
           <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-            When enabled and a file handle is attached, Gawkyy automatically flushes unwritten SQLite transactions to disk at the chosen interval.
+            When enabled and a file handle is attached, Gawkyy periodically checks external file metrics, overwrites when internal has changes, reloads external edits, and reconciles concurrent mutations.
           </p>
 
           <div className="space-y-4 pt-2">
@@ -1921,8 +1989,8 @@ export default function LocalStoragePlugin({ gaw }) {
               isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-50 border-slate-200'
             )}>
               <div>
-                <p className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>Enable Auto-Save to Disk</p>
-                <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Automatically persist memory writes to file</p>
+                <p className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>Enable Local Auto-Sync</p>
+                <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Automatically check and synchronize changes with local disk</p>
               </div>
               <input
                 type="checkbox"
@@ -1932,29 +2000,55 @@ export default function LocalStoragePlugin({ gaw }) {
               />
             </label>
 
-            <div className="space-y-1.5">
-              <label className={'text-xs font-medium ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>Auto-Save Frequency:</label>
-              <select
-                value={autoInterval}
-                onChange={(e) => handleIntervalChange(e.target.value)}
-                className={'w-full px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-emerald-500 border ' + (
-                  isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+            {autoEnabled && (
+              <div className="space-y-2 pt-1">
+                <label className={'text-xs font-medium ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>Sync Frequency Interval:</label>
+                <select
+                  value={selectedIntervalOption}
+                  onChange={(e) => handleFrequencySelect(e.target.value)}
+                  className={'w-full px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-emerald-500 border ' + (
+                    isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+                  )}
+                >
+                  <option value="5">Every 5 seconds</option>
+                  <option value="10">Every 10 seconds</option>
+                  <option value="30">Every 30 seconds</option>
+                  <option value="60">Every 60 seconds (1 minute)</option>
+                  <option value="300">Every 5 minutes</option>
+                  <option value="custom">Custom frequency...</option>
+                </select>
+
+                {selectedIntervalOption === 'custom' && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="number"
+                      min="1"
+                      max="86400"
+                      value={customIntervalSeconds}
+                      onChange={(e) => setCustomIntervalSeconds(e.target.value)}
+                      placeholder="e.g. 15"
+                      className={'w-24 px-2.5 py-1.5 rounded-lg border text-xs font-mono focus:outline-none focus:border-emerald-500 ' + (
+                        isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                      )}
+                    />
+                    <span className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>seconds</span>
+                    <button
+                      onClick={handleApplyCustomInterval}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition active:scale-95"
+                    >
+                      Apply
+                    </button>
+                  </div>
                 )}
-              >
-                <option value={5}>Every 5 seconds (Real-time safety)</option>
-                <option value={10}>Every 10 seconds</option>
-                <option value={30}>Every 30 seconds (Standard)</option>
-                <option value={60}>Every 60 seconds</option>
-                <option value={0}>Manual save only (Disabled)</option>
-              </select>
-            </div>
+              </div>
+            )}
 
             <div className={'p-3 rounded-lg text-[11px] space-y-1 border ' + (
               isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
             )}>
-              <p className={'font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>File System Access Note:</p>
+              <p className={'font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>PWA File System Access Note:</p>
               <p>
-                Browsers maintain an active write lock on your selected file handle during your session. If you switch to Dropbox mode, local auto-saves pause automatically.
+                Gawkyy maintains ongoing read-write access to your local database file without holding a persistent write lock, allowing smooth concurrent access and automated 4-way sync.
               </p>
             </div>
           </div>

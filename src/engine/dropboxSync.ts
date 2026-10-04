@@ -21,14 +21,14 @@ export class DropboxSyncEngine {
     connected: false,
   };
   private currentRemoteFile: DropboxFileItem | null = null;
-  private lastSyncTime: Date | null = null;
-  private autoSyncIntervalSec: number = 0;
+  private autoSyncIntervalSec: number = 60;
   private isAutoSyncEnabled: boolean = false;
-  private activeTarget: StorageTarget =
-    typeof window !== 'undefined'
-      ? ((localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local')
-      : 'local';
+  private lastDropboxSyncRev: string | null = null;
+  private lastDropboxSyncRemoteTime: string | null = null;
+  private lastDropboxSyncInternalTime: number | null = null;
+  private activeTarget: StorageTarget = 'local';
   private autoSyncTimer: any = null;
+  private lastSyncTime: Date | null = null;
   private listeners: Set<(config: DropboxConfig) => void> = new Set();
   private static processedCodes: Set<string> = new Set();
   private static activeExchanges: Map<string, Promise<boolean>> = new Map();
@@ -145,9 +145,18 @@ export class DropboxSyncEngine {
           this.validateToken().catch(() => {});
         }
       }
-      // On initial load or refresh, set saving to manual only
-      this.autoSyncIntervalSec = 0;
-      this.isAutoSyncEnabled = false;
+      const savedEnabled = localStorage.getItem('gaw_dropbox_auto_sync_enabled');
+      const savedInterval = localStorage.getItem('gaw_dropbox_auto_sync_interval');
+      if (savedEnabled !== null) {
+        this.isAutoSyncEnabled = savedEnabled === 'true';
+      } else {
+        this.isAutoSyncEnabled = false;
+      }
+      if (savedInterval !== null) {
+        this.autoSyncIntervalSec = parseInt(savedInterval, 10) || 60;
+      } else {
+        this.autoSyncIntervalSec = 60;
+      }
       const savedTarget = localStorage.getItem('gaw_active_storage_target');
       if (savedTarget === 'local' || savedTarget === 'dropbox') {
         this.activeTarget = savedTarget as StorageTarget;
@@ -237,10 +246,10 @@ export class DropboxSyncEngine {
     if (!this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) return;
 
     this.autoSyncTimer = setInterval(async () => {
-      // Only auto-sync to Dropbox if Dropbox is the active sync target and is connected
-      if (this.activeTarget === 'dropbox' && this.config.connected && this.config.accessToken) {
+      // Act independently: runs whenever Dropbox is connected and enabled
+      if (this.config.connected && this.config.accessToken) {
         try {
-          await this.uploadActiveDatabase();
+          await this.checkAndReconcileDropbox();
         } catch (err) {
           console.error('Dropbox auto-sync background error:', err);
         }
@@ -628,8 +637,158 @@ export class DropboxSyncEngine {
 
     this.currentRemoteFile = savedItem;
     this.lastSyncTime = new Date();
-    this.setActiveTarget('dropbox');
-    FileStorageEngine.getInstance().setActiveTarget('dropbox');
+    this.lastDropboxSyncRev = savedItem.rev;
+    this.lastDropboxSyncRemoteTime = savedItem.server_modified;
+    this.lastDropboxSyncInternalTime = FileStorageEngine.getInstance().getInternalStateModifiedTime();
     return savedItem;
+  }
+
+  // --- Manual Save to Dropbox ---
+  public async save(): Promise<DropboxFileItem> {
+    const item = await this.uploadActiveDatabase();
+    this.lastDropboxSyncRev = item.rev;
+    this.lastDropboxSyncRemoteTime = item.server_modified;
+    this.lastDropboxSyncInternalTime = FileStorageEngine.getInstance().getInternalStateModifiedTime();
+    FileStorageEngine.getInstance().markSaved();
+    RecentFilesManager.addRecentFile({
+      name: item.name,
+      source: 'dropbox',
+      path: item.path_display,
+      size: item.size,
+    });
+    this.notify();
+    return item;
+  }
+
+  // --- Manual Save As... to Dropbox ---
+  public async saveAs(suggestedName?: string): Promise<DropboxFileItem> {
+    const engine = SQLiteEngine.getInstance();
+    const defaultName = suggestedName || engine.activeDbName || 'new_database.sqlite';
+    const cleanName = defaultName.endsWith('.db') || defaultName.endsWith('.sqlite') || defaultName.endsWith('.sqlite3')
+      ? defaultName
+      : `${defaultName}.sqlite`;
+
+    const item = await this.uploadActiveDatabase('/' + cleanName);
+    engine.activeDbName = item.name;
+    this.currentRemoteFile = item;
+    this.lastDropboxSyncRev = item.rev;
+    this.lastDropboxSyncRemoteTime = item.server_modified;
+    this.lastDropboxSyncInternalTime = FileStorageEngine.getInstance().getInternalStateModifiedTime();
+    FileStorageEngine.getInstance().setFileName(item.name);
+    FileStorageEngine.getInstance().markSaved();
+    RecentFilesManager.addRecentFile({
+      name: item.name,
+      source: 'dropbox',
+      path: item.path_display,
+      size: item.size,
+    });
+    this.notify();
+    engine.notifyChange();
+    return item;
+  }
+
+  // --- Auto-Sync Scheduler & 4-Way Reconciliation for Dropbox ---
+  public async checkAndReconcileDropbox(): Promise<void> {
+    if (!this.config.connected || !this.config.accessToken || !this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) {
+      return;
+    }
+    const engine = SQLiteEngine.getInstance();
+    const targetPath = this.currentRemoteFile?.path_display || `/${engine.activeDbName}`;
+
+    try {
+      const res = await fetch('https://api.dropboxapi.com/2/files/get_metadata', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.config.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          path: targetPath,
+          include_media_info: false,
+          include_deleted: false,
+          include_has_explicit_shared_members: false,
+        }),
+      });
+
+      const internalModified = FileStorageEngine.getInstance().getInternalStateModifiedTime();
+      const hasUserModifications = FileStorageEngine.getInstance().hasModifications();
+      const internalHasChanged =
+        hasUserModifications &&
+        internalModified !== null &&
+        (this.lastDropboxSyncInternalTime === null || internalModified > this.lastDropboxSyncInternalTime);
+
+      if (!res.ok) {
+        if (res.status === 409 && internalHasChanged) {
+          // File does not exist remotely, upload it
+          await this.save();
+        }
+        return;
+      }
+
+      const meta = await res.json();
+      const remoteRev = meta.rev;
+      const remoteHasChanged = this.lastDropboxSyncRev !== null && remoteRev !== this.lastDropboxSyncRev;
+
+      // Rule 1: Neither has changed -> do nothing
+      if (!internalHasChanged && !remoteHasChanged) {
+        return;
+      }
+
+      // Rule 2: Internal state changed, remote unchanged -> overwrite remote file
+      if (internalHasChanged && !remoteHasChanged) {
+        await this.save();
+        return;
+      }
+
+      // Rule 3: Remote changed, internal unchanged -> bring internal into line with remote
+      if (!internalHasChanged && remoteHasChanged) {
+        await this.downloadFile(meta);
+        this.lastDropboxSyncRev = meta.rev;
+        this.lastDropboxSyncRemoteTime = meta.server_modified;
+        this.lastDropboxSyncInternalTime = null;
+        FileStorageEngine.getInstance().setInternalStateModifiedTime(null);
+        FileStorageEngine.getInstance().setUserModified(false);
+        FileStorageEngine.getInstance().markSaved();
+        return;
+      }
+
+      // Rule 4: Both changed -> attempt to reconcile internal with remote
+      if (internalHasChanged && remoteHasChanged) {
+        try {
+          const downloadRes = await fetch('https://content.dropboxapi.com/2/files/download', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${this.config.accessToken}`,
+              'Dropbox-API-Arg': JSON.stringify({ path: targetPath }),
+            },
+          });
+          if (downloadRes.ok) {
+            const buf = await downloadRes.arrayBuffer();
+            const remoteBinary = new Uint8Array(buf);
+            const engine = SQLiteEngine.getInstance();
+            const result = engine.attemptReconcile(remoteBinary);
+
+            if (result.success) {
+              const savedItem = await this.uploadActiveDatabase(targetPath);
+              this.lastDropboxSyncRev = savedItem.rev;
+              this.lastDropboxSyncRemoteTime = savedItem.server_modified;
+              this.lastDropboxSyncInternalTime = FileStorageEngine.getInstance().getInternalStateModifiedTime();
+              FileStorageEngine.getInstance().setUserModified(false);
+              FileStorageEngine.getInstance().markSaved();
+              this.notify();
+              return;
+            }
+          }
+        } catch (reconcileErr) {
+          console.warn('Dropbox auto-sync reconciliation attempt error:', reconcileErr);
+        }
+
+        console.warn('Dropbox auto-sync conflict: both local and remote changed and could not be automatically reconciled');
+        const storage = FileStorageEngine.getInstance();
+        storage.markDirty(true);
+      }
+    } catch (err) {
+      console.error('Dropbox auto-sync check error:', err);
+    }
   }
 }

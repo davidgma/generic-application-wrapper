@@ -1368,4 +1368,136 @@ export class SQLiteEngine {
     );
     this.notifyChange();
   }
+
+  public attemptReconcile(externalBinary: Uint8Array): { success: boolean; message?: string } {
+    if (!this.sqlJs || !this.db) {
+      return { success: false, message: 'SQLite engine not ready' };
+    }
+
+    try {
+      const extDb = new this.sqlJs.Database(externalBinary);
+
+      // 1. Get tables from external and internal
+      const extTablesRes = extDb.exec("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+      const intTablesRes = this.db.exec("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+
+      const extTableMap = new Map<string, string>();
+      if (extTablesRes.length > 0 && extTablesRes[0].values) {
+        for (const row of extTablesRes[0].values) {
+          extTableMap.set(row[0] as string, row[1] as string);
+        }
+      }
+
+      const intTableMap = new Map<string, string>();
+      if (intTablesRes.length > 0 && intTablesRes[0].values) {
+        for (const row of intTablesRes[0].values) {
+          intTableMap.set(row[0] as string, row[1] as string);
+        }
+      }
+
+      // Check for any conflicting schemas on shared tables
+      for (const [tblName] of extTableMap.entries()) {
+        if (intTableMap.has(tblName)) {
+          const extCols = extDb.exec(`PRAGMA table_info("${tblName}");`);
+          const intCols = this.db.exec(`PRAGMA table_info("${tblName}");`);
+          const extColNames = (extCols[0]?.values || []).map((r) => r[1] as string);
+          const intColNames = (intCols[0]?.values || []).map((r) => r[1] as string);
+
+          if (extColNames.sort().join(',') !== intColNames.sort().join(',')) {
+            extDb.close();
+            return {
+              success: false,
+              message: `Table "${tblName}" has conflicting column structures between internal and external files.`,
+            };
+          }
+        }
+      }
+
+      // 2. Begin transaction in internal database to merge non-conflicting records
+      this.db.run('BEGIN TRANSACTION;');
+
+      try {
+        // A. Import any tables present in externalDb but missing in internalDb
+        for (const [tblName, createSql] of extTableMap.entries()) {
+          if (!intTableMap.has(tblName)) {
+            this.db.run(createSql);
+            const rows = extDb.exec(`SELECT * FROM "${tblName}";`);
+            if (rows.length > 0 && rows[0].values) {
+              const cols = rows[0].columns.map((c) => `"${c}"`).join(', ');
+              const placeholders = rows[0].columns.map(() => '?').join(', ');
+              const insertStmt = this.db.prepare(`INSERT INTO "${tblName}" (${cols}) VALUES (${placeholders});`);
+              for (const v of rows[0].values) {
+                insertStmt.run(v);
+              }
+              insertStmt.free();
+            }
+          }
+        }
+
+        // B. Reconcile shared tables (such as t_settings, t_plugins, t_queries, t_reports, or user tables)
+        for (const [tblName] of extTableMap.entries()) {
+          if (intTableMap.has(tblName)) {
+            const pkInfo = this.db.exec(`PRAGMA table_info("${tblName}");`);
+            const pks = (pkInfo[0]?.values || []).filter((r) => Number(r[5]) > 0).map((r) => r[1] as string);
+
+            if (pks.length === 1) {
+              const pkCol = pks[0];
+              const extRows = extDb.exec(`SELECT * FROM "${tblName}";`);
+              if (extRows.length > 0 && extRows[0].values) {
+                const colNames = extRows[0].columns;
+                const pkIdx = colNames.indexOf(pkCol);
+
+                for (const extRow of extRows[0].values) {
+                  const pkVal = extRow[pkIdx];
+                  const existing = this.db.exec(`SELECT * FROM "${tblName}" WHERE "${pkCol}" = ?;`, [pkVal]);
+                  if (existing.length === 0 || existing[0].values.length === 0) {
+                    const cols = colNames.map((c) => `"${c}"`).join(', ');
+                    const placeholders = colNames.map(() => '?').join(', ');
+                    const stmt = this.db.prepare(`INSERT INTO "${tblName}" (${cols}) VALUES (${placeholders});`);
+                    stmt.run(extRow);
+                    stmt.free();
+                  } else {
+                    const intRow = existing[0].values[0];
+                    const differs = colNames.some((_, i) => String(intRow[i]) !== String(extRow[i]));
+                    if (differs) {
+                      const updatedIdx = colNames.indexOf('updated_at');
+                      if (updatedIdx !== -1) {
+                        const extUp = String(extRow[updatedIdx]);
+                        const intUp = String(intRow[updatedIdx]);
+                        if (extUp > intUp) {
+                          const sets = colNames.map((c) => `"${c}" = ?`).join(', ');
+                          const stmt = this.db.prepare(`UPDATE "${tblName}" SET ${sets} WHERE "${pkCol}" = ?;`);
+                          stmt.run([...extRow, pkVal]);
+                          stmt.free();
+                        }
+                      } else {
+                        throw new Error(`Conflicting modifications detected for key "${pkVal}" in table "${tblName}".`);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        this.db.run('COMMIT;');
+        extDb.close();
+        this.notifyChange();
+        return { success: true };
+      } catch (err: any) {
+        try {
+          this.db.run('ROLLBACK;');
+        } catch (_) {}
+        extDb.close();
+        return {
+          success: false,
+          message: err.message || 'Conflicting changes could not be automatically reconciled.',
+        };
+      }
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Failed to read external database for reconciliation.' };
+    }
+  }
 }
+

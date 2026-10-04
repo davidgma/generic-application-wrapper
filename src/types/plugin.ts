@@ -75,6 +75,8 @@ export interface GAWDropboxApi {
   listDatabaseFiles: (folderPath?: string) => Promise<any[]>;
   downloadFile: (fileItem: any) => Promise<boolean>;
   uploadActiveDatabase: (targetPath?: string) => Promise<any>;
+  save: () => Promise<any>;
+  saveAs: (suggestedName?: string) => Promise<any>;
   setAutoSyncInterval: (seconds: number) => void;
   setAutoSyncEnabled: (enabled: boolean) => void;
   setActiveTarget: (target: StorageTarget) => void;

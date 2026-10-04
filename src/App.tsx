@@ -323,13 +323,11 @@ export default function App() {
     }
   }, []);
 
-  // On initial load or refresh, set saving to manual only
+  // On initial load or refresh, mark internal state as unchanged until a change is made
   useEffect(() => {
-    storageEngine.setAutoSyncEnabled(false);
-    storageEngine.setAutoSyncInterval(0);
-    dropboxEngine.setAutoSyncEnabled(false);
-    dropboxEngine.setAutoSyncInterval(0);
-  }, [storageEngine, dropboxEngine]);
+    storageEngine.setUserModified(false);
+    storageEngine.setInternalStateModifiedTime(null);
+  }, [storageEngine]);
 
   // Automatically connect to previous active storage target on startup (remember local or dropbox)
   useEffect(() => {
@@ -797,6 +795,16 @@ export default function App() {
           }
           return ok;
         },
+        save: async () => {
+          const item = await dropboxEngine.save();
+          refreshDatabaseState();
+          return item;
+        },
+        saveAs: async (suggestedName?: string) => {
+          const item = await dropboxEngine.saveAs(suggestedName);
+          refreshDatabaseState();
+          return item;
+        },
         uploadActiveDatabase: async (targetPath) => dropboxEngine.uploadActiveDatabase(targetPath),
         setAutoSyncInterval: (sec) => dropboxEngine.setAutoSyncInterval(sec),
         setAutoSyncEnabled: (en) => dropboxEngine.setAutoSyncEnabled(en),
@@ -1087,6 +1095,10 @@ export default function App() {
               theme={theme}
               onNewDatabase={() => {
                 SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
+                storageEngine.resetActiveFile('new_database.sqlite');
+                storageEngine.setUserModified(false);
+                storageEngine.setInternalStateModifiedTime(null);
+                storageEngine.markSaved();
                 toastApi.success('Created new database (new_database.sqlite).');
                 refreshDatabaseState();
                 setActiveRoute('file');
@@ -1111,6 +1123,10 @@ export default function App() {
               }}
               onOpenDemo={() => {
                 SQLiteEngine.getInstance().createNorthwindDemoDatabase();
+                storageEngine.resetActiveFile('northwind_commerce.db');
+                storageEngine.setUserModified(false);
+                storageEngine.setInternalStateModifiedTime(null);
+                storageEngine.markSaved();
                 RecentFilesManager.addRecentFile({
                   name: 'Northwind Modern Commerce Demo',
                   source: 'demo',

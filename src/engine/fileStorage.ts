@@ -2,29 +2,89 @@ import { SQLiteEngine } from './sqliteEngine';
 import { ConflictDetails, StorageMetadata, StorageTarget, SyncStatus } from '../types/storage';
 import { RecentFilesManager } from './recentFiles';
 
+// IndexedDB Helper for PWA Persistent File Handle
+const IDB_NAME = 'gaw_pwa_storage_db';
+const IDB_STORE = 'handles';
+const IDB_KEY = 'active_file_handle';
+
+async function getStoredHandle(): Promise<FileSystemFileHandle | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return null;
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(IDB_STORE, 'readonly');
+        const store = tx.objectStore(IDB_STORE);
+        const getReq = store.get(IDB_KEY);
+        getReq.onsuccess = () => resolve(getReq.result || null);
+        getReq.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function setStoredHandle(handle: FileSystemFileHandle | null): Promise<void> {
+  if (typeof window === 'undefined' || !window.indexedDB) return;
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        if (handle) {
+          store.put(handle, IDB_KEY);
+        } else {
+          store.delete(IDB_KEY);
+        }
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      };
+      req.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 export class FileStorageEngine {
   private static instance: FileStorageEngine | null = null;
   private fileHandle: FileSystemFileHandle | null = null;
   private lastModifiedDisk: number | null = null;
   private lastSavedAt: Date | null = null;
+
+  // Internal state tracking tally
   private isDirty: boolean = false;
   private hasUserModifications: boolean = false;
+  private internalStateModifiedTime: number | null = null;
+  private lastLocalSyncExternalTime: number | null = null;
+  private lastLocalSyncInternalTime: number | null = null;
+
   private syncStatus: SyncStatus = 'saved';
   private autoSyncTimer: any = null;
-  private pollingTimer: any = null;
   private conflictCallback: ((conflict: ConflictDetails) => void) | null = null;
   private statusListeners: Set<(meta: StorageMetadata) => void> = new Set();
-  private autoSyncIntervalSec: number = 0;
+
+  private autoSyncIntervalSec: number = 30;
   private isAutoSyncEnabled: boolean = false;
-  private activeTarget: StorageTarget =
-    typeof window !== 'undefined'
-      ? ((localStorage.getItem('gaw_active_storage_target') as StorageTarget) || 'local')
-      : 'local';
+  private activeTarget: StorageTarget = 'local';
 
   private constructor() {
+    this.loadPersistedSyncSettings();
+    this.restoreStoredHandle();
     this.setupBeforeUnload();
-    this.startPollingDisk();
     this.startAutoSync();
+
     SQLiteEngine.getInstance().setOnDatabaseReset((name) => {
       this.resetActiveFile(name);
     });
@@ -35,6 +95,54 @@ export class FileStorageEngine {
       FileStorageEngine.instance = new FileStorageEngine();
     }
     return FileStorageEngine.instance;
+  }
+
+  private loadPersistedSyncSettings(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const savedEnabled = localStorage.getItem('gaw_local_auto_sync_enabled');
+      const savedInterval = localStorage.getItem('gaw_local_auto_sync_interval');
+
+      // Default: disabled for new database or fresh instances without saved preference
+      if (savedEnabled !== null) {
+        this.isAutoSyncEnabled = savedEnabled === 'true';
+      } else {
+        this.isAutoSyncEnabled = false;
+      }
+
+      if (savedInterval !== null) {
+        this.autoSyncIntervalSec = parseInt(savedInterval, 10) || 30;
+      } else {
+        this.autoSyncIntervalSec = 30;
+      }
+
+      const savedTarget = localStorage.getItem('gaw_active_storage_target');
+      if (savedTarget === 'local' || savedTarget === 'dropbox') {
+        this.activeTarget = savedTarget as StorageTarget;
+      }
+    } catch (e) {
+      console.error('Failed to load local sync settings:', e);
+    }
+  }
+
+  private async restoreStoredHandle(): Promise<void> {
+    try {
+      const handle = await getStoredHandle();
+      if (!handle) return;
+
+      if ('queryPermission' in handle) {
+        const status = await (handle as any).queryPermission({ mode: 'readwrite' });
+        if (status === 'granted') {
+          this.fileHandle = handle;
+          const file = await handle.getFile();
+          this.lastModifiedDisk = file.lastModified;
+          this.lastLocalSyncExternalTime = file.lastModified;
+          this.notifyStatus();
+        }
+      }
+    } catch {
+      // Permission not yet granted or handle expired
+    }
   }
 
   public onStatusChange(listener: (meta: StorageMetadata) => void): () => void {
@@ -58,9 +166,11 @@ export class FileStorageEngine {
     });
   }
 
+  // --- Internal State Tally & Modification Tracking ---
   public markDirty(isUserAction: boolean = false): void {
     if (isUserAction) {
       this.hasUserModifications = true;
+      this.internalStateModifiedTime = Date.now();
     }
     if (this.syncStatus !== 'dirty' && this.syncStatus !== 'saving') {
       this.isDirty = true;
@@ -73,11 +183,26 @@ export class FileStorageEngine {
 
   public setUserModified(val: boolean = true): void {
     this.hasUserModifications = val;
-    if (val && this.syncStatus !== 'dirty') {
-      this.isDirty = true;
-      this.syncStatus = 'dirty';
+    if (val) {
+      this.internalStateModifiedTime = Date.now();
+      if (this.syncStatus !== 'dirty') {
+        this.isDirty = true;
+        this.syncStatus = 'dirty';
+      }
     }
     this.notifyStatus();
+  }
+
+  public hasModifications(): boolean {
+    return this.hasUserModifications;
+  }
+
+  public getInternalStateModifiedTime(): number | null {
+    return this.internalStateModifiedTime;
+  }
+
+  public setInternalStateModifiedTime(time: number | null): void {
+    this.internalStateModifiedTime = time;
   }
 
   public getActiveTarget(): StorageTarget {
@@ -95,10 +220,10 @@ export class FileStorageEngine {
   public exportDownload(fileName?: string): void {
     const engine = SQLiteEngine.getInstance();
     const binary = engine.exportBinary();
-    const baseName = fileName || engine.activeDbName || 'Northwind_Modern.db';
+    const baseName = fileName || engine.activeDbName || 'new_database.sqlite';
     const name = baseName.endsWith('.db') || baseName.endsWith('.sqlite') || baseName.endsWith('.sqlite3')
       ? baseName
-      : `${baseName}.db`;
+      : `${baseName}.sqlite`;
     const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -115,7 +240,7 @@ export class FileStorageEngine {
     let fileSize = 0;
     try {
       fileSize = engine.exportBinary().byteLength;
-    } catch (e) {
+    } catch {
       // not initialized yet
     }
 
@@ -135,15 +260,21 @@ export class FileStorageEngine {
     };
   }
 
+  // --- Auto-Sync Settings Configuration & Persistence ---
   public setAutoSyncInterval(seconds: number): void {
     this.autoSyncIntervalSec = seconds;
-    this.isAutoSyncEnabled = seconds > 0;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_local_auto_sync_interval', String(seconds));
+    }
     this.startAutoSync();
     this.notifyStatus();
   }
 
   public setAutoSyncEnabled(enabled: boolean): void {
     this.isAutoSyncEnabled = enabled;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_local_auto_sync_enabled', String(enabled));
+    }
     this.startAutoSync();
     this.notifyStatus();
   }
@@ -171,9 +302,15 @@ export class FileStorageEngine {
         const binary = new Uint8Array(buffer);
 
         this.fileHandle = handle;
+        setStoredHandle(handle);
+
         this.lastModifiedDisk = file.lastModified;
+        this.lastLocalSyncExternalTime = file.lastModified;
+        this.lastLocalSyncInternalTime = 0;
         this.lastSavedAt = new Date();
         this.isDirty = false;
+        this.hasUserModifications = false;
+        this.internalStateModifiedTime = null;
         this.syncStatus = 'saved';
 
         const engine = SQLiteEngine.getInstance();
@@ -186,7 +323,6 @@ export class FileStorageEngine {
           path: 'Local Disk',
         });
 
-        this.setActiveTarget('local');
         this.notifyStatus();
         return true;
       } catch (err: any) {
@@ -195,7 +331,7 @@ export class FileStorageEngine {
         throw err;
       }
     } else {
-      // Fallback: standard file picker
+      // Fallback standard input
       return new Promise((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -207,9 +343,15 @@ export class FileStorageEngine {
             const binary = new Uint8Array(buffer);
 
             this.fileHandle = null;
+            setStoredHandle(null);
+
             this.lastModifiedDisk = file.lastModified;
+            this.lastLocalSyncExternalTime = file.lastModified;
+            this.lastLocalSyncInternalTime = 0;
             this.lastSavedAt = new Date();
             this.isDirty = false;
+            this.hasUserModifications = false;
+            this.internalStateModifiedTime = null;
             this.syncStatus = 'saved';
 
             const engine = SQLiteEngine.getInstance();
@@ -222,7 +364,6 @@ export class FileStorageEngine {
               path: 'Local Disk',
             });
 
-            this.setActiveTarget('local');
             this.notifyStatus();
             resolve(true);
           } else {
@@ -236,20 +377,28 @@ export class FileStorageEngine {
 
   public closeFile(): void {
     this.fileHandle = null;
+    setStoredHandle(null);
     this.lastModifiedDisk = null;
     this.lastSavedAt = null;
+    this.lastLocalSyncExternalTime = null;
+    this.lastLocalSyncInternalTime = null;
     this.isDirty = false;
     this.hasUserModifications = false;
+    this.internalStateModifiedTime = null;
     this.syncStatus = 'saved';
     this.notifyStatus();
   }
 
   public resetActiveFile(dbName: string = 'new_database.sqlite'): void {
     this.fileHandle = null;
+    setStoredHandle(null);
     this.lastModifiedDisk = null;
     this.lastSavedAt = null;
+    this.lastLocalSyncExternalTime = null;
+    this.lastLocalSyncInternalTime = null;
     this.isDirty = false;
     this.hasUserModifications = false;
+    this.internalStateModifiedTime = null;
     this.syncStatus = 'saved';
     const engine = SQLiteEngine.getInstance();
     engine.activeDbName = dbName;
@@ -265,12 +414,13 @@ export class FileStorageEngine {
   public markSaved(): void {
     this.isDirty = false;
     this.hasUserModifications = false;
+    this.internalStateModifiedTime = null;
     this.syncStatus = 'saved';
     this.lastSavedAt = new Date();
     this.notifyStatus();
   }
 
-  // --- Save Database ---
+  // --- Manual Save Database (Local File) ---
   public async save(): Promise<boolean> {
     const engine = SQLiteEngine.getInstance();
     const binary = engine.exportBinary();
@@ -280,10 +430,10 @@ export class FileStorageEngine {
         this.syncStatus = 'saving';
         this.notifyStatus();
 
-        // Check if file was modified externally before writing
+        // Check if external file changed on disk before write
         const file = await this.fileHandle.getFile();
-        if (this.lastModifiedDisk && file.lastModified > this.lastModifiedDisk) {
-          // External modification detected!
+        if (this.lastLocalSyncExternalTime && file.lastModified > this.lastLocalSyncExternalTime) {
+          // Both changed -> conflict!
           this.syncStatus = 'conflict';
           this.notifyStatus();
 
@@ -299,12 +449,15 @@ export class FileStorageEngine {
           return false;
         }
 
+        // PWA File System Access: write without holding write lock
         const writable = await (this.fileHandle as any).createWritable();
         await writable.write(binary);
         await writable.close();
 
         const updatedFile = await this.fileHandle.getFile();
         this.lastModifiedDisk = updatedFile.lastModified;
+        this.lastLocalSyncExternalTime = updatedFile.lastModified;
+        this.lastLocalSyncInternalTime = this.internalStateModifiedTime;
         this.lastSavedAt = new Date();
         this.isDirty = false;
         this.hasUserModifications = false;
@@ -315,7 +468,6 @@ export class FileStorageEngine {
         console.error('Save error:', err);
         this.syncStatus = 'error';
         this.notifyStatus();
-        // Fall back to saveAs
         return this.saveAs();
       }
     } else {
@@ -323,19 +475,22 @@ export class FileStorageEngine {
     }
   }
 
-  // --- Save As New File ---
+  // --- Manual Save As (Local File) ---
   public async saveAs(suggestedName?: string): Promise<boolean> {
     const engine = SQLiteEngine.getInstance();
     const binary = engine.exportBinary();
-    const defaultName = suggestedName || engine.activeDbName || 'database.db';
+    const defaultName = suggestedName || engine.activeDbName || 'new_database.sqlite';
+    const cleanName = defaultName.endsWith('.db') || defaultName.endsWith('.sqlite') || defaultName.endsWith('.sqlite3')
+      ? defaultName
+      : `${defaultName}.sqlite`;
 
     if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
       try {
         const handle = await (window as any).showSaveFilePicker({
-          suggestedName: defaultName,
+          suggestedName: cleanName,
           types: [
             {
-              description: 'SQLite Database (*.db)',
+              description: 'SQLite Database (*.db, *.sqlite)',
               accept: { 'application/vnd.sqlite3': ['.db', '.sqlite'] },
             },
           ],
@@ -347,7 +502,11 @@ export class FileStorageEngine {
 
         const file = await handle.getFile();
         this.fileHandle = handle;
+        setStoredHandle(handle);
+
         this.lastModifiedDisk = file.lastModified;
+        this.lastLocalSyncExternalTime = file.lastModified;
+        this.lastLocalSyncInternalTime = this.internalStateModifiedTime;
         this.lastSavedAt = new Date();
         this.isDirty = false;
         this.hasUserModifications = false;
@@ -366,15 +525,24 @@ export class FileStorageEngine {
       } catch (err: any) {
         if (err.name === 'AbortError') return false;
         console.error('SaveAs error:', err);
-        this.downloadBinary(binary, defaultName);
+        this.downloadBinary(binary, cleanName);
+        engine.activeDbName = cleanName;
+        this.notifyStatus();
         return true;
       }
     } else {
-      this.downloadBinary(binary, defaultName);
+      this.downloadBinary(binary, cleanName);
+      engine.activeDbName = cleanName;
       this.lastSavedAt = new Date();
       this.isDirty = false;
       this.hasUserModifications = false;
       this.syncStatus = 'saved';
+      RecentFilesManager.addRecentFile({
+        name: cleanName,
+        source: 'local',
+        size: binary.byteLength,
+        path: 'Downloads',
+      });
       this.notifyStatus();
       return true;
     }
@@ -385,7 +553,7 @@ export class FileStorageEngine {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = fileName.endsWith('.db') || fileName.endsWith('.sqlite') ? fileName : `${fileName}.db`;
+    a.download = fileName.endsWith('.db') || fileName.endsWith('.sqlite') ? fileName : `${fileName}.sqlite`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => {
@@ -394,40 +562,138 @@ export class FileStorageEngine {
     }, 100);
   }
 
-  // --- Periodic Conflict Polling ---
-  private startPollingDisk(): void {
-    if (this.pollingTimer) clearInterval(this.pollingTimer);
+  // --- Auto-Sync Scheduler & 4-Way Reconciliation ---
+  private startAutoSync(): void {
+    if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
 
-    // Poll every 5 seconds if a native file handle is attached
-    this.pollingTimer = setInterval(async () => {
-      if (!this.fileHandle || this.syncStatus === 'saving' || this.syncStatus === 'conflict') {
+    if (!this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) return;
+
+    this.autoSyncTimer = setInterval(async () => {
+      await this.checkAndReconcileLocal();
+    }, this.autoSyncIntervalSec * 1000);
+  }
+
+  public async checkAndReconcileLocal(): Promise<void> {
+    if (!this.fileHandle || this.syncStatus === 'saving' || this.syncStatus === 'conflict') {
+      return;
+    }
+
+    try {
+      // 1. Query external file state without locking it
+      const file = await this.fileHandle.getFile();
+      const externalModified = file.lastModified;
+      const internalModified = this.internalStateModifiedTime;
+      const lastSyncedExt = this.lastLocalSyncExternalTime;
+      const lastSyncedInt = this.lastLocalSyncInternalTime;
+
+      const internalHasChanged =
+        this.hasUserModifications &&
+        internalModified !== null &&
+        (lastSyncedInt === null || internalModified > lastSyncedInt);
+
+      const externalHasChanged =
+        lastSyncedExt !== null && externalModified > lastSyncedExt;
+
+      // Rule 1: If neither state has changed, do nothing
+      if (!internalHasChanged && !externalHasChanged) {
         return;
       }
 
-      try {
-        const file = await this.fileHandle.getFile();
-        if (this.lastModifiedDisk && file.lastModified > this.lastModifiedDisk) {
-          // File has changed on disk!
-          this.syncStatus = 'conflict';
-          this.notifyStatus();
+      // Rule 2: Internal state changed, external unchanged since last sync
+      // -> Overwrite external file with current database!
+      if (internalHasChanged && !externalHasChanged) {
+        const engine = SQLiteEngine.getInstance();
+        const binary = engine.exportBinary();
 
+        this.syncStatus = 'saving';
+        this.notifyStatus();
+
+        const writable = await (this.fileHandle as any).createWritable();
+        await writable.write(binary);
+        await writable.close();
+
+        const updatedFile = await this.fileHandle.getFile();
+        this.lastModifiedDisk = updatedFile.lastModified;
+        this.lastLocalSyncExternalTime = updatedFile.lastModified;
+        this.lastLocalSyncInternalTime = internalModified;
+        this.lastSavedAt = new Date();
+        this.isDirty = false;
+        this.hasUserModifications = false;
+        this.syncStatus = 'saved';
+        this.notifyStatus();
+        return;
+      }
+
+      // Rule 3: External state has changed since last sync and internal state hasn't
+      // -> Bring internal state into line with external state!
+      if (!internalHasChanged && externalHasChanged) {
+        const buffer = await file.arrayBuffer();
+        const binary = new Uint8Array(buffer);
+        const engine = SQLiteEngine.getInstance();
+        engine.loadBinary(binary, file.name);
+
+        this.lastModifiedDisk = file.lastModified;
+        this.lastLocalSyncExternalTime = file.lastModified;
+        this.lastLocalSyncInternalTime = null;
+        this.internalStateModifiedTime = null;
+        this.hasUserModifications = false;
+        this.lastSavedAt = new Date();
+        this.isDirty = false;
+        this.syncStatus = 'saved';
+        this.notifyStatus();
+        return;
+      }
+
+      // Rule 4: Both internal and external state have changed since last sync
+      // -> Attempt reconciliation; if not possible, notify user of conflict
+      if (internalHasChanged && externalHasChanged) {
+        try {
+          const buffer = await file.arrayBuffer();
+          const extBinary = new Uint8Array(buffer);
+          const engine = SQLiteEngine.getInstance();
+          const reconcileRes = engine.attemptReconcile(extBinary);
+
+          if (reconcileRes.success) {
+            // Write reconciled state to disk
+            const reconciledBinary = engine.exportBinary();
+            const writable = await (this.fileHandle as any).createWritable();
+            await writable.write(reconciledBinary);
+            await writable.close();
+
+            const updatedFile = await this.fileHandle.getFile();
+            this.lastModifiedDisk = updatedFile.lastModified;
+            this.lastLocalSyncExternalTime = updatedFile.lastModified;
+            this.lastLocalSyncInternalTime = this.internalStateModifiedTime;
+            this.lastSavedAt = new Date();
+            this.isDirty = false;
+            this.hasUserModifications = false;
+            this.syncStatus = 'saved';
+            this.notifyStatus();
+            return;
+          }
+        } catch (reconcileErr) {
+          console.warn('Local reconciliation error:', reconcileErr);
+        }
+
+        // Automatic reconciliation not possible -> inform user of conflict
+        this.syncStatus = 'conflict';
+        this.notifyStatus();
+
+        if (this.conflictCallback) {
           const engine = SQLiteEngine.getInstance();
           const binary = engine.exportBinary();
-
-          if (this.conflictCallback) {
-            this.conflictCallback({
-              fileName: file.name,
-              localModifiedAt: this.lastSavedAt || new Date(),
-              diskModifiedAt: new Date(file.lastModified),
-              localSize: binary.byteLength,
-              diskSize: file.size,
-            });
-          }
+          this.conflictCallback({
+            fileName: file.name,
+            localModifiedAt: new Date(internalModified || Date.now()),
+            diskModifiedAt: new Date(externalModified),
+            localSize: binary.byteLength,
+            diskSize: file.size,
+          });
         }
-      } catch (e) {
-        // Disk access might have been lost or revoked
       }
-    }, 5000);
+    } catch {
+      // Access may have been temporarily busy or revoked
+    }
   }
 
   // --- Conflict Resolution Actions ---
@@ -446,8 +712,11 @@ export class FileStorageEngine {
 
       const updatedFile = await this.fileHandle.getFile();
       this.lastModifiedDisk = updatedFile.lastModified;
+      this.lastLocalSyncExternalTime = updatedFile.lastModified;
+      this.lastLocalSyncInternalTime = this.internalStateModifiedTime;
       this.lastSavedAt = new Date();
       this.isDirty = false;
+      this.hasUserModifications = false;
       this.syncStatus = 'saved';
       this.notifyStatus();
     } catch (err) {
@@ -465,6 +734,10 @@ export class FileStorageEngine {
       const binary = new Uint8Array(buffer);
 
       this.lastModifiedDisk = file.lastModified;
+      this.lastLocalSyncExternalTime = file.lastModified;
+      this.lastLocalSyncInternalTime = null;
+      this.internalStateModifiedTime = null;
+      this.hasUserModifications = false;
       this.lastSavedAt = new Date();
       this.isDirty = false;
       this.syncStatus = 'saved';
@@ -481,41 +754,15 @@ export class FileStorageEngine {
   public async resolveConflictSaveCopy(): Promise<void> {
     const engine = SQLiteEngine.getInstance();
     const baseName = engine.activeDbName.replace(/\.(db|sqlite3?)$/i, '');
-    const copyName = `${baseName}_copy_${new Date().toISOString().replace(/[:.]/g, '-')}.db`;
+    const copyName = `${baseName}_copy_${new Date().toISOString().replace(/[:.]/g, '-')}.sqlite`;
     await this.saveAs(copyName);
   }
 
-  // --- Auto-Save Scheduler ---
-  private startAutoSync(): void {
-    if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
-
-    if (!this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) return;
-
-    this.autoSyncTimer = setInterval(async () => {
-      // If Dropbox connection is currently in active use, assume no local auto-syncing needed
-      if (this.activeTarget !== 'local') return;
-
-      if (this.isDirty && this.fileHandle && this.syncStatus !== 'conflict' && this.syncStatus !== 'saving') {
-        await this.save();
-      }
-    }, this.autoSyncIntervalSec * 1000);
-  }
-
-  // --- beforeunload Handler ---
   private setupBeforeUnload(): void {
     if (typeof window === 'undefined') return;
 
     window.addEventListener('beforeunload', (e) => {
-      if (this.isDirty) {
-        // Attempt quick write if handle exists
-        if (this.fileHandle) {
-          try {
-            // Note: browsers may block async createWritable in beforeunload,
-            // but standard confirmation prevents accidental data loss
-          } catch (e) {
-            // ignore
-          }
-        }
+      if (this.isDirty || this.hasUserModifications) {
         e.preventDefault();
         e.returnValue = 'You have unsaved changes in your SQLite database. Do you wish to leave?';
         return e.returnValue;
