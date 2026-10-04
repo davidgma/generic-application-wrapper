@@ -25,6 +25,9 @@ export class FileStorageEngine {
     this.setupBeforeUnload();
     this.startPollingDisk();
     this.startAutoSync();
+    SQLiteEngine.getInstance().setOnDatabaseReset((name) => {
+      this.resetActiveFile(name);
+    });
   }
 
   public static getInstance(): FileStorageEngine {
@@ -236,7 +239,34 @@ export class FileStorageEngine {
     this.lastModifiedDisk = null;
     this.lastSavedAt = null;
     this.isDirty = false;
+    this.hasUserModifications = false;
     this.syncStatus = 'saved';
+    this.notifyStatus();
+  }
+
+  public resetActiveFile(dbName: string = 'new_database.sqlite'): void {
+    this.fileHandle = null;
+    this.lastModifiedDisk = null;
+    this.lastSavedAt = null;
+    this.isDirty = false;
+    this.hasUserModifications = false;
+    this.syncStatus = 'saved';
+    const engine = SQLiteEngine.getInstance();
+    engine.activeDbName = dbName;
+    this.notifyStatus();
+  }
+
+  public setFileName(name: string): void {
+    const engine = SQLiteEngine.getInstance();
+    engine.activeDbName = name;
+    this.notifyStatus();
+  }
+
+  public markSaved(): void {
+    this.isDirty = false;
+    this.hasUserModifications = false;
+    this.syncStatus = 'saved';
+    this.lastSavedAt = new Date();
     this.notifyStatus();
   }
 

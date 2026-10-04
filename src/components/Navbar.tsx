@@ -111,8 +111,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Row 2: 5 Mobile-like Navigation Icons with words shown just below */}
-      <nav aria-label="Main Navigation" className={`flex items-center px-2 py-1 md:justify-start justify-around gap-1 md:gap-3 ${
+      {/* Row 2: 5 Mobile-like Navigation Icons centered on desktop and mobile */}
+      <nav aria-label="Main Navigation" className={`flex items-center px-2 py-1 justify-center gap-2 sm:gap-4 md:gap-6 ${
         isDark ? 'bg-slate-950 text-slate-300' : 'bg-slate-200/50 text-slate-700'
       }`}>
         {navItems.map((item) => {

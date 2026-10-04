@@ -19,7 +19,12 @@ export class SQLiteEngine {
   private db: Database | null = null;
   private listeners: Set<() => void> = new Set();
   private isInitializing: Promise<void> | null = null;
-  public activeDbName: string = 'northwind_commerce.db';
+  private onDatabaseResetHandler: ((dbName: string) => void) | null = null;
+  public activeDbName: string = 'new_database.sqlite';
+
+  public setOnDatabaseReset(handler: (dbName: string) => void): void {
+    this.onDatabaseResetHandler = handler;
+  }
 
   private constructor() {}
 
@@ -49,7 +54,7 @@ export class SQLiteEngine {
       if (binaryData) {
         this.loadBinary(binaryData, dbName);
       } else if (!this.db) {
-        this.createDefaultDatabase();
+        this.createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
       }
       this.ensureSystemTables();
     })();
@@ -132,7 +137,96 @@ export class SQLiteEngine {
     this.notifyChange();
   }
 
-  public createDefaultDatabase(): void {
+  public createMinimalDatabase(
+    dbName: string = 'new_database.sqlite',
+    appTitle: string = 'New Application',
+    companyName: string = 'None'
+  ): void {
+    if (!this.sqlJs) throw new Error('SQL.js not initialized');
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    this.db = new this.sqlJs.Database();
+    this.activeDbName = dbName;
+
+    // 1. Create System Tables Only
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS t_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS t_plugins (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        version TEXT,
+        enabled INTEGER,
+        icon TEXT,
+        menu_category TEXT,
+        route TEXT,
+        description TEXT,
+        code TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS t_sql_queries (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        query TEXT,
+        params TEXT,
+        layout TEXT,
+        created_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS t_reports (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        query_id TEXT,
+        custom_sql TEXT,
+        config TEXT,
+        created_at TEXT
+      );
+    `);
+
+    // 2. Insert Settings
+    const now = new Date().toISOString();
+    const settings = [
+      ['app_title', appTitle, now],
+      ['auto_sync_interval', '0', now],
+      ['version', '1.0.0', now],
+      ['company_name', companyName, now],
+      ['author', 'Gawkyy User', now],
+    ];
+
+    for (const [k, v, u] of settings) {
+      this.db.run('INSERT INTO t_settings (key, value, updated_at) VALUES (?, ?, ?)', [k, v, u]);
+    }
+
+    // 3. Seed only the 5 minimal plugins
+    this.seedMinimalPlugins();
+
+    // 4. Seed 1 example query on t_plugins
+    this.seedMinimalQueries();
+
+    // 5. Seed 1 sample report on t_plugins
+    this.seedMinimalReports(companyName);
+
+    if (this.onDatabaseResetHandler) {
+      this.onDatabaseResetHandler(dbName);
+    }
+    this.notifyChange();
+  }
+
+  public createNorthwindDemoDatabase(): void {
     if (!this.sqlJs) throw new Error('SQL.js not initialized');
     if (this.db) {
       try {
@@ -195,7 +289,7 @@ export class SQLiteEngine {
       ['auto_sync_interval', '0', now],
       ['version', '1.0.0', now],
       ['company_name', 'Northwind Global Corp', now],
-      ['author', 'GAW Studio', now],
+      ['author', 'Gawkyy Studio', now],
     ];
 
     for (const [k, v, u] of settings) {
@@ -214,7 +308,133 @@ export class SQLiteEngine {
     // 6. Seed Built-In TSX Plugins
     this.seedPlugins();
 
+    if (this.onDatabaseResetHandler) {
+      this.onDatabaseResetHandler('northwind_commerce.db');
+    }
     this.notifyChange();
+  }
+
+  public createDefaultDatabase(): void {
+    this.createNorthwindDemoDatabase();
+  }
+
+  private seedMinimalPlugins(): void {
+    if (!this.db) return;
+    const now = new Date().toISOString();
+
+    const plugins = [
+      {
+        id: 'plugin_dropbox_sync',
+        name: 'Dropbox Cloud Sync',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Cloud',
+        menu_category: 'System & Cloud',
+        route: '/dropbox-sync',
+        description: 'Connect to Dropbox, monitor cloud sync status, configure auto-sync interval, push/pull databases, and browse remote files.',
+        code: DEFAULT_DROPBOX_PLUGIN_CODE,
+      },
+      {
+        id: 'plugin_file_manager',
+        name: 'File & Workspace Manager',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'FolderOpen',
+        menu_category: 'System & Storage',
+        route: '/files',
+        description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
+        code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+      },
+      {
+        id: 'plugin_hello_world',
+        name: 'Hello World Starter',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Sparkles',
+        menu_category: 'Examples',
+        route: '/hello-world',
+        description: 'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in Gawkyy.',
+        code: DEFAULT_HELLO_WORLD_PLUGIN_CODE,
+      },
+      {
+        id: 'plugin_local_storage',
+        name: 'Local Storage & Disk Sync',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'HardDrive',
+        menu_category: 'System & Storage',
+        route: '/local-storage',
+        description: 'Manage local disk database saving, File System Access API handles, auto-save timers, direct exports, and file opening.',
+        code: DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
+      },
+      {
+        id: 'plugin_manager',
+        name: 'Plugin Manager',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Puzzle',
+        menu_category: 'System & Plugins',
+        route: '/plugin-manager',
+        description: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
+        code: DEFAULT_PLUGIN_MANAGER_CODE,
+      },
+    ];
+
+    for (const p of plugins) {
+      this.db.run(
+        'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [p.id, p.name, p.version, p.enabled, p.icon, p.menu_category, p.route, p.description, p.code, now, now]
+      );
+    }
+  }
+
+  private seedMinimalQueries(): void {
+    if (!this.db) return;
+    const now = new Date().toISOString();
+    this.db.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        'q_plugins_overview',
+        'Plugins Registry Summary',
+        'Example query extracting registered dynamic TSX plugins, system extensions, version numbers, and descriptions from the t_plugins table.',
+        'SELECT id, name, version, enabled, menu_category, description, updated_at FROM t_plugins ORDER BY name ASC;',
+        '[]',
+        '{"density":"compact"}',
+        now,
+      ]
+    );
+  }
+
+  private seedMinimalReports(companyName: string = 'None'): void {
+    if (!this.db) return;
+    const now = new Date().toISOString();
+    const config = {
+      companyName,
+      reportTitle: 'Dynamic Plugins Registry Report',
+      subtitle: 'Installed Extensions, TSX Modules & Status Overview',
+      preparedBy: 'Gawkyy System',
+      periodText: 'System Manifest',
+      notes: 'This report lists all registered client-side TypeScript micro-apps and dynamic plugins compiled in this database.',
+      kpiCards: [
+        { id: 'kpi-p-1', title: 'Total Plugins', queryIndex: 0, valueColumn: 'id', format: 'number', subtitle: 'Registered modules' },
+      ],
+      tables: [
+        { id: 'tb-p-1', title: 'Installed Plugins Directory', queryIndex: 0, showTotalRow: false },
+      ],
+    };
+
+    this.db.run(
+      'INSERT INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        'report_plugins_catalog',
+        'Plugins Registry Report',
+        'Sample report displaying the details and registry information of the t_plugins table.',
+        'q_plugins_overview',
+        '',
+        JSON.stringify(config),
+        now,
+      ]
+    );
   }
 
   private seedBusinessData(): void {
@@ -422,6 +642,12 @@ export class SQLiteEngine {
         description: 'Multi-part SQL query returning 3 separate analytical tables in a single transaction.',
         query: `SELECT COUNT(*) AS total_customers, (SELECT COUNT(*) FROM orders) AS total_orders, (SELECT ROUND(SUM(total_amount), 2) FROM orders) AS gross_revenue FROM customers;\n\nSELECT status, COUNT(*) AS order_count, ROUND(SUM(total_amount), 2) AS status_revenue FROM orders GROUP BY status;\n\nSELECT c.name AS category_name, COUNT(p.id) AS product_count, SUM(p.units_in_stock) AS total_inventory FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id;`,
       },
+      {
+        id: 'q_plugins_overview',
+        name: 'Plugins Registry Summary',
+        description: 'Summary of all registered dynamic TSX plugins, system extensions, version numbers, and active status.',
+        query: `SELECT id, name, version, enabled, menu_category, description, updated_at FROM t_plugins ORDER BY name ASC;`,
+      },
     ];
 
     const now = new Date().toISOString();
@@ -498,6 +724,34 @@ export class SQLiteEngine {
         'q_low_stock',
         '',
         JSON.stringify(inventoryReportConfig),
+        now,
+      ]
+    );
+
+    const pluginsReportConfig = {
+      companyName: 'Northwind Global Corp',
+      reportTitle: 'Dynamic Plugins Registry Report',
+      subtitle: 'Installed Extensions, TSX Modules & Status Overview',
+      preparedBy: 'GAW Analytics Engine',
+      periodText: 'System Manifest',
+      notes: 'This report lists all registered client-side TypeScript micro-apps and dynamic plugins compiled in this database.',
+      kpiCards: [
+        { id: 'kpi-p-1', title: 'Total Plugins', queryIndex: 0, valueColumn: 'id', format: 'number', subtitle: 'Registered modules' },
+      ],
+      tables: [
+        { id: 'tb-p-1', title: 'Installed Plugins Directory', queryIndex: 0, showTotalRow: false },
+      ],
+    };
+
+    this.db.run(
+      'INSERT INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        'report_plugins_catalog',
+        'Plugins Registry Report',
+        'Detailed report displaying the catalog of registered dynamic plugins.',
+        'q_plugins_overview',
+        '',
+        JSON.stringify(pluginsReportConfig),
         now,
       ]
     );
@@ -864,40 +1118,8 @@ export class SQLiteEngine {
       `);
 
       // Ensure default system & example plugins exist
+      // Ensure only the 5 minimal essential plugins exist (Northwind plugins are only in demo database)
       const defaultPluginsToCheck = [
-        {
-          id: 'plugin_crm',
-          name: 'Customer Directory & CRM',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'Users',
-          category: 'Business',
-          route: '/crm',
-          desc: 'Manage client accounts, credit limits, and orders directly inside this .db file.',
-          code: DEFAULT_CRM_PLUGIN_CODE,
-        },
-        {
-          id: 'plugin_inventory',
-          name: 'Inventory Valuation Desk',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'Package',
-          category: 'Operations',
-          route: '/inventory',
-          desc: 'Monitor real-time warehouse inventory value, low-stock triggers, and execute immediate batch restocks.',
-          code: DEFAULT_INVENTORY_PLUGIN_CODE,
-        },
-        {
-          id: 'plugin_executive',
-          name: 'Executive Pulse',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'BarChart3',
-          category: 'Business',
-          route: '/executive',
-          desc: 'Aggregated business KPIs computed directly from SQLite relational tables.',
-          code: DEFAULT_EXECUTIVE_PLUGIN_CODE,
-        },
         {
           id: 'plugin_hello_world',
           name: 'Hello World Starter',

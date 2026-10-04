@@ -107,7 +107,7 @@ export default function App() {
   const [queries, setQueries] = useState<SavedQuery[]>([]);
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [plugins, setPlugins] = useState<PluginRecord[]>([]);
-  const [appTitle, setAppTitle] = useState('Northwind Modern Commerce');
+  const [appTitle, setAppTitle] = useState('New Application');
 
   // Active query result for table/query views
   const [activeQueryResult, setActiveQueryResult] = useState<QueryResult | null>(null);
@@ -316,7 +316,7 @@ export default function App() {
       const plgs = engine.getPlugins();
       setPlugins(plgs);
 
-      const title = engine.getSetting('app_title', 'Northwind Modern Commerce');
+      const title = engine.getSetting('app_title', 'New Application');
       setAppTitle(title);
     } catch (e) {
       console.error('Failed to refresh database state:', e);
@@ -873,22 +873,27 @@ export default function App() {
           eventBusApi.emit('recent_files_changed');
         },
         loadNorthwindDemo: () => {
-          SQLiteEngine.getInstance().createDefaultDatabase();
+          SQLiteEngine.getInstance().createNorthwindDemoDatabase();
           RecentFilesManager.addRecentFile({
-            name: 'Northwind Commerce (Demo)',
+            name: 'Northwind Modern Commerce Demo',
             source: 'demo',
             path: 'northwind_commerce.db',
           });
           setSidebarOpen(true);
           refreshDatabaseState();
           setActiveView('plugin:plugin_crm');
+          setActiveRoute('plugins');
+          navigateTo('plugins', 'plugin:plugin_crm');
           toastApi.success('Northwind Demo database opened.');
         },
         closeDatabase: async () => {
           storageEngine.closeFile();
-          SQLiteEngine.getInstance().createEmptyDatabase('untitled.db');
+          SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
           refreshDatabaseState();
-          toastApi.info('Active database closed.');
+          setActiveView('file');
+          setActiveRoute('file');
+          navigateTo('file', 'file');
+          toastApi.info('Active database reset to new database.');
         },
       },
     };
@@ -1081,12 +1086,12 @@ export default function App() {
               storageMeta={storageMeta}
               theme={theme}
               onNewDatabase={() => {
-                SQLiteEngine.getInstance().createDefaultDatabase();
-                toastApi.info('Created new database.');
-                setSidebarOpenWithStorage(true);
+                SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
+                toastApi.success('Created new database (new_database.sqlite).');
                 refreshDatabaseState();
-                setActiveView('view');
-                navigateTo('view', 'view');
+                setActiveRoute('file');
+                setActiveView('file');
+                navigateTo('file', 'file');
               }}
               onOpenFile={async () => {
                 const ok = await storageEngine.openFile();
@@ -1105,8 +1110,13 @@ export default function App() {
                 navigateTo('plugins', 'plugin:plugin_file_manager');
               }}
               onOpenDemo={() => {
-                SQLiteEngine.getInstance().createDefaultDatabase();
-                toastApi.success('Reset database to Northwind Modern template.');
+                SQLiteEngine.getInstance().createNorthwindDemoDatabase();
+                RecentFilesManager.addRecentFile({
+                  name: 'Northwind Modern Commerce Demo',
+                  source: 'demo',
+                  path: 'northwind_commerce.db',
+                });
+                toastApi.success('Loaded Northwind Modern Commerce Demo.');
                 setSidebarOpenWithStorage(true);
                 refreshDatabaseState();
                 setActiveView('plugin:plugin_crm');
@@ -1151,8 +1161,8 @@ export default function App() {
               onOpenIDE={handleOpenInIDE}
               onOpenSettings={() => setShowSettingsModal(true)}
               onResetDefault={() => {
-                SQLiteEngine.getInstance().createDefaultDatabase();
-                toastApi.success('Reset database to Northwind Modern template.');
+                SQLiteEngine.getInstance().createNorthwindDemoDatabase();
+                toastApi.success('Loaded Northwind Modern Commerce template.');
                 setSidebarOpenWithStorage(true);
                 refreshDatabaseState();
                 setActiveView('plugin:plugin_crm');
@@ -1492,7 +1502,7 @@ export default function App() {
 
       {/* 6. Two-Stage Deletion Confirmation Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-text">
           <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 text-slate-100 flex flex-col space-y-4">
             {deleteTarget.stage === 1 ? (
               <>

@@ -18,14 +18,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const storage = FileStorageEngine.getInstance();
   const meta = storage.getMetadata();
 
-  const [appTitle, setAppTitle] = useState(engine.getSetting('app_title', 'Northwind Modern Commerce'));
   const [syncInterval, setSyncInterval] = useState(String(meta.autoSyncIntervalSec || 30));
-  const [companyName, setCompanyName] = useState(engine.getSetting('company_name', 'Northwind Global Corp'));
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(meta.isAutoSyncEnabled);
 
   const handleSave = () => {
-    engine.setSetting('app_title', appTitle);
-    engine.setSetting('company_name', companyName);
     engine.setSetting('auto_sync_interval', syncInterval);
     storage.setAutoSyncInterval(Number(syncInterval));
     storage.setAutoSyncEnabled(autoSyncEnabled);
@@ -103,32 +99,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* App Branding (t_settings) */}
-          <div className={`space-y-3 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-            <h3 className="font-bold text-indigo-500 uppercase tracking-wider text-[11px]">Database Metadata (t_settings)</h3>
-            <div>
-              <label className={`block mb-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Application Title</label>
-              <input
-                type="text"
-                value={appTitle}
-                onChange={(e) => setAppTitle(e.target.value)}
-                className={`w-full px-3 py-1.5 rounded border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                  isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
-                }`}
-              />
-            </div>
-            <div>
-              <label className={`block mb-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Organization / Company Name</label>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className={`w-full px-3 py-1.5 rounded border focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                  isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
-                }`}
-              />
-            </div>
-          </div>
 
           {/* Storage & Auto-Save */}
           <div className={`space-y-3 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>

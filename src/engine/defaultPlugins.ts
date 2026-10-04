@@ -2405,7 +2405,7 @@ export default function PluginManagerPlugin({ gaw }) {
 
                 {isProtected ? (
                   <span
-                    className={'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold select-none ' + (
+                    className={'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold select-text ' + (
                       isDark ? 'bg-indigo-950/60 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
                     )}
                     title="Core System Plugin - Cannot be deleted to ensure application remains operational"

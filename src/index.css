@@ -2,20 +2,20 @@
 
 @layer base {
   *, ::before, ::after {
-    user-select: text;
-    -webkit-user-select: text;
+    user-select: text !important;
+    -webkit-user-select: text !important;
   }
   html, body, #root {
     overflow: hidden;
-    user-select: text;
-    -webkit-user-select: text;
+    user-select: text !important;
+    -webkit-user-select: text !important;
   }
 }
 
-/* Ensure text elements, tables, plugin outputs, reports are freely selectable */
-p, span, td, th, h1, h2, h3, h4, h5, h6, pre, code, blockquote, label, div {
-  user-select: text;
-  -webkit-user-select: text;
+/* Ensure all text elements, tables, plugin outputs, reports are freely selectable and copyable */
+p, span, td, th, h1, h2, h3, h4, h5, h6, pre, code, blockquote, label, div, section, article, aside, main, header, footer, b, i, strong, em, button, a {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .select-all {
@@ -24,8 +24,8 @@ p, span, td, th, h1, h2, h3, h4, h5, h6, pre, code, blockquote, label, div {
 }
 
 .select-none {
-  user-select: auto !important;
-  -webkit-user-select: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 @media print {
