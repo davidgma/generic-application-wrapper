@@ -46,6 +46,8 @@ export interface GAWNavigationApi {
   openReport: (reportId: string) => void;
   openPlugin: (pluginId: string) => void;
   openIDE: (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string }) => void;
+  openAI?: () => void;
+  openSettings?: () => void;
 }
 
 export interface GAWEventBusApi {

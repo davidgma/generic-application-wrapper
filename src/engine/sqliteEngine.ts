@@ -9,6 +9,7 @@ import {
   DEFAULT_HELLO_WORLD_PLUGIN_CODE,
   DEFAULT_DROPBOX_PLUGIN_CODE,
   DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
+  DEFAULT_HELP_PLUGIN_CODE,
   DEFAULT_PLUGIN_MANAGER_CODE,
   DEFAULT_FILE_MANAGER_PLUGIN_CODE,
 } from './defaultPlugins';
@@ -377,6 +378,17 @@ export class SQLiteEngine {
         route: '/plugin-manager',
         description: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
         code: DEFAULT_PLUGIN_MANAGER_CODE,
+      },
+      {
+        id: 'plugin_help',
+        name: 'Help & System Guide',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'HelpCircle',
+        menu_category: 'System & Documentation',
+        route: '/help',
+        description: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
+        code: DEFAULT_HELP_PLUGIN_CODE,
       },
     ];
 
@@ -850,6 +862,17 @@ export class SQLiteEngine {
         description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
         code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
       },
+      {
+        id: 'plugin_help',
+        name: 'Help & System Guide',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'HelpCircle',
+        menu_category: 'System & Documentation',
+        route: '/help',
+        description: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
+        code: DEFAULT_HELP_PLUGIN_CODE,
+      },
     ];
 
     for (const p of plugins) {
@@ -1174,6 +1197,17 @@ export class SQLiteEngine {
           route: '/files',
           desc: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
           code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+        },
+        {
+          id: 'plugin_help',
+          name: 'Help & System Guide',
+          version: '1.0.0',
+          enabled: 1,
+          icon: 'HelpCircle',
+          category: 'System & Documentation',
+          route: '/help',
+          desc: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
+          code: DEFAULT_HELP_PLUGIN_CODE,
         },
       ];
 

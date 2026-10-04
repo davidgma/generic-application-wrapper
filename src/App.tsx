@@ -29,6 +29,7 @@ import { ViewPane } from './components/panes/ViewPane';
 import { DatabasePane } from './components/panes/DatabasePane';
 import { PluginsPane } from './components/panes/PluginsPane';
 import { HelpPane } from './components/panes/HelpPane';
+import { DEFAULT_HELP_PLUGIN_CODE } from './engine/defaultPlugins';
 
 import {
   AlertCircle,
@@ -661,9 +662,9 @@ export default function App() {
       } else if (hash === 'plugins') {
         setActiveRoute('plugins');
         setActiveView('plugins');
-      } else if (hash === 'help') {
+      } else if (hash === 'help' || hash === 'plugin/plugin_help') {
         setActiveRoute('help');
-        setActiveView('help');
+        setActiveView('plugin:plugin_help');
       } else if (hash === 'spreadsheet') {
         setActiveRoute('view');
         setActiveView('spreadsheet');
@@ -736,6 +737,8 @@ export default function App() {
         openReport: (repId) => setActiveView(`report:${repId}`),
         openPlugin: (plgId) => setActiveView(`plugin:${plgId}`),
         openIDE: (tab) => handleOpenInIDE(tab),
+        openAI: () => setShowAIModal(true),
+        openSettings: () => setShowSettingsModal(true),
       },
       eventBus: eventBusApi,
       theme,
@@ -1006,7 +1009,23 @@ export default function App() {
   }
 
   // Active object references
-  const currentPlugin = plugins.find((p) => activeView === `plugin:${p.id}`);
+  const currentPlugin =
+    plugins.find((p) => activeView === `plugin:${p.id}`) ||
+    (activeView === 'help' || activeView === 'plugin:plugin_help'
+      ? plugins.find((p) => p.id === 'plugin_help') || {
+          id: 'plugin_help',
+          name: 'Help & System Guide',
+          version: '1.0.0',
+          enabled: 1,
+          icon: 'HelpCircle',
+          menu_category: 'System & Documentation',
+          route: '/help',
+          description: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
+          code: DEFAULT_HELP_PLUGIN_CODE,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      : undefined);
   const currentReport = reports.find((r) => activeView === `report:${r.id}`);
 
   const isFullVSCode = activeView === 'ide' && isVSCodeMode;
@@ -1019,9 +1038,15 @@ export default function App() {
           theme={theme}
           activeRoute={activeRoute}
           onSelectRoute={(route) => {
-            setActiveRoute(route as any);
-            setActiveView(route);
-            navigateTo(route, route);
+            if (route === 'help') {
+              setActiveRoute('help');
+              setActiveView('plugin:plugin_help');
+              navigateTo('help', 'plugin:plugin_help');
+            } else {
+              setActiveRoute(route as any);
+              setActiveView(route);
+              navigateTo(route, route);
+            }
           }}
           onThemeToggle={() => {
             const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
@@ -1213,18 +1238,18 @@ export default function App() {
             />
           )}
 
-          {/* Pane 5: Help Route */}
+          {/* Pane 5: Help Route (Dynamic Help & System Guide Plugin) */}
           {activeRoute === 'help' && activeView === 'help' && (
-            <HelpPane
-              theme={theme}
-              onOpenAI={() => setShowAIModal(true)}
-              onOpenSettings={() => setShowSettingsModal(true)}
-              onOpenPlugin={(pId) => {
-                setActiveView(`plugin:${pId}`);
-                setActiveRoute('plugins');
-                navigateTo('plugins', `plugin:${pId}`);
-              }}
-            />
+            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
+              <PluginHost
+                code={currentPlugin?.code || DEFAULT_HELP_PLUGIN_CODE}
+                pluginName="Help & System Guide"
+                pluginId="plugin_help"
+                theme={theme}
+                gawContext={gawContext}
+                onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' })}
+              />
+            </div>
           )}
 
           {/* View 1: Active Dynamic TSX Plugin */}

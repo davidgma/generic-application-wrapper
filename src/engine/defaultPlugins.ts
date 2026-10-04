@@ -2061,6 +2061,753 @@ export default function LocalStoragePlugin({ gaw }) {
 }
 `;
 
+export const DEFAULT_HELP_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import {
+  HelpCircle,
+  Sparkles,
+  Download,
+  Smartphone,
+  Keyboard,
+  Cloud,
+  Shield,
+  ExternalLink,
+  Code2,
+  Database,
+  BookOpen,
+  Cpu,
+  Layers,
+  Terminal,
+  FileCode,
+  CheckCircle2,
+  Puzzle,
+  Table,
+  FileSpreadsheet,
+  BarChart3,
+  Github,
+  Info,
+  FolderOpen,
+  HardDrive,
+  Save,
+  RefreshCw,
+  Play,
+  Copy,
+  Check,
+  Settings,
+  Zap,
+  Globe,
+  FileText,
+  Lightbulb,
+  Workflow,
+  ListOrdered
+} from 'lucide-react';
+
+export default function HelpPlugin({ gaw }) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
+
+  const sampleBoilerplate = 'import React, { useState, useEffect } from \\'react\\';\\nimport { Database, Sparkles, RefreshCw } from \\'lucide-react\\';\\n\\nexport default function MyCustomPlugin({ gaw }) {\\n  const [rows, setRows] = useState([]);\\n  const [loading, setLoading] = useState(false);\\n\\n  const loadData = () => {\\n    try {\\n      setLoading(true);\\n      // Query SQLite database objects\\n      const result = gaw.db.queryObjects(\\'SELECT * FROM t_settings LIMIT 20;\\');\\n      setRows(result || []);\\n      gaw.toast.success(\\'Loaded \\' + (result?.length || 0) + \\' records from SQLite!\\');\\n    } catch (err) {\\n      gaw.toast.error(\\'Query error: \\' + (err.message || String(err)));\\n    } finally {\\n      setLoading(false);\\n    }\\n  };\\n\\n  useEffect(() => {\\n    loadData();\\n  }, []);\\n\\n  return (\\n    <div className=\\"p-6 max-w-4xl mx-auto space-y-4\\">\\n      <div className=\\"flex items-center justify-between p-4 rounded-xl border bg-slate-900 border-slate-800\\">\\n        <h2 className=\\"text-base font-bold text-white flex items-center gap-2\\">\\n          <Sparkles className=\\"w-5 h-5 text-indigo-400\\" />\\n          <span>My Custom SQLite Plugin</span>\\n        </h2>\\n        <button\\n          onClick={loadData}\\n          className=\\"px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5\\"\\n        >\\n          <RefreshCw className={\\'w-3.5 h-3.5 \\' + (loading ? \\'animate-spin\\' : \\'\\')} />\\n          <span>Refresh</span>\\n        </button>\\n      </div>\\n\\n      <div className=\\"border rounded-xl p-4 bg-slate-950/70 border-slate-800 text-xs text-slate-300 font-mono\\">\\n        <pre>{JSON.stringify(rows, null, 2)}</pre>\\n      </div>\\n    </div>\\n  );\\n}';
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(sampleBoilerplate);
+    setCopiedCode(true);
+    gaw.toast.success('Plugin boilerplate copied to clipboard!');
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const technologies = [
+    {
+      name: 'TypeScript',
+      badge: 'Language',
+      url: 'https://www.typescriptlang.org/',
+      desc: 'Strongly typed superset of JavaScript providing compile-time type safety, intellisense, and high reliability across the application core.',
+      icon: Code2,
+    },
+    {
+      name: 'React 19',
+      badge: 'UI Framework',
+      url: 'https://react.dev/',
+      desc: 'Declarative component architecture powering interactive workspaces, reactive data streams, and client-side plugin hosts.',
+      icon: Zap,
+    },
+    {
+      name: 'SQLite',
+      badge: 'Database Engine',
+      url: 'https://www.sqlite.org/',
+      desc: 'The world\\'s most deployed, self-contained, transactional SQL database engine. Stores your schema, records, settings, and plugins in a single binary file.',
+      icon: Database,
+    },
+    {
+      name: 'sql.js (WebAssembly SQLite)',
+      badge: 'Wasm Runtime',
+      url: 'https://sql.js.org/',
+      desc: 'Official WebAssembly port of SQLite compiled using Emscripten, enabling full native SQL execution entirely inside client browser memory with zero server dependencies.',
+      icon: Cpu,
+    },
+    {
+      name: 'Dropbox API',
+      badge: 'Cloud Sync',
+      url: 'https://www.dropbox.com/developers',
+      secondaryUrl: 'https://www.dropbox.com/developers/apps',
+      secondaryLabel: 'App Console',
+      desc: 'Secure cloud file storage integration leveraging PKCE OAuth authentication, metadata inspection, and delta file uploads/downloads.',
+      icon: Cloud,
+    },
+    {
+      name: 'Progressive Web App (PWA)',
+      badge: 'Web Standard',
+      url: 'https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps',
+      desc: 'Enables 100% offline functionality, service worker asset precaching, background sync, and native installation on Windows, macOS, iPadOS, iOS, and Android.',
+      icon: Smartphone,
+    },
+    {
+      name: 'File System Access API',
+      badge: 'Web Standard',
+      url: 'https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API',
+      desc: 'Modern web API granting ongoing read-write access to local disk SQLite files without persistent write locks, allowing concurrent access and background synchronization.',
+      icon: HardDrive,
+    },
+    {
+      name: 'HTML5 Standards',
+      badge: 'Web Standard',
+      url: 'https://developer.mozilla.org/en-US/docs/Web/HTML',
+      desc: 'Modern semantic structure, drag-and-drop file readers, IndexedDB storage containers, and binary ArrayBuffer processing.',
+      icon: Globe,
+    },
+    {
+      name: 'CSS3 & Tailwind CSS',
+      badge: 'Styling',
+      url: 'https://tailwindcss.com/',
+      secondaryUrl: 'https://developer.mozilla.org/en-US/docs/Web/CSS',
+      secondaryLabel: 'MDN CSS3',
+      desc: 'Utility-first styling framework delivering high-density enterprise layouts, dark/light themes, and responsive design across desktop and mobile.',
+      icon: Layers,
+    },
+    {
+      name: 'JavaScript (ES2022+)',
+      badge: 'Runtime',
+      url: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript',
+      desc: 'Modern asynchronous JavaScript including async/await, BroadcastChannel cross-tab synchronization, and binary Uint8Array streams.',
+      icon: Terminal,
+    },
+    {
+      name: 'Monaco Editor (Internal IDE)',
+      badge: 'Code Editor',
+      url: 'https://microsoft.github.io/monaco-editor/',
+      desc: 'The professional code editor that powers Visual Studio Code, integrated into Gawkyy with TypeScript syntax highlighting, intellisense, and code folding.',
+      icon: FileCode,
+    },
+    {
+      name: 'Sucrase TSX Transpiler',
+      badge: 'Compiler',
+      url: 'https://sucrase.io/',
+      desc: 'Blazing fast in-browser TypeScript and JSX compiler transforming live plugin code into executable JavaScript in milliseconds.',
+      icon: Sparkles,
+    },
+    {
+      name: 'Lucide React Icons',
+      badge: 'Iconography',
+      url: 'https://lucide.dev/',
+      desc: 'Consistent, clean, customizable SVG icon library with hundreds of icons available directly to plugins and host components.',
+      icon: CheckCircle2,
+    },
+    {
+      name: 'Vite & Rollup',
+      badge: 'Build Tool',
+      url: 'https://vitejs.dev/',
+      desc: 'Next-generation frontend tooling providing instant server start, optimized production bundles, and PWA workbox service worker compilation.',
+      icon: Zap,
+    },
+    {
+      name: 'Spreadsheet Studio Calculation Engine',
+      badge: 'Core Feature',
+      desc: 'In-memory multi-sheet reactive calculation grid supporting formulas (=SUM, =AVERAGE, =MIN, =MAX, =COUNT, =IF, math operations), cell coordinate mapping (A1:Z100), CSV export, and live SQL query synchronization.',
+      icon: FileSpreadsheet,
+    },
+    {
+      name: 'Visual Report Generator & Designer',
+      badge: 'Core Feature',
+      desc: 'Reactive SQL aggregation and publication reporting engine supporting KPI scorecards, multi-column summary tables, custom SQL projections, charts, and print/PDF formatting.',
+      icon: BarChart3,
+    },
+    {
+      name: 'Google AI Studio',
+      badge: 'Build Environment',
+      url: 'https://aistudio.google.com/',
+      desc: 'Gawkyy was conceived, architected, and engineered with Google AI Studio. This application project is public on AI Studio so developers worldwide can clone, inspect, prompt, and extend it directly!',
+      icon: Sparkles,
+    },
+    {
+      name: 'GitHub Open Source Repository',
+      badge: 'Source Code',
+      url: 'https://github.com/davidgma/generic-application-wrapper',
+      desc: 'The official public open-source repository for Gawkyy. Explore the codebase, report issues, submit pull requests, and contribute to the project.',
+      icon: Github,
+    },
+  ];
+
+  return (
+    <div className={'flex-1 overflow-y-auto p-4 md:p-6 select-text transition-colors ' + (
+      isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'
+    )}>
+      <div className="max-w-5xl mx-auto space-y-6 pb-28">
+        {/* Top Header Card */}
+        <div className={'p-5 rounded-2xl border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 ' + (
+          isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center gap-3.5">
+            <div className={'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ' + (
+              isDark ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+            )}>
+              <HelpCircle className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  Help, Technologies & Documentation
+                </h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                  Core Plugin
+                </span>
+              </div>
+              <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                Comprehensive manual, technology reference with official sources, plugin development guide, and application walkthrough.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <a
+              href="https://github.com/davidgma/generic-application-wrapper"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 shadow transition active:scale-95"
+            >
+              <Github className="w-3.5 h-3.5" />
+              <span>GitHub Repo</span>
+              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+            </a>
+            <a
+              href="https://aistudio.google.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Studio</span>
+              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+            </a>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className={'flex items-center gap-2 border-b pb-2 text-xs overflow-x-auto ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
+          {[
+            { id: 'overview', label: 'Overview & Tools', icon: Info },
+            { id: 'tech', label: 'Technology Stack (' + technologies.length + ')', icon: Cpu },
+            { id: 'plugins', label: 'Plugin Developer Guide', icon: Code2 },
+            { id: 'guide', label: 'Application User Guide', icon: BookOpen },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={'flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-semibold transition whitespace-nowrap active:scale-95 ' + (
+                activeTab === tab.id
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              )}
+            >
+              <tab.icon className="w-3.5 h-3.5" />
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* TAB 1: Overview & Quick Tools */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* Primary Action Cards: AI Spec Generator + PWA Installation */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 1. AI Specification Generator */}
+              <div className={'p-5 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.005] ' + (
+                isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+              )}>
+                <div className="space-y-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>AI Specification Generator</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        Prompt Exporter
+                      </span>
+                    </h3>
+                    <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      Generate customized engineering prompts embedded with your active SQLite schema and the Gawkyy TypeScript SDK.
+                      Paste into Gemini, Claude, or ChatGPT to generate dynamic plugins instantly.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (gaw.navigation.openAI) {
+                      gaw.navigation.openAI();
+                    } else {
+                      gaw.toast.info('Opening AI Prompt Exporter from main menu...');
+                    }
+                  }}
+                  className="mt-4 w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Launch AI Prompt Generator</span>
+                </button>
+              </div>
+
+              {/* 2. Install App as PWA */}
+              <div className={'p-5 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.005] ' + (
+                isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+              )}>
+                <div className="space-y-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <span>Install Gawkyy as PWA</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        100% Offline Ready
+                      </span>
+                    </h3>
+                    <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      Install Gawkyy on your PC, Mac, iPad, iPhone, or Android device as a standalone desktop app.
+                      Once installed, it operates with zero internet requirement and direct access to your local SQLite file system.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 p-2.5 rounded-xl border bg-slate-900/50 border-slate-800 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-slate-400">PWA Desktop / Mobile Standalone</span>
+                  <button
+                    onClick={() => gaw.toast.info('Click the browser install icon in the URL bar, or choose "Install Gawkyy" from browser settings.')}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Install Instructions</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* About Gawkyy Card */}
+            <div className={'p-5 rounded-2xl border shadow-sm ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <img
+                  src="/gawkyy-cat-256x256.png"
+                  alt="Gawkyy Mascot"
+                  className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-amber-400/40 flex-shrink-0"
+                />
+                <div className="space-y-1">
+                  <h3 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-sky-300' : 'text-blue-950')}>
+                    <span>Gawkyy — Generic Application Wrapper</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono font-normal">
+                      v1.2.0
+                    </span>
+                  </h3>
+                  <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                    A web-native, offline-first portable application platform and MS Access successor. Built on client-side WebAssembly SQLite,
+                    in-browser Sucrase TSX compilation, reactive Excel-compatible spreadsheets, and automated 4-way conflict reconciliation.
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1 text-[11px] font-mono text-indigo-400">
+                    <span>• sql.js WebAssembly SQLite</span>
+                    <span>• Sucrase Fast TSX Compiler</span>
+                    <span>• PWA File System Access API</span>
+                    <span>• Dropbox PKCE Cloud Sync</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Keyboard Shortcuts Reference */}
+            <div className={'p-5 rounded-2xl border shadow-sm ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-800/40">
+                <Keyboard className="w-4 h-4 text-indigo-400" />
+                <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+                  Keyboard Shortcuts Reference
+                </h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 text-xs">
+                {[
+                  ['Ctrl + Shift + F', 'Toggle Full VS Code Studio Mode / Gawkyy Shell'],
+                  ['Ctrl + O', 'Open Local SQLite Database File'],
+                  ['Ctrl + S', 'Save Active Database to Disk / Cloud'],
+                  ['Ctrl + Enter', 'Run SQL Query / Test Plugin in IDE'],
+                  ['Shift + Alt + F', 'Format Document (Prettier Auto-format)'],
+                  ['Ctrl + B', 'Toggle Navigation Side Bar'],
+                ].map(([shortcut, desc], idx) => (
+                  <div
+                    key={idx}
+                    className={'p-2.5 rounded-xl border flex items-center justify-between gap-3 ' + (
+                      isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                    )}
+                  >
+                    <span className={'text-[11px] ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>{desc}</span>
+                    <kbd className="px-2 py-1 rounded bg-black/40 text-sky-300 font-mono text-[10px] font-bold border border-white/10 flex-shrink-0">
+                      {shortcut}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Cloud Sync Quick Link */}
+            <div className={'p-5 rounded-2xl border shadow-sm flex items-center justify-between gap-4 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Dropbox Cloud Synchronization</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Synchronize SQLite databases across devices using Dropbox OAuth PKCE authentication and 4-way delta reconciliation.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center gap-1.5 flex-shrink-0"
+              >
+                <span>Open Cloud Sync</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: Technology Stack & Official References */}
+        {activeTab === 'tech' && (
+          <div className="space-y-4">
+            <div className={'p-4 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700')}>
+              <p className="text-xs leading-relaxed">
+                Gawkyy is built with open web standards and proven open-source technologies. Below is the complete catalog of core libraries,
+                database engines, compilers, and APIs powering the platform, along with direct links to official documentation.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {technologies.map((t, idx) => (
+                <div
+                  key={idx}
+                  className={'p-4 rounded-2xl border flex flex-col justify-between transition hover:border-indigo-500/50 shadow-sm ' + (
+                    isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+                  )}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
+                          isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-50 text-indigo-700'
+                        )}>
+                          <t.icon className="w-4 h-4" />
+                        </div>
+                        <h4 className="text-xs font-bold truncate text-slate-900 dark:text-white">
+                          {t.name}
+                        </h4>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
+                        {t.badge}
+                      </span>
+                    </div>
+
+                    <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      {t.desc}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-3 mt-2 border-t border-slate-800/40">
+                    {t.url && (
+                      <a
+                        href={t.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition"
+                      >
+                        <span>Official Docs</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                    {t.secondaryUrl && (
+                      <>
+                        <span className="text-slate-600">•</span>
+                        <a
+                          href={t.secondaryUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 transition"
+                        >
+                          <span>{t.secondaryLabel || 'Secondary Link'}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Plugin Developer Guide */}
+        {activeTab === 'plugins' && (
+          <div className="space-y-6">
+            {/* Intro Card */}
+            <div className={'p-5 rounded-2xl border space-y-2 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+            )}>
+              <div className="flex items-center gap-2 text-indigo-400">
+                <Code2 className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Plugin Architecture & Execution Model</h3>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-400">
+                In Gawkyy, plugins are first-class applications stored directly inside the SQLite database in the <code className="text-indigo-400 font-mono">t_plugins</code> table.
+                Each plugin is written in React (TSX) and receives the global <code className="text-sky-400 font-mono">gaw</code> context object.
+                Plugins are dynamically compiled client-side in milliseconds via Sucrase, hot-reloaded automatically, and isolated inside React Error Boundaries (Plugin Safe Mode).
+              </p>
+            </div>
+
+            {/* Boilerplate Section */}
+            <div className={'p-5 rounded-2xl border space-y-3 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Starter Plugin Boilerplate</h4>
+                  <p className="text-xs text-slate-400 mt-0.5">Copy and paste this standard template into the Internal Monaco IDE:</p>
+                </div>
+                <button
+                  onClick={handleCopyCode}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95"
+                >
+                  {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                </button>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-400 overflow-x-auto max-h-72">
+                <pre>{sampleBoilerplate}</pre>
+              </div>
+            </div>
+
+            {/* gaw Context API Reference Table */}
+            <div className={'p-5 rounded-2xl border space-y-4 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-indigo-400" />
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                  The <code className="text-indigo-400 font-mono">gaw</code> Context API Reference
+                </h4>
+              </div>
+
+              <div className="divide-y divide-slate-800/60 text-xs">
+                {[
+                  ['gaw.db.query(sql, params)', 'Executes a SQL query and returns { columns: string[], values: any[][] }.'],
+                  ['gaw.db.queryObjects(sql, params)', 'Executes SQL and returns typed array of JavaScript objects [ { id: 1, ... } ].'],
+                  ['gaw.db.execute(sql)', 'Executes multi-statement SQL scripts (DDL/DML) and notifies subscribers of mutations.'],
+                  ['gaw.db.getTables()', 'Returns array of user table names in the active SQLite database.'],
+                  ['gaw.db.getSchema()', 'Returns detailed table column metadata, primary keys, and types.'],
+                  ['gaw.toast.success(msg) / .error / .warning / .info', 'Displays floating non-blocking notification alerts.'],
+                  ['gaw.dialog.confirm(message)', 'Prompts user with asynchronous confirm modal returning Promise<boolean>.'],
+                  ['gaw.dialog.prompt(message, defaultVal)', 'Prompts user for input returning Promise<string | null>.'],
+                  ['gaw.navigation.navigate(route)', 'Switches views (e.g. "view", "database", "ide", "spreadsheet", "plugin:id").'],
+                  ['gaw.navigation.openSpreadsheet(data, name)', 'Pushes dataset directly into Spreadsheet Studio workbook tab.'],
+                  ['gaw.navigation.openIDE(tab)', 'Opens the Internal Monaco IDE focused on a specific plugin or query.'],
+                  ['gaw.navigation.openAI()', 'Launches the AI Specification Generator modal.'],
+                  ['gaw.eventBus.on(event, cb) / .emit(event, ...args)', 'Decoupled pub/sub event bus for plugin-to-plugin real-time events.'],
+                  ['gaw.storage.save() / .saveAs()', 'Saves active database to local disk without persistent write locks.'],
+                  ['gaw.dropbox.save() / .saveAs()', 'Saves active database to Dropbox cloud account.'],
+                  ['gaw.theme', 'Current theme ("vs-dark" | "vs-light") to match system aesthetics.'],
+                ].map(([api, desc], i) => (
+                  <div key={i} className="py-2.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+                    <code className="text-sky-300 font-mono text-[11px] font-semibold">{api}</code>
+                    <span className="text-slate-400 text-xs sm:text-right max-w-md">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Step-by-Step Creation Walkthrough */}
+            <div className={'p-5 rounded-2xl border space-y-3 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Step-by-Step: Creating a New Plugin</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">1</span>
+                    <span>Create Plugin Record</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Click <strong>Add Plugin</strong> in the left sidebar or launch the Plugin Manager. Give it an ID (e.g. <code className="font-mono text-indigo-300">plugin_analytics</code>) and title.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">2</span>
+                    <span>Write TSX Component</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Click the three dots <strong>(···)</strong> next to your plugin and choose <strong>Edit in IDE</strong>. Write your standard React component with state, hooks, and SQL calls.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">3</span>
+                    <span>Hot Reload & Testing</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Press <kbd className="font-mono text-indigo-300">Ctrl + S</kbd> to save. The plugin renders live in the right preview canvas. If an error occurs, Plugin Safe Mode isolates it cleanly.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">4</span>
+                    <span>Export & Share</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Save your database locally or to Dropbox. Your plugin code travels inside the <code className="font-mono text-indigo-300">.sqlite</code> binary file to any device running Gawkyy!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: Application User Guide */}
+        {activeTab === 'guide' && (
+          <div className="space-y-6">
+            {/* Feature 1: Database Studio & Table Editor */}
+            <div className={'p-5 rounded-2xl border space-y-3 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-2 text-indigo-400">
+                <Database className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">1. Database Studio & Table Editor</h3>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-400">
+                Gawkyy provides a full database management suite running directly in the browser:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li><strong>Schema Inspection</strong>: View columns, SQLite data types, primary keys, and nullability constraints.</li>
+                <li><strong>Table Grid & Inline Editing</strong>: Paginate, search, sort, and double-click cells to modify data live in SQLite memory.</li>
+                <li><strong>SQL Console</strong>: Write and execute arbitrary DDL and DML statements with real-time execution duration telemetry.</li>
+                <li><strong>Export</strong>: Download raw binary SQLite files or export tables to CSV at any time.</li>
+              </ul>
+            </div>
+
+            {/* Feature 2: Visual Report Generator */}
+            <div className={'p-5 rounded-2xl border space-y-3 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-2 text-purple-400">
+                <BarChart3 className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">2. Visual Report Generator & Executive Designer</h3>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-400">
+                Create publication-quality reports bound directly to SQL queries:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li><strong>Query Binding</strong>: Select any saved query from <code className="font-mono text-purple-300">t_sql_queries</code> or write custom SQL projections.</li>
+                <li><strong>KPI Scorecard Metrics</strong>: Add highlight cards showing aggregated metrics (<code className="font-mono text-purple-300">SUM</code>, <code className="font-mono text-purple-300">AVG</code>, <code className="font-mono text-purple-300">COUNT</code>, <code className="font-mono text-purple-300">MIN</code>, <code className="font-mono text-purple-300">MAX</code>).</li>
+                <li><strong>Grouping & Sorting</strong>: Group data rows by categories or dates with automatic sub-totals and formatting.</li>
+                <li><strong>Print & PDF</strong>: One-click print layout designed for executive delivery and PDF generation with zero watermark.</li>
+              </ul>
+            </div>
+
+            {/* Feature 3: Spreadsheet Studio */}
+            <div className={'p-5 rounded-2xl border space-y-3 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-2 text-emerald-400">
+                <FileSpreadsheet className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">3. Spreadsheet Studio (Excel-Compatible Grid)</h3>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-400">
+                A built-in reactive multi-sheet calculation engine:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
+                <li><strong>Formulas</strong>: Standard formula syntax including <code className="font-mono text-emerald-300">=SUM(A1:A10)</code>, <code className="font-mono text-emerald-300">=AVERAGE(B1:B10)</code>, <code className="font-mono text-emerald-300">=COUNT(C1:C10)</code>, <code className="font-mono text-emerald-300">=IF(A1&gt;100, "High", "Low")</code>, and arithmetic expressions.</li>
+                <li><strong>Multi-Sheet Workbooks</strong>: Add, rename, switch, and delete sheet tabs.</li>
+                <li><strong>SQL Interoperability</strong>: Push query results from any SQL view into a fresh spreadsheet sheet with one click.</li>
+                <li><strong>CSV Export</strong>: Download active sheets as clean CSV files for external analysis.</li>
+              </ul>
+            </div>
+
+            {/* Feature 4: File Storage & 4-Way Auto-Sync Conflict Reconciliation */}
+            <div className={'p-5 rounded-2xl border space-y-3 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            )}>
+              <div className="flex items-center gap-2 text-sky-400">
+                <Workflow className="w-5 h-5" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">4. File Storage & 4-Way Auto-Sync Reconciliation</h3>
+              </div>
+              <p className="text-xs leading-relaxed text-slate-400">
+                Gawkyy supports independent local disk file synchronization (via PWA File System Access API without persistent write locks) and Dropbox cloud synchronization.
+                When auto-sync is enabled, Gawkyy executes a state-metric check across 4 conditions:
+              </p>
+              <div className="space-y-2 text-xs pt-1">
+                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
+                  <strong className="text-slate-200">Condition 1 (Neither changed):</strong>
+                  <span className="text-slate-400 ml-1">No action required; database remains cleanly synchronized.</span>
+                </div>
+                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
+                  <strong className="text-emerald-300">Condition 2 (Internal changed, external unchanged):</strong>
+                  <span className="text-slate-400 ml-1">Current database is saved directly to the external destination (disk or cloud), updating sync metrics.</span>
+                </div>
+                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
+                  <strong className="text-sky-300">Condition 3 (External changed, internal unchanged):</strong>
+                  <span className="text-slate-400 ml-1">Internal database reloads the external changes to stay up to date.</span>
+                </div>
+                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
+                  <strong className="text-amber-300">Condition 4 (Both changed concurrently):</strong>
+                  <span className="text-slate-400 ml-1">Gawkyy runs an automated reconciliation algorithm to merge non-overlapping schema and record additions. If an unresolvable collision occurs, a conflict dialog prompts you to keep internal, reload external, or save as a separate copy.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+`;
+
 export const DEFAULT_PLUGIN_MANAGER_CODE = `import React, { useState, useEffect, useMemo } from 'react';
 import {
   Puzzle,
