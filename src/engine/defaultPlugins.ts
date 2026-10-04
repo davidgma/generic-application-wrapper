@@ -1033,6 +1033,8 @@ export default function HelloWorldPlugin({ gaw }) {
 export const DEFAULT_DROPBOX_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
 import {
   Cloud,
+  Save,
+  Layers,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
