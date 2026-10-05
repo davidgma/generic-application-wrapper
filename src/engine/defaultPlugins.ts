@@ -2888,7 +2888,16 @@ export default function HelpPlugin({ gaw }) {
                     Summarizes inventory valuation, product quantities, and average prices across product categories:
                   </p>
                   <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                    <pre>{'SELECT\n  c.name AS category_name,\n  COUNT(p.id) AS product_count,\n  SUM(p.units_in_stock) AS total_inventory,\n  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,\n  ROUND(AVG(p.unit_price), 2) AS avg_unit_price\nFROM categories c\nJOIN products p ON p.category_id = c.id\nGROUP BY c.id, c.name\nORDER BY gross_inventory_value DESC;'}</pre>
+                    <pre>{\`SELECT
+  c.name AS category_name,
+  COUNT(p.id) AS product_count,
+  SUM(p.units_in_stock) AS total_inventory,
+  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,
+  ROUND(AVG(p.unit_price), 2) AS avg_unit_price
+FROM categories c
+JOIN products p ON p.category_id = c.id
+GROUP BY c.id, c.name
+ORDER BY gross_inventory_value DESC;\`}</pre>
                   </div>
                   <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                     <div>• <strong>KPI Cards</strong>: Card 1 (<code className="font-mono text-indigo-600 dark:text-indigo-300">gross_inventory_value</code>, Currency format), Card 2 (<code className="font-mono text-indigo-600 dark:text-indigo-300">product_count</code>, Number format), Card 3 (<code className="font-mono text-indigo-600 dark:text-indigo-300">avg_unit_price</code>, Currency format).</div>
@@ -2911,7 +2920,18 @@ export default function HelpPlugin({ gaw }) {
                     Aggregates lifetime order volume, total revenue spent, and recency of purchase per client:
                   </p>
                   <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                    <pre>{'SELECT\n  c.company_name,\n  c.country,\n  COUNT(o.id) AS total_orders,\n  ROUND(SUM(o.total_amount), 2) AS lifetime_value,\n  ROUND(AVG(o.total_amount), 2) AS avg_order_value,\n  MAX(o.order_date) AS last_purchase_date\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id\nGROUP BY c.id\nORDER BY lifetime_value DESC\nLIMIT 25;'}</pre>
+                    <pre>{\`SELECT
+  c.company_name,
+  c.country,
+  COUNT(o.id) AS total_orders,
+  ROUND(SUM(o.total_amount), 2) AS lifetime_value,
+  ROUND(AVG(o.total_amount), 2) AS avg_order_value,
+  MAX(o.order_date) AS last_purchase_date
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.id
+GROUP BY c.id
+ORDER BY lifetime_value DESC
+LIMIT 25;\`}</pre>
                   </div>
                   <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                     <div>• <strong>KPI Cards</strong>: Total Customer Revenue (<code className="font-mono text-indigo-600 dark:text-indigo-300">lifetime_value</code>), Average Deal Size (<code className="font-mono text-indigo-600 dark:text-indigo-300">avg_order_value</code>).</div>
@@ -2933,7 +2953,16 @@ export default function HelpPlugin({ gaw }) {
                     Audits all custom TSX plugins stored and executed inside the database schema:
                   </p>
                   <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                    <pre>{'SELECT\n  id,\n  name,\n  version,\n  CASE WHEN enabled = 1 THEN \'Active\' ELSE \'Disabled\' END AS status,\n  menu_category,\n  route,\n  created_at\nFROM t_plugins\nORDER BY menu_category, name;'}</pre>
+                    <pre>{\`SELECT
+  id,
+  name,
+  version,
+  CASE WHEN enabled = 1 THEN 'Active' ELSE 'Disabled' END AS status,
+  menu_category,
+  route,
+  created_at
+FROM t_plugins
+ORDER BY menu_category, name;\`}</pre>
                   </div>
                   <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                     <div>• Seeded by default in Gawkyy as <code className="font-mono text-indigo-600 dark:text-indigo-300">report_plugins_catalog</code> to document extensions and system modules.</div>
