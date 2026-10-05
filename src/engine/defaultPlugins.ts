@@ -2123,6 +2123,12 @@ export default function HelpPlugin({ gaw }) {
 
   const sampleBoilerplate = 'import React, { useState, useEffect } from \\'react\\';\\nimport { Database, Sparkles, RefreshCw } from \\'lucide-react\\';\\n\\nexport default function MyCustomPlugin({ gaw }) {\\n  const [rows, setRows] = useState([]);\\n  const [loading, setLoading] = useState(false);\\n\\n  const loadData = () => {\\n    try {\\n      setLoading(true);\\n      // Query SQLite database objects\\n      const result = gaw.db.queryObjects(\\'SELECT * FROM t_settings LIMIT 20;\\');\\n      setRows(result || []);\\n      gaw.toast.success(\\'Loaded \\' + (result?.length || 0) + \\' records from SQLite!\\');\\n    } catch (err) {\\n      gaw.toast.error(\\'Query error: \\' + (err.message || String(err)));\\n    } finally {\\n      setLoading(false);\\n    }\\n  };\\n\\n  useEffect(() => {\\n    loadData();\\n  }, []);\\n\\n  return (\\n    <div className=\\"p-6 max-w-4xl mx-auto space-y-4\\">\\n      <div className=\\"flex items-center justify-between p-4 rounded-xl border bg-slate-900 border-slate-800\\">\\n        <h2 className=\\"text-base font-bold text-white flex items-center gap-2\\">\\n          <Sparkles className=\\"w-5 h-5 text-indigo-400\\" />\\n          <span>My Custom SQLite Plugin</span>\\n        </h2>\\n        <button\\n          onClick={loadData}\\n          className=\\"px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5\\"\\n        >\\n          <RefreshCw className={\\'w-3.5 h-3.5 \\' + (loading ? \\'animate-spin\\' : \\'\\')} />\\n          <span>Refresh</span>\\n        </button>\\n      </div>\\n\\n      <div className=\\"border rounded-xl p-4 bg-slate-950/70 border-slate-800 text-xs text-slate-300 font-mono\\">\\n        <pre>{JSON.stringify(rows, null, 2)}</pre>\\n      </div>\\n    </div>\\n  );\\n}';
 
+  const sampleReportSql1 = 'SELECT\\n  c.name AS category_name,\\n  COUNT(p.id) AS product_count,\\n  SUM(p.units_in_stock) AS total_inventory,\\n  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,\\n  ROUND(AVG(p.unit_price), 2) AS avg_unit_price\\nFROM categories c\\nJOIN products p ON p.category_id = c.id\\nGROUP BY c.id, c.name\\nORDER BY gross_inventory_value DESC;';
+
+  const sampleReportSql2 = 'SELECT\\n  c.company_name,\\n  c.country,\\n  COUNT(o.id) AS total_orders,\\n  ROUND(SUM(o.total_amount), 2) AS lifetime_value,\\n  ROUND(AVG(o.total_amount), 2) AS avg_order_value,\\n  MAX(o.order_date) AS last_purchase_date\\nFROM customers c\\nLEFT JOIN orders o ON o.customer_id = c.id\\nGROUP BY c.id\\nORDER BY lifetime_value DESC\\nLIMIT 25;';
+
+  const sampleReportSql3 = 'SELECT\\n  id,\\n  name,\\n  version,\\n  CASE WHEN enabled = 1 THEN \\'Active\\' ELSE \\'Disabled\\' END AS status,\\n  menu_category,\\n  route,\\n  created_at\\nFROM t_plugins\\nORDER BY menu_category, name;';
+
   const handleCopyCode = () => {
     navigator.clipboard.writeText(sampleBoilerplate);
     setCopiedCode(true);
@@ -2240,7 +2246,7 @@ export default function HelpPlugin({ gaw }) {
       icon: FileSpreadsheet,
     },
     {
-      name: 'Visual Report Generator & Designer',
+      name: 'Visual Report Generator and Designer',
       badge: 'Core Feature',
       desc: 'Reactive SQL aggregation and publication reporting engine supporting KPI scorecards, multi-column summary tables, custom SQL projections, charts, and print/PDF formatting.',
       icon: BarChart3,
@@ -2733,7 +2739,7 @@ export default function HelpPlugin({ gaw }) {
               </ul>
             </div>
 
-            {/* Feature 2: Visual Report Generator & Executive Designer (EXPANDED) */}
+            {/* Feature 2: Visual Report Generator and Designer */}
             <div className={'p-6 rounded-2xl border space-y-5 ' + (
               isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
@@ -2742,7 +2748,7 @@ export default function HelpPlugin({ gaw }) {
                   <BarChart3 className="w-6 h-6" />
                   <div>
                     <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                      2. Visual Report Generator & Executive Designer
+                      2. Visual Report Generator and Designer
                     </h3>
                     <p className={'text-xs ' + (isDark ? 'text-purple-300/80' : 'text-purple-800')}>
                       Publication-grade executive reports, KPI scorecards, SVG charts & print-ready PDF export
@@ -2762,7 +2768,7 @@ export default function HelpPlugin({ gaw }) {
                   Overview & Design Philosophy
                 </h4>
                 <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
-                  The <strong>Visual Report Generator</strong> is Gawkyy\\'s modern successor to Microsoft Access Reports and Crystal Reports.
+                  The <strong>Visual Report Generator</strong> is Gawkyy's modern successor to Microsoft Access Reports and Crystal Reports.
                   Rather than forcing you to export data into external BI tools or spreadsheets to assemble management summaries, Gawkyy allows you to bind live SQLite SQL queries directly to beautiful, publication-ready executive documents that execute entirely inside your browser.
                 </p>
                 <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
@@ -2888,16 +2894,7 @@ export default function HelpPlugin({ gaw }) {
                     Summarizes inventory valuation, product quantities, and average prices across product categories:
                   </p>
                   <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                    <pre>{\`SELECT
-  c.name AS category_name,
-  COUNT(p.id) AS product_count,
-  SUM(p.units_in_stock) AS total_inventory,
-  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,
-  ROUND(AVG(p.unit_price), 2) AS avg_unit_price
-FROM categories c
-JOIN products p ON p.category_id = c.id
-GROUP BY c.id, c.name
-ORDER BY gross_inventory_value DESC;\`}</pre>
+                    <pre>{sampleReportSql1}</pre>
                   </div>
                   <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                     <div>• <strong>KPI Cards</strong>: Card 1 (<code className="font-mono text-indigo-600 dark:text-indigo-300">gross_inventory_value</code>, Currency format), Card 2 (<code className="font-mono text-indigo-600 dark:text-indigo-300">product_count</code>, Number format), Card 3 (<code className="font-mono text-indigo-600 dark:text-indigo-300">avg_unit_price</code>, Currency format).</div>
@@ -2920,18 +2917,7 @@ ORDER BY gross_inventory_value DESC;\`}</pre>
                     Aggregates lifetime order volume, total revenue spent, and recency of purchase per client:
                   </p>
                   <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                    <pre>{\`SELECT
-  c.company_name,
-  c.country,
-  COUNT(o.id) AS total_orders,
-  ROUND(SUM(o.total_amount), 2) AS lifetime_value,
-  ROUND(AVG(o.total_amount), 2) AS avg_order_value,
-  MAX(o.order_date) AS last_purchase_date
-FROM customers c
-LEFT JOIN orders o ON o.customer_id = c.id
-GROUP BY c.id
-ORDER BY lifetime_value DESC
-LIMIT 25;\`}</pre>
+                    <pre>{sampleReportSql2}</pre>
                   </div>
                   <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                     <div>• <strong>KPI Cards</strong>: Total Customer Revenue (<code className="font-mono text-indigo-600 dark:text-indigo-300">lifetime_value</code>), Average Deal Size (<code className="font-mono text-indigo-600 dark:text-indigo-300">avg_order_value</code>).</div>
@@ -2953,16 +2939,7 @@ LIMIT 25;\`}</pre>
                     Audits all custom TSX plugins stored and executed inside the database schema:
                   </p>
                   <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
-                    <pre>{\`SELECT
-  id,
-  name,
-  version,
-  CASE WHEN enabled = 1 THEN 'Active' ELSE 'Disabled' END AS status,
-  menu_category,
-  route,
-  created_at
-FROM t_plugins
-ORDER BY menu_category, name;\`}</pre>
+                    <pre>{sampleReportSql3}</pre>
                   </div>
                   <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                     <div>• Seeded by default in Gawkyy as <code className="font-mono text-indigo-600 dark:text-indigo-300">report_plugins_catalog</code> to document extensions and system modules.</div>
@@ -2981,7 +2958,7 @@ ORDER BY menu_category, name;\`}</pre>
                 <ul className="list-disc pl-5 space-y-1 text-xs">
                   <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Enable Background Graphics</strong>: In the browser print dialog (Ctrl + P / Cmd + P), check the box for <em>"Background graphics"</em> to ensure KPI card shading and chart colors are captured in your exported PDF.</li>
                   <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Column Aliasing</strong>: Always assign clean SQL aliases (<code className="font-mono">AS revenue</code>, <code className="font-mono">AS order_count</code>) to avoid raw function names appearing in headers.</li>
-                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Rounding & Formats</strong>: Wrap aggregate numbers in SQLite\\'s <code className="font-mono">ROUND(..., 2)</code> function so currency metrics format cleanly to two decimal places.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Rounding & Formats</strong>: Wrap aggregate numbers in SQLite's <code className="font-mono">ROUND(..., 2)</code> function so currency metrics format cleanly to two decimal places.</li>
                   <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Paper Layout</strong>: The report canvas is styled to scale naturally to standard Letter and A4 portrait pages with zero clipping.</li>
                 </ul>
               </div>

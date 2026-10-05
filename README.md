@@ -1,4 +1,4 @@
-# Gawkyy — Generic Application Wrapper (GAW)
+# Gawkyy — Generic Application Wrapper
 
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -24,7 +24,7 @@
 - **Dynamic TSX Plugin Engine**: Build custom applications directly inside SQLite (`t_plugins`). Dynamic plugins are written in React TSX, transpiled in milliseconds via [Sucrase](https://sucrase.io/), and safely isolated inside React Error Boundaries (Plugin Safe Mode).
 - **Embedded Monaco IDE**: Full Visual Studio Code editor experience inside the browser with syntax highlighting, TypeScript autocompletion, Prettier auto-formatting, SQL scratchpad, and a dedicated Full-Screen Studio Mode (`Ctrl + Shift + F`).
 - **Spreadsheet Studio**: Excel-compatible calculation grid supporting formulas (`=SUM`, `=AVERAGE`, `=COUNT`, `=MIN`, `=MAX`, `=IF`, arithmetic), multi-sheet workbooks, CSV export, and bi-directional SQL table pushing.
-- **Visual Report Generator**: Connect SQL queries to publication-grade executive reports with KPI summary scorecards, multi-column aggregation tables, charts, and clean print/PDF layouts.
+- **Visual Report Generator and Designer**: Connect SQL queries to publication-grade executive reports with KPI summary scorecards, multi-column aggregation tables, charts, and clean print/PDF layouts.
 
 ---
 
@@ -61,7 +61,7 @@ You can start designing and running your own database applications immediately i
    - Click the **Application User Guide** tab at the top of the Help screen.
    - Here you will find in-depth operational manuals covering:
      - **Database Studio & Table Editor**: Designing relational tables, editing data inline, and executing raw SQL queries.
-     - **Visual Report Generator & Executive Designer**: Creating publication-grade reports with KPI summary scorecards, SVG charts, aggregation tables, and clean PDF exports.
+     - **Visual Report Generator and Designer**: Creating publication-grade reports with KPI summary scorecards, SVG charts, aggregation tables, and clean PDF exports.
      - **Spreadsheet Studio**: Using the reactive Excel-compatible formula grid (`=SUM`, `=AVERAGE`, `=COUNT`, `=IF`) and pushing datasets to and from SQLite.
      - **File Storage & 4-Way Auto-Sync Reconciliation**: Configuring lock-free local disk sync via the File System Access API and multi-device Dropbox cloud synchronization with automated conflict resolution.
 3. **Start Building**:
@@ -69,7 +69,172 @@ You can start designing and running your own database applications immediately i
 
 ---
 
-## 💻 Developing Gawkyy itself
+## 📊 Visual Report Generator and Designer Guide
+
+Publication-grade executive reports, KPI scorecards, SVG charts, and print-ready PDF export directly from SQLite.
+
+### 🎯 Overview & Design Philosophy
+
+The **Visual Report Generator and Designer** is Gawkyy's modern web-native successor to Microsoft Access Reports and Crystal Reports. Rather than forcing you to export data into external BI tools or spreadsheets to assemble management summaries, Gawkyy allows you to bind live SQLite SQL queries directly to beautiful, publication-ready executive documents that execute entirely inside your browser.
+
+- **100% Reactive**: Opening a report or clicking **Refresh Data** re-executes the underlying SQL against the active SQLite database in real time.
+- **Single-File Portability**: Reports are serialized as structured JSON configurations inside the SQLite database itself in the `t_reports` table. Every visual report travels seamlessly across devices inside your portable `.sqlite` file.
+- **Zero External Dependencies**: All rendering (KPI scorecards, SVG charts, data tables) runs in-browser with zero tracking or external API calls.
+
+### 🏛️ The 6 Core Visual Report Elements
+
+1. **Corporate Header & Metadata**:
+   - Organization branding / company name
+   - Report title and subtitle
+   - Generation timestamp and author attribution
+   - Reporting period badge (e.g., `"Q3 FY2026"`, `"Monthly Close"`)
+   - Confidentiality classification tags (e.g., `"Strictly Confidential"`, `"Internal Audit"`)
+
+2. **KPI Highlight Scorecards**:
+   - Executive summary cards highlighting aggregate metrics
+   - Automatic numeric formatting:
+     - **Currency**: `$1,250,000.00`
+     - **Percent**: `18.4%`
+     - **Number**: `4,520`
+     - **Text**: Custom strings
+   - Secondary comparison subtitle (e.g., `"+12.5% vs prior quarter"`)
+
+3. **Proportional Vector SVG Charts**:
+   - Clean vector bar charts, line trends, and donut distributions
+   - Maps categorical SQL label columns to numerical metric values
+   - Custom brand color palettes (Hex values) with proportional distribution bars
+
+4. **Tabular Data Breakdown**:
+   - Multi-column detail and summary tables
+   - Monospace right-alignment for numeric metrics to ensure accounting precision
+   - Automatic null handling (null values display as clean em-dashes `—`)
+   - Optional total summary rows
+
+5. **Executive Commentary & Audit Notes**:
+   - Prominent callout memo positioned at the conclusion of the report
+   - Formatted for auditor remarks, qualitative commentary, strategic recommendations, or data provenance disclaimers
+
+6. **Zero-Watermark Print & PDF Engine**:
+   - Dedicated print styling via `@media print` CSS
+   - Strips application sidebars, navigation bars, headers, and interactive buttons
+   - Clean Letter / A4 portrait page layout with page-break protection for board-level presentation
+
+### 🪜 Step-by-Step Workflow: Designing a Custom Report
+
+1. **Formulate Your SQL Query**:
+   - Open **Query Studio** or the **SQL Console** in Gawkyy.
+   - Formulate and test your aggregation query.
+   - Use clear column aliases (e.g., `AS total_revenue`, `AS units_sold`, `AS avg_price`) so columns are immediately recognizable when configuring widgets.
+
+2. **Create the Report Entry**:
+   - Navigate to **Reports** in the left navigation sidebar.
+   - Click **Add Report (+)** or select an existing report and click **Customize Report**.
+
+3. **Bind Data Source & Configure Metadata**:
+   - Choose a saved query from the dropdown or paste your custom SQL directly.
+   - Set the Report Title, Subtitle, Organization Name, Period text, and confidentiality tag.
+
+4. **Add KPI Cards & Charts**:
+   - Add up to 4 KPI scorecard widgets: choose the source numeric column, display label, format (currency, percent, number), and contextual subtitle.
+   - Configure SVG Charts: assign the category label column (X-axis) and metric value column (Y-axis), and select your desired accent color.
+
+5. **Save to SQLite & Deliver**:
+   - Click **Save Report**. Gawkyy serializes the layout directly into `t_reports`.
+   - Click **Print / Save as PDF** anytime to preview or download a formal PDF document.
+
+### 💼 Detailed Real-World Examples with SQL & Configurations
+
+#### Example 1: Executive Sales & Inventory Valuation Report (Retail / E-Commerce)
+
+Summarizes current stock valuation, total unit inventory, and average prices across product categories:
+
+```sql
+SELECT
+  c.name AS category_name,
+  COUNT(p.id) AS product_count,
+  SUM(p.units_in_stock) AS total_inventory,
+  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,
+  ROUND(AVG(p.unit_price), 2) AS avg_unit_price
+FROM categories c
+JOIN products p ON p.category_id = c.id
+GROUP BY c.id, c.name
+ORDER BY gross_inventory_value DESC;
+```
+
+- **Report Header**: Title: *"Executive Sales & Inventory Valuation"*, Subtitle: *"Warehouse stock distribution & capital allocation"*, Period: *"FY2026 Inventory Close"*.
+- **KPI Highlight Scorecards**:
+  - Card 1: Label: *"Gross Inventory Value"*, Column: `gross_inventory_value`, Format: Currency (`$`)
+  - Card 2: Label: *"Total Catalog Products"*, Column: `product_count`, Format: Number
+  - Card 3: Label: *"Average Unit Price"*, Column: `avg_unit_price`, Format: Currency (`$`)
+- **SVG Chart**: Bar Chart mapping Category Label (`category_name`) to Value (`gross_inventory_value`), Color: `#4f46e5` (Indigo).
+- **Breakdown Table**: Displays all 5 columns with `total_inventory`, `gross_inventory_value`, and `avg_unit_price` right-aligned.
+
+---
+
+#### Example 2: Customer CRM & Account Activity Audit (B2B & Accounts)
+
+Aggregates client lifetime value (LTV), total purchase volume, and recency of purchase:
+
+```sql
+SELECT
+  c.company_name,
+  c.country,
+  COUNT(o.id) AS total_orders,
+  ROUND(SUM(o.total_amount), 2) AS lifetime_value,
+  ROUND(AVG(o.total_amount), 2) AS avg_order_value,
+  MAX(o.order_date) AS last_purchase_date
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.id
+GROUP BY c.id
+ORDER BY lifetime_value DESC
+LIMIT 25;
+```
+
+- **Report Header**: Title: *"Customer CRM & Account Activity Audit"*, Subtitle: *"Top enterprise accounts by cumulative spend"*, Period: *"Trailing 12 Months"*.
+- **KPI Highlight Scorecards**:
+  - Card 1: Label: *"Top Accounts Cumulative Revenue"*, Column: `lifetime_value`, Format: Currency (`$`)
+  - Card 2: Label: *"Average Deal Size"*, Column: `avg_order_value`, Format: Currency (`$`)
+- **SVG Chart**: Bar Chart displaying Top 10 clients by Lifetime Value, Color: `#0ea5e9` (Sky Blue).
+- **Breakdown Table**: Displays Company Name, Country, Total Orders, Lifetime Value, Average Order Value, and Last Purchase Date.
+
+---
+
+#### Example 3: Dynamic Plugins & Architecture Manifest Report (System Governance)
+
+Audits all dynamic React TSX micro-apps and extensions stored inside the SQLite binary database:
+
+```sql
+SELECT
+  id,
+  name,
+  version,
+  CASE WHEN enabled = 1 THEN 'Active' ELSE 'Disabled' END AS status,
+  menu_category,
+  route,
+  created_at
+FROM t_plugins
+ORDER BY menu_category, name;
+```
+
+- **Report Header**: Title: *"Dynamic Plugins & Architecture Manifest"*, Subtitle: *"Catalog of verified TSX micro-apps running on Gawkyy runtime"*, Period: *"System Audit"*.
+- **KPI Highlight Scorecards**:
+  - Card 1: Label: *"Installed Plugins"*, Column: `id`, Format: Number
+- **Breakdown Table**: Complete inventory of installed extensions with status badges and routes.
+
+### 💡 Executive Reporting & PDF Printing Pro-Tips
+
+1. **Enable Background Graphics in Browser Print Settings**:
+   In the print dialog (`Ctrl + P` / `Cmd + P`), ensure the **"Background graphics"** checkbox is selected so KPI scorecard shaded containers and chart colors render faithfully in the PDF.
+2. **Column Aliasing**:
+   Always use explicit SQL aliases (`AS revenue`, `AS order_count`) rather than raw expression names (`SUM(price * qty)`) so table headers and KPI dropdowns display readable labels.
+3. **Rounding & Currency Formats**:
+   Wrap monetary calculations in SQLite's `ROUND(..., 2)` function to prevent floating-point precision artifacts from appearing in summary grids.
+4. **Portrait Letter & A4 Scaling**:
+   The report canvas is mathematically proportioned to fill standard Letter (8.5" x 11") and A4 portrait sheets with zero clipping and standard corporate margins.
+
+---
+
+## 💻 Developing Gawkyy Itself
 
 Gawkyy can be developed and extended in two ways: through **Google AI Studio** using AI prompt-assisted vibe coding, or locally on your machine via standard TypeScript / Vite tooling.
 
