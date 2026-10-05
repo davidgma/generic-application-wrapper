@@ -205,6 +205,87 @@ export class FileStorageEngine {
     this.internalStateModifiedTime = time;
   }
 
+  private remoteSyncCheckers: Array<(internalModifiedTime: number | null) => { hasRemote: boolean; isSynced: boolean }> = [];
+
+  public registerRemoteSyncChecker(checker: (internalModifiedTime: number | null) => { hasRemote: boolean; isSynced: boolean }): void {
+    this.remoteSyncCheckers.push(checker);
+  }
+
+  public hasFileHandle(): boolean {
+    return this.fileHandle !== null;
+  }
+
+  public isLocalSynced(): boolean {
+    if (!this.fileHandle) return true;
+    if (this.internalStateModifiedTime === null) return true;
+    return this.lastLocalSyncInternalTime !== null && this.lastLocalSyncInternalTime >= this.internalStateModifiedTime;
+  }
+
+  public checkIfAllChosenTargetsInSync(): boolean {
+    const hasLocal = this.fileHandle !== null;
+    const localInSync = !hasLocal || (
+      this.lastLocalSyncInternalTime !== null &&
+      this.internalStateModifiedTime !== null &&
+      this.lastLocalSyncInternalTime >= this.internalStateModifiedTime
+    );
+
+    let allRemotesInSync = true;
+    for (const checker of this.remoteSyncCheckers) {
+      try {
+        const res = checker(this.internalStateModifiedTime);
+        if (res.hasRemote && !res.isSynced) {
+          allRemotesInSync = false;
+        }
+      } catch (err) {
+        console.error('Remote sync check error:', err);
+      }
+    }
+
+    return localInSync && allRemotesInSync;
+  }
+
+  public hasUnsavedChanges(): boolean {
+    // 1. If internal state was never modified by the user since initial load or last full save, no unsaved changes
+    if (!this.hasUserModifications || this.internalStateModifiedTime === null) {
+      return false;
+    }
+
+    const hasLocal = this.fileHandle !== null;
+    const localInSync = !hasLocal || (
+      this.lastLocalSyncInternalTime !== null &&
+      this.lastLocalSyncInternalTime >= this.internalStateModifiedTime
+    );
+
+    let hasAnyRemote = false;
+    let allRemotesInSync = true;
+
+    for (const checker of this.remoteSyncCheckers) {
+      try {
+        const res = checker(this.internalStateModifiedTime);
+        if (res.hasRemote) {
+          hasAnyRemote = true;
+          if (!res.isSynced) {
+            allRemotesInSync = false;
+          }
+        }
+      } catch (err) {
+        console.error('Remote sync check error:', err);
+      }
+    }
+
+    // 2. If the user hasn't chosen either target (no local file handle and no remote file),
+    // and has made user modifications in memory, they are unsaved.
+    if (!hasLocal && !hasAnyRemote) {
+      return true;
+    }
+
+    // 3. If external files were chosen (locally and/or in Dropbox),
+    // they must all be in sync with the current internal state.
+    // If all chosen external targets are in sync, return false (fully saved state).
+    // If any chosen external target is not in sync, return true (unsaved changes exist).
+    return !(localInSync && allRemotesInSync);
+  }
+
   public getActiveTarget(): StorageTarget {
     return this.activeTarget;
   }
@@ -457,11 +538,16 @@ export class FileStorageEngine {
         const updatedFile = await this.fileHandle.getFile();
         this.lastModifiedDisk = updatedFile.lastModified;
         this.lastLocalSyncExternalTime = updatedFile.lastModified;
-        this.lastLocalSyncInternalTime = this.internalStateModifiedTime;
+        this.lastLocalSyncInternalTime = this.internalStateModifiedTime || Date.now();
         this.lastSavedAt = new Date();
-        this.isDirty = false;
-        this.hasUserModifications = false;
-        this.syncStatus = 'saved';
+
+        if (this.checkIfAllChosenTargetsInSync()) {
+          this.isDirty = false;
+          this.hasUserModifications = false;
+          this.syncStatus = 'saved';
+        } else {
+          this.syncStatus = 'dirty';
+        }
         this.notifyStatus();
         return true;
       } catch (err: any) {
@@ -506,12 +592,17 @@ export class FileStorageEngine {
 
         this.lastModifiedDisk = file.lastModified;
         this.lastLocalSyncExternalTime = file.lastModified;
-        this.lastLocalSyncInternalTime = this.internalStateModifiedTime;
+        this.lastLocalSyncInternalTime = this.internalStateModifiedTime || Date.now();
         this.lastSavedAt = new Date();
-        this.isDirty = false;
-        this.hasUserModifications = false;
-        this.syncStatus = 'saved';
         engine.activeDbName = file.name;
+
+        if (this.checkIfAllChosenTargetsInSync()) {
+          this.isDirty = false;
+          this.hasUserModifications = false;
+          this.syncStatus = 'saved';
+        } else {
+          this.syncStatus = 'dirty';
+        }
 
         RecentFilesManager.addRecentFile({
           name: file.name,
@@ -617,9 +708,14 @@ export class FileStorageEngine {
         this.lastLocalSyncExternalTime = updatedFile.lastModified;
         this.lastLocalSyncInternalTime = internalModified;
         this.lastSavedAt = new Date();
-        this.isDirty = false;
-        this.hasUserModifications = false;
-        this.syncStatus = 'saved';
+
+        if (this.checkIfAllChosenTargetsInSync()) {
+          this.isDirty = false;
+          this.hasUserModifications = false;
+          this.syncStatus = 'saved';
+        } else {
+          this.syncStatus = 'dirty';
+        }
         this.notifyStatus();
         return;
       }
@@ -762,7 +858,7 @@ export class FileStorageEngine {
     if (typeof window === 'undefined') return;
 
     window.addEventListener('beforeunload', (e) => {
-      if (this.isDirty || this.hasUserModifications) {
+      if (this.hasUnsavedChanges()) {
         e.preventDefault();
         e.returnValue = 'You have unsaved changes in your SQLite database. Do you wish to leave?';
         return e.returnValue;

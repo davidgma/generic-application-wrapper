@@ -588,7 +588,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       setTabs((prev) =>
         prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
       );
-      engine.notifyChange();
+      engine.notifyChange(true);
     } else if (activeTab.type === 'table') {
       try {
         const results = engine.exec(contentToSave);
@@ -597,7 +597,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         setTabs((prev) =>
           prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
         );
-        engine.notifyChange();
+        engine.notifyChange(true);
       } catch (err: any) {
         setQueryResults([
           {
@@ -640,7 +640,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           [newId, queryName, 'Custom Query saved from IDE', contentToSave, '{}', '{}', now]
         );
       }
-      engine.notifyChange();
+      engine.notifyChange(true);
       setTabs((prev) =>
         prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
       );

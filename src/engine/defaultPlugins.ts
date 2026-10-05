@@ -2490,8 +2490,8 @@ export default function HelpPlugin({ gaw }) {
                   <Cloud className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Dropbox Cloud Synchronization</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Dropbox Cloud Synchronization</h3>
+                  <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
                     Synchronize SQLite databases across devices using Dropbox OAuth PKCE authentication and 4-way delta reconciliation.
                   </p>
                 </div>
@@ -2510,7 +2510,7 @@ export default function HelpPlugin({ gaw }) {
         {/* TAB 2: Technology Stack & Official References */}
         {activeTab === 'tech' && (
           <div className="space-y-4">
-            <div className={'p-4 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700')}>
+            <div className={'p-4 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-800')}>
               <p className="text-xs leading-relaxed">
                 Gawkyy is built with open web standards and proven open-source technologies. Below is the complete catalog of core libraries,
                 database engines, compilers, and APIs powering the platform, along with direct links to official documentation.
@@ -2533,27 +2533,29 @@ export default function HelpPlugin({ gaw }) {
                         )}>
                           <t.icon className="w-4 h-4" />
                         </div>
-                        <h4 className="text-xs font-bold truncate text-slate-900 dark:text-white">
+                        <h4 className={'text-xs font-bold truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
                           {t.name}
                         </h4>
                       </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700 flex-shrink-0">
+                      <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold border flex-shrink-0 ' + (
+                        isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-800 border-slate-300'
+                      )}>
                         {t.badge}
                       </span>
                     </div>
 
-                    <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                    <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
                       {t.desc}
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-3 mt-2 border-t border-slate-800/40">
+                  <div className={'flex items-center gap-2 pt-3 mt-2 border-t ' + (isDark ? 'border-slate-800/40' : 'border-slate-200')}>
                     {t.url && (
                       <a
                         href={t.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition"
+                        className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 transition"
                       >
                         <span>Official Docs</span>
                         <ExternalLink className="w-3 h-3" />
@@ -2561,12 +2563,12 @@ export default function HelpPlugin({ gaw }) {
                     )}
                     {t.secondaryUrl && (
                       <>
-                        <span className="text-slate-600">•</span>
+                        <span className={isDark ? 'text-slate-600' : 'text-slate-400'}>•</span>
                         <a
                           href={t.secondaryUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs font-semibold text-sky-400 hover:text-sky-300 flex items-center gap-1 transition"
+                          className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1 transition"
                         >
                           <span>{t.secondaryLabel || 'Secondary Link'}</span>
                           <ExternalLink className="w-3 h-3" />
@@ -2585,15 +2587,15 @@ export default function HelpPlugin({ gaw }) {
           <div className="space-y-6">
             {/* Intro Card */}
             <div className={'p-5 rounded-2xl border space-y-2 ' + (
-              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700'
+              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-800'
             )}>
-              <div className="flex items-center gap-2 text-indigo-400">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                 <Code2 className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Plugin Architecture & Execution Model</h3>
+                <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Plugin Architecture & Execution Model</h3>
               </div>
-              <p className="text-xs leading-relaxed text-slate-400">
-                In Gawkyy, plugins are first-class applications stored directly inside the SQLite database in the <code className="text-indigo-400 font-mono">t_plugins</code> table.
-                Each plugin is written in React (TSX) and receives the global <code className="text-sky-400 font-mono">gaw</code> context object.
+              <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                In Gawkyy, plugins are first-class applications stored directly inside the SQLite database in the <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-indigo-300 bg-slate-900' : 'text-indigo-800 bg-slate-100 border border-slate-200')}>t_plugins</code> table.
+                Each plugin is written in React (TSX) and receives the global <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-sky-300 bg-slate-900' : 'text-sky-800 bg-slate-100 border border-slate-200')}>gaw</code> context object.
                 Plugins are dynamically compiled client-side in milliseconds via Sucrase, hot-reloaded automatically, and isolated inside React Error Boundaries (Plugin Safe Mode).
               </p>
             </div>
@@ -2604,8 +2606,8 @@ export default function HelpPlugin({ gaw }) {
             )}>
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Starter Plugin Boilerplate</h4>
-                  <p className="text-xs text-slate-400 mt-0.5">Copy and paste this standard template into the Internal Monaco IDE:</p>
+                  <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-indigo-400' : 'text-indigo-700')}>Starter Plugin Boilerplate</h4>
+                  <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>Copy and paste this standard template into the Internal Monaco IDE:</p>
                 </div>
                 <button
                   onClick={handleCopyCode}
@@ -2626,13 +2628,13 @@ export default function HelpPlugin({ gaw }) {
               isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
             )}>
               <div className="flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-indigo-400" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                  The <code className="text-indigo-400 font-mono">gaw</code> Context API Reference
+                <Terminal className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  The <code className={'font-mono ' + (isDark ? 'text-indigo-400' : 'text-indigo-700')}>gaw</code> Context API Reference
                 </h4>
               </div>
 
-              <div className="divide-y divide-slate-800/60 text-xs">
+              <div className={'divide-y text-xs ' + (isDark ? 'divide-slate-800/60' : 'divide-slate-200')}>
                 {[
                   ['gaw.db.query(sql, params)', 'Executes a SQL query and returns { columns: string[], values: any[][] }.'],
                   ['gaw.db.queryObjects(sql, params)', 'Executes SQL and returns typed array of JavaScript objects [ { id: 1, ... } ].'],
@@ -2652,8 +2654,8 @@ export default function HelpPlugin({ gaw }) {
                   ['gaw.theme', 'Current theme ("vs-dark" | "vs-light") to match system aesthetics.'],
                 ].map(([api, desc], i) => (
                   <div key={i} className="py-2.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-                    <code className="text-sky-300 font-mono text-[11px] font-semibold">{api}</code>
-                    <span className="text-slate-400 text-xs sm:text-right max-w-md">{desc}</span>
+                    <code className={'font-mono text-[11px] font-semibold ' + (isDark ? 'text-sky-300' : 'text-indigo-900')}>{api}</code>
+                    <span className={'text-xs sm:text-right max-w-md ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>{desc}</span>
                   </div>
                 ))}
               </div>
@@ -2663,45 +2665,45 @@ export default function HelpPlugin({ gaw }) {
             <div className={'p-5 rounded-2xl border space-y-3 ' + (
               isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
             )}>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400">Step-by-Step: Creating a New Plugin</h4>
+              <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-indigo-400' : 'text-indigo-700')}>Step-by-Step: Creating a New Plugin</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <div className={'flex items-center gap-2 font-bold ' + (isDark ? 'text-slate-200' : 'text-slate-900')}>
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">1</span>
                     <span>Create Plugin Record</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    Click <strong>Add Plugin</strong> in the left sidebar or launch the Plugin Manager. Give it an ID (e.g. <code className="font-mono text-indigo-300">plugin_analytics</code>) and title.
+                  <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                    Click <strong>Add Plugin</strong> in the left sidebar or launch the Plugin Manager. Give it an ID (e.g. <code className={'font-mono font-semibold ' + (isDark ? 'text-indigo-300' : 'text-indigo-700')}>plugin_analytics</code>) and title.
                   </p>
                 </div>
 
-                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <div className={'flex items-center gap-2 font-bold ' + (isDark ? 'text-slate-200' : 'text-slate-900')}>
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">2</span>
                     <span>Write TSX Component</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">
+                  <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
                     Click the three dots <strong>(···)</strong> next to your plugin and choose <strong>Edit in IDE</strong>. Write your standard React component with state, hooks, and SQL calls.
                   </p>
                 </div>
 
-                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <div className={'flex items-center gap-2 font-bold ' + (isDark ? 'text-slate-200' : 'text-slate-900')}>
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">3</span>
                     <span>Hot Reload & Testing</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    Press <kbd className="font-mono text-indigo-300">Ctrl + S</kbd> to save. The plugin renders live in the right preview canvas. If an error occurs, Plugin Safe Mode isolates it cleanly.
+                  <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                    Press <kbd className={'font-mono font-semibold px-1 py-0.5 rounded text-[10px] ' + (isDark ? 'bg-black/40 text-sky-300 border border-white/10' : 'bg-slate-200 text-slate-800 border border-slate-300')}>Ctrl + S</kbd> to save. The plugin renders live in the right preview canvas. If an error occurs, Plugin Safe Mode isolates it cleanly.
                   </p>
                 </div>
 
-                <div className="p-3.5 rounded-xl border bg-slate-900/60 border-slate-800 space-y-1">
-                  <div className="flex items-center gap-2 font-bold text-slate-200">
+                <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <div className={'flex items-center gap-2 font-bold ' + (isDark ? 'text-slate-200' : 'text-slate-900')}>
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">4</span>
                     <span>Export & Share</span>
                   </div>
-                  <p className="text-[11px] text-slate-400">
-                    Save your database locally or to Dropbox. Your plugin code travels inside the <code className="font-mono text-indigo-300">.sqlite</code> binary file to any device running Gawkyy!
+                  <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                    Save your database locally or to Dropbox. Your plugin code travels inside the <code className={'font-mono font-semibold ' + (isDark ? 'text-indigo-300' : 'text-indigo-700')}>.sqlite</code> binary file to any device running Gawkyy!
                   </p>
                 </div>
               </div>
@@ -2714,89 +2716,295 @@ export default function HelpPlugin({ gaw }) {
           <div className="space-y-6">
             {/* Feature 1: Database Studio & Table Editor */}
             <div className={'p-5 rounded-2xl border space-y-3 ' + (
-              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
-              <div className="flex items-center gap-2 text-indigo-400">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                 <Database className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">1. Database Studio & Table Editor</h3>
+                <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>1. Database Studio & Table Editor</h3>
               </div>
-              <p className="text-xs leading-relaxed text-slate-400">
-                Gawkyy provides a full database management suite running directly in the browser:
+              <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                Gawkyy provides a comprehensive client-side database management suite running directly on WebAssembly SQLite in browser memory:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
-                <li><strong>Schema Inspection</strong>: View columns, SQLite data types, primary keys, and nullability constraints.</li>
-                <li><strong>Table Grid & Inline Editing</strong>: Paginate, search, sort, and double-click cells to modify data live in SQLite memory.</li>
-                <li><strong>SQL Console</strong>: Write and execute arbitrary DDL and DML statements with real-time execution duration telemetry.</li>
-                <li><strong>Export</strong>: Download raw binary SQLite files or export tables to CSV at any time.</li>
+              <ul className={'list-disc pl-5 space-y-1.5 text-xs ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Visual Schema Inspection</strong>: Inspect column names, SQLite data types (INTEGER, TEXT, REAL, BLOB), PRIMARY KEY constraints, and NOT NULL flags.</li>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Interactive Table Grid</strong>: Fast searchable and paginated grid. Double-click table cells to edit values inline with immediate transactional persistence.</li>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>SQL Console & Scratchpad</strong>: Write and execute arbitrary DDL (CREATE, ALTER, DROP) and DML (INSERT, UPDATE, DELETE) statements with millisecond execution profiling.</li>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Data Export & Import</strong>: Export table records to CSV or JSON with one click, or download the full raw binary <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-indigo-300 bg-slate-900' : 'text-indigo-800 bg-slate-100 border border-slate-200')}>.sqlite</code> file.</li>
               </ul>
             </div>
 
-            {/* Feature 2: Visual Report Generator */}
-            <div className={'p-5 rounded-2xl border space-y-3 ' + (
-              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+            {/* Feature 2: Visual Report Generator & Executive Designer (EXPANDED) */}
+            <div className={'p-6 rounded-2xl border space-y-5 ' + (
+              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
-              <div className="flex items-center gap-2 text-purple-400">
-                <BarChart3 className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">2. Visual Report Generator & Executive Designer</h3>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2.5 text-purple-600 dark:text-purple-400">
+                  <BarChart3 className="w-6 h-6" />
+                  <div>
+                    <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                      2. Visual Report Generator & Executive Designer
+                    </h3>
+                    <p className={'text-xs ' + (isDark ? 'text-purple-300/80' : 'text-purple-800')}>
+                      Publication-grade executive reports, KPI scorecards, SVG charts & print-ready PDF export
+                    </p>
+                  </div>
+                </div>
+                <span className={'px-2.5 py-1 rounded-full text-[11px] font-semibold ' + (
+                  isDark ? 'bg-purple-950/60 text-purple-300 border border-purple-800/60' : 'bg-purple-50 text-purple-800 border border-purple-200'
+                )}>
+                  Core Architecture
+                </span>
               </div>
-              <p className="text-xs leading-relaxed text-slate-400">
-                Create publication-quality reports bound directly to SQL queries:
-              </p>
-              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
-                <li><strong>Query Binding</strong>: Select any saved query from <code className="font-mono text-purple-300">t_sql_queries</code> or write custom SQL projections.</li>
-                <li><strong>KPI Scorecard Metrics</strong>: Add highlight cards showing aggregated metrics (<code className="font-mono text-purple-300">SUM</code>, <code className="font-mono text-purple-300">AVG</code>, <code className="font-mono text-purple-300">COUNT</code>, <code className="font-mono text-purple-300">MIN</code>, <code className="font-mono text-purple-300">MAX</code>).</li>
-                <li><strong>Grouping & Sorting</strong>: Group data rows by categories or dates with automatic sub-totals and formatting.</li>
-                <li><strong>Print & PDF</strong>: One-click print layout designed for executive delivery and PDF generation with zero watermark.</li>
-              </ul>
+
+              {/* Overview & Mission */}
+              <div className="space-y-2">
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                  Overview & Design Philosophy
+                </h4>
+                <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                  The <strong>Visual Report Generator</strong> is Gawkyy\\'s modern successor to Microsoft Access Reports and Crystal Reports.
+                  Rather than forcing you to export data into external BI tools or spreadsheets to assemble management summaries, Gawkyy allows you to bind live SQLite SQL queries directly to beautiful, publication-ready executive documents that execute entirely inside your browser.
+                </p>
+                <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                  Every report is fully reactive: opening a report or clicking <strong>Refresh Data</strong> re-executes the underlying SQL against the active SQLite database in real time.
+                  Reports are stored as structured JSON configurations inside the SQLite database itself (<code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-purple-300 bg-slate-900' : 'text-purple-800 bg-slate-100 border border-slate-200')}>t_reports</code>), so every visual report travels seamlessly across devices inside your portable <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-purple-300 bg-slate-900' : 'text-purple-800 bg-slate-100 border border-slate-200')}>.sqlite</code> file.
+                </p>
+              </div>
+
+              {/* 6 Core Components Breakdown */}
+              <div className="space-y-3">
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                  The 6 Core Visual Report Elements
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                    <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                      <span className="text-purple-600 dark:text-purple-400 font-mono">1.</span>
+                      <span>Corporate Header & Metadata</span>
+                    </div>
+                    <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                      Configurable organization branding, report title, subtitle, generation date, reporting period badge (e.g. "Q3 FY2026"), author attribution, and official confidentiality tags.
+                    </p>
+                  </div>
+
+                  <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                    <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                      <span className="text-purple-600 dark:text-purple-400 font-mono">2.</span>
+                      <span>KPI Highlight Scorecards</span>
+                    </div>
+                    <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                      Executive summary cards highlighting aggregate metrics with automatic formatting: <strong>currency</strong> ($1,250,000.00), <strong>percent</strong> (18.4%), <strong>number</strong> (4,520), or <strong>text</strong>, plus contextual subtitles.
+                    </p>
+                  </div>
+
+                  <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                    <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                      <span className="text-purple-600 dark:text-purple-400 font-mono">3.</span>
+                      <span>Proportional Vector SVG Charts</span>
+                    </div>
+                    <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                      Clean vector bar charts, line graphs, and donut charts. Maps SQL category columns to numeric metric values with custom brand color palettes and proportional distribution bars.
+                    </p>
+                  </div>
+
+                  <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                    <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                      <span className="text-purple-600 dark:text-purple-400 font-mono">4.</span>
+                      <span>Tabular Data Breakdown</span>
+                    </div>
+                    <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                      Multi-column breakdown tables. Numeric metrics automatically align right in monospace font for accounting precision; nulls display em-dashes (—); optional total summary rows.
+                    </p>
+                  </div>
+
+                  <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                    <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                      <span className="text-purple-600 dark:text-purple-400 font-mono">5.</span>
+                      <span>Executive Commentary & Audit Notes</span>
+                    </div>
+                    <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                      Prominent memo callout block positioned at the conclusion of the report for auditor remarks, qualitative commentary, strategic recommendations, or data provenance disclaimers.
+                    </p>
+                  </div>
+
+                  <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                    <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                      <span className="text-purple-600 dark:text-purple-400 font-mono">6.</span>
+                      <span>Zero-Watermark Print & PDF Engine</span>
+                    </div>
+                    <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                      Click <strong>Print / Save as PDF</strong> to generate print-ready documents. Uses tailored @media print CSS to strip web navigation, headers, and UI controls for formal presentation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step-by-Step Workflow */}
+              <div className="space-y-3">
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                  Step-by-Step: Designing a Custom Report
+                </h4>
+                <ol className={'list-decimal pl-5 space-y-2 text-xs ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                  <li>
+                    <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Formulate Your SQL Query</strong>:
+                    In the Query Studio or SQL Console, formulate and test your aggregation query. Use descriptive aliases (e.g. <code className="font-mono text-indigo-600 dark:text-indigo-300">AS total_revenue</code>, <code className="font-mono text-indigo-600 dark:text-indigo-300">AS units_sold</code>) so columns are intuitive when configuring report widgets.
+                  </li>
+                  <li>
+                    <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Create the Report Entry</strong>:
+                    Navigate to <strong>Reports</strong> in the left sidebar and click <strong>Add Report (+)</strong> or select an existing report and click <strong>Customize Report</strong>.
+                  </li>
+                  <li>
+                    <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Bind Data Source & Configure Metadata</strong>:
+                    Select your saved query from the dropdown or provide custom SQL. Specify the Report Title, Subtitle, Company Name, and Period text.
+                  </li>
+                  <li>
+                    <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Add KPI Cards & Charts</strong>:
+                    Select which numeric column feeds each KPI card and specify formatting (currency, percent, or number). Map category label columns and numerical value columns to generate SVG bar charts with your preferred hex color.
+                  </li>
+                  <li>
+                    <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Save to SQLite & Deliver</strong>:
+                    Click <strong>Save Report</strong>. Gawkyy serializes the design directly into <code className="font-mono text-indigo-600 dark:text-indigo-300">t_reports</code>. Click <strong>Print / Save as PDF</strong> anytime to produce an executive document.
+                  </li>
+                </ol>
+              </div>
+
+              {/* Detailed Real-World Examples */}
+              <div className="space-y-4">
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                  Detailed Examples with SQL & Configurations
+                </h4>
+
+                {/* Example 1: Sales & Inventory Valuation */}
+                <div className={'p-4 rounded-xl border space-y-2.5 ' + (
+                  isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                )}>
+                  <div className="flex items-center justify-between">
+                    <span className={'text-xs font-bold ' + (isDark ? 'text-purple-300' : 'text-purple-900')}>
+                      Example 1: Executive Sales & Inventory Valuation Report
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 font-mono">Retail / E-Commerce</span>
+                  </div>
+                  <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                    Summarizes inventory valuation, product quantities, and average prices across product categories:
+                  </p>
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
+                    <pre>{'SELECT\n  c.name AS category_name,\n  COUNT(p.id) AS product_count,\n  SUM(p.units_in_stock) AS total_inventory,\n  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,\n  ROUND(AVG(p.unit_price), 2) AS avg_unit_price\nFROM categories c\nJOIN products p ON p.category_id = c.id\nGROUP BY c.id, c.name\nORDER BY gross_inventory_value DESC;'}</pre>
+                  </div>
+                  <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                    <div>• <strong>KPI Cards</strong>: Card 1 (<code className="font-mono text-indigo-600 dark:text-indigo-300">gross_inventory_value</code>, Currency format), Card 2 (<code className="font-mono text-indigo-600 dark:text-indigo-300">product_count</code>, Number format), Card 3 (<code className="font-mono text-indigo-600 dark:text-indigo-300">avg_unit_price</code>, Currency format).</div>
+                    <div>• <strong>Chart</strong>: Bar Chart with Label: <code className="font-mono text-indigo-600 dark:text-indigo-300">category_name</code>, Value: <code className="font-mono text-indigo-600 dark:text-indigo-300">gross_inventory_value</code>, Color: <code className="font-mono text-indigo-600 dark:text-indigo-300">#4f46e5</code>.</div>
+                    <div>• <strong>Table</strong>: Renders all columns with total stock counts and monetary values right-aligned.</div>
+                  </div>
+                </div>
+
+                {/* Example 2: Customer CRM & Order Activity */}
+                <div className={'p-4 rounded-xl border space-y-2.5 ' + (
+                  isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                )}>
+                  <div className="flex items-center justify-between">
+                    <span className={'text-xs font-bold ' + (isDark ? 'text-purple-300' : 'text-purple-900')}>
+                      Example 2: Customer CRM & Account Activity Audit
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 font-mono">B2B & Accounts</span>
+                  </div>
+                  <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                    Aggregates lifetime order volume, total revenue spent, and recency of purchase per client:
+                  </p>
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
+                    <pre>{'SELECT\n  c.company_name,\n  c.country,\n  COUNT(o.id) AS total_orders,\n  ROUND(SUM(o.total_amount), 2) AS lifetime_value,\n  ROUND(AVG(o.total_amount), 2) AS avg_order_value,\n  MAX(o.order_date) AS last_purchase_date\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.id\nGROUP BY c.id\nORDER BY lifetime_value DESC\nLIMIT 25;'}</pre>
+                  </div>
+                  <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                    <div>• <strong>KPI Cards</strong>: Total Customer Revenue (<code className="font-mono text-indigo-600 dark:text-indigo-300">lifetime_value</code>), Average Deal Size (<code className="font-mono text-indigo-600 dark:text-indigo-300">avg_order_value</code>).</div>
+                    <div>• <strong>Chart</strong>: Bar Chart displaying Top 10 clients by Lifetime Value with accent color <code className="font-mono text-indigo-600 dark:text-indigo-300">#0ea5e9</code> (Sky Blue).</div>
+                  </div>
+                </div>
+
+                {/* Example 3: System Administration & Plugins Audit */}
+                <div className={'p-4 rounded-xl border space-y-2.5 ' + (
+                  isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                )}>
+                  <div className="flex items-center justify-between">
+                    <span className={'text-xs font-bold ' + (isDark ? 'text-purple-300' : 'text-purple-900')}>
+                      Example 3: Dynamic Plugins & Architecture Manifest Report
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 font-mono">System Governance</span>
+                  </div>
+                  <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
+                    Audits all custom TSX plugins stored and executed inside the database schema:
+                  </p>
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto">
+                    <pre>{'SELECT\n  id,\n  name,\n  version,\n  CASE WHEN enabled = 1 THEN \'Active\' ELSE \'Disabled\' END AS status,\n  menu_category,\n  route,\n  created_at\nFROM t_plugins\nORDER BY menu_category, name;'}</pre>
+                  </div>
+                  <div className={'text-xs space-y-1 pt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                    <div>• Seeded by default in Gawkyy as <code className="font-mono text-indigo-600 dark:text-indigo-300">report_plugins_catalog</code> to document extensions and system modules.</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Best Practices & PDF Tips */}
+              <div className={'p-4 rounded-xl border space-y-2 ' + (
+                isDark ? 'bg-purple-950/20 border-purple-800/40 text-purple-200' : 'bg-purple-50/70 border-purple-200 text-purple-950'
+              )}>
+                <h5 className="text-xs font-bold flex items-center gap-1.5">
+                  <Lightbulb className="w-4 h-4 text-purple-500" />
+                  <span>Executive Reporting & PDF Printing Pro-Tips</span>
+                </h5>
+                <ul className="list-disc pl-5 space-y-1 text-xs">
+                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Enable Background Graphics</strong>: In the browser print dialog (Ctrl + P / Cmd + P), check the box for <em>"Background graphics"</em> to ensure KPI card shading and chart colors are captured in your exported PDF.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Column Aliasing</strong>: Always assign clean SQL aliases (<code className="font-mono">AS revenue</code>, <code className="font-mono">AS order_count</code>) to avoid raw function names appearing in headers.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Rounding & Formats</strong>: Wrap aggregate numbers in SQLite\\'s <code className="font-mono">ROUND(..., 2)</code> function so currency metrics format cleanly to two decimal places.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Paper Layout</strong>: The report canvas is styled to scale naturally to standard Letter and A4 portrait pages with zero clipping.</li>
+                </ul>
+              </div>
             </div>
 
             {/* Feature 3: Spreadsheet Studio */}
             <div className={'p-5 rounded-2xl border space-y-3 ' + (
-              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
-              <div className="flex items-center gap-2 text-emerald-400">
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <FileSpreadsheet className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">3. Spreadsheet Studio (Excel-Compatible Grid)</h3>
+                <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>3. Spreadsheet Studio (Excel-Compatible Grid)</h3>
               </div>
-              <p className="text-xs leading-relaxed text-slate-400">
-                A built-in reactive multi-sheet calculation engine:
+              <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                A built-in reactive multi-sheet calculation engine for exploratory modeling and data analysis:
               </p>
-              <ul className="list-disc pl-5 space-y-1 text-xs text-slate-300">
-                <li><strong>Formulas</strong>: Standard formula syntax including <code className="font-mono text-emerald-300">=SUM(A1:A10)</code>, <code className="font-mono text-emerald-300">=AVERAGE(B1:B10)</code>, <code className="font-mono text-emerald-300">=COUNT(C1:C10)</code>, <code className="font-mono text-emerald-300">=IF(A1&gt;100, "High", "Low")</code>, and arithmetic expressions.</li>
-                <li><strong>Multi-Sheet Workbooks</strong>: Add, rename, switch, and delete sheet tabs.</li>
-                <li><strong>SQL Interoperability</strong>: Push query results from any SQL view into a fresh spreadsheet sheet with one click.</li>
-                <li><strong>CSV Export</strong>: Download active sheets as clean CSV files for external analysis.</li>
+              <ul className={'list-disc pl-5 space-y-1.5 text-xs ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Formulas & Calculation Engine</strong>: Standard spreadsheet formulas including <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>=SUM(A1:A10)</code>, <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>=AVERAGE(B1:B10)</code>, <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>=COUNT(C1:C10)</code>, <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>=IF(A1&gt;100, "High", "Low")</code>, and arbitrary arithmetic expressions.</li>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Multi-Sheet Workbooks</strong>: Add, rename, switch, and delete sheet tabs within a single session.</li>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>SQL Interoperability</strong>: Push query results from any SQL view directly into a fresh spreadsheet sheet with one click.</li>
+                <li><strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>CSV Export</strong>: Download active sheets as clean CSV files for external analysis or sharing.</li>
               </ul>
             </div>
 
             {/* Feature 4: File Storage & 4-Way Auto-Sync Conflict Reconciliation */}
             <div className={'p-5 rounded-2xl border space-y-3 ' + (
-              isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+              isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
-              <div className="flex items-center gap-2 text-sky-400">
+              <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
                 <Workflow className="w-5 h-5" />
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">4. File Storage & 4-Way Auto-Sync Reconciliation</h3>
+                <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>4. File Storage & 4-Way Auto-Sync Reconciliation</h3>
               </div>
-              <p className="text-xs leading-relaxed text-slate-400">
+              <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                 Gawkyy supports independent local disk file synchronization (via PWA File System Access API without persistent write locks) and Dropbox cloud synchronization.
                 When auto-sync is enabled, Gawkyy executes a state-metric check across 4 conditions:
               </p>
               <div className="space-y-2 text-xs pt-1">
-                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
-                  <strong className="text-slate-200">Condition 1 (Neither changed):</strong>
-                  <span className="text-slate-400 ml-1">No action required; database remains cleanly synchronized.</span>
+                <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Condition 1 (Neither changed):</strong>
+                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>No action required; database remains cleanly synchronized with disk and cloud.</span>
                 </div>
-                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
-                  <strong className="text-emerald-300">Condition 2 (Internal changed, external unchanged):</strong>
-                  <span className="text-slate-400 ml-1">Current database is saved directly to the external destination (disk or cloud), updating sync metrics.</span>
+                <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <strong className={isDark ? 'text-emerald-300' : 'text-emerald-800 font-bold'}>Condition 2 (Internal changed, external unchanged):</strong>
+                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>Current database is saved directly to the external destination (disk or cloud), updating sync metrics.</span>
                 </div>
-                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
-                  <strong className="text-sky-300">Condition 3 (External changed, internal unchanged):</strong>
-                  <span className="text-slate-400 ml-1">Internal database reloads the external changes to stay up to date.</span>
+                <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <strong className={isDark ? 'text-sky-300' : 'text-sky-800 font-bold'}>Condition 3 (External changed, internal unchanged):</strong>
+                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>Internal database reloads the external changes automatically to stay continuously up to date.</span>
                 </div>
-                <div className="p-3 rounded-xl border bg-slate-900/60 border-slate-800">
-                  <strong className="text-amber-300">Condition 4 (Both changed concurrently):</strong>
-                  <span className="text-slate-400 ml-1">Gawkyy runs an automated reconciliation algorithm to merge non-overlapping schema and record additions. If an unresolvable collision occurs, a conflict dialog prompts you to keep internal, reload external, or save as a separate copy.</span>
+                <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+                  <strong className={isDark ? 'text-amber-300' : 'text-amber-800 font-bold'}>Condition 4 (Both changed concurrently):</strong>
+                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>Gawkyy runs an automated reconciliation algorithm to merge non-overlapping schema and record additions. If an unresolvable collision occurs, a conflict dialog prompts you to keep internal, reload external, or save as a separate copy.</span>
                 </div>
               </div>
             </div>

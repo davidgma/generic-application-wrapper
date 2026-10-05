@@ -41,10 +41,10 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
             <HelpCircle className="w-5 h-5" />
           </div>
           <div>
-            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-slate-900'}`}>
               Help, Tools & About Gawkyy
             </h2>
-            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
               AI code generation, progressive web app installation, keyboard shortcuts, and documentation.
             </p>
           </div>
@@ -67,7 +67,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
                     Prompt Exporter
                   </span>
                 </h3>
-                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                   Generate tailored prompts embedded with your active SQLite schema and the Gawkyy TypeScript API.
                   Copy and paste into Google Gemini, Claude, or ChatGPT to instantly build custom plugins.
                 </p>
@@ -97,7 +97,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
                     Offline Ready
                   </span>
                 </h3>
-                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                <p className={`text-xs mt-1 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                   Install Gawkyy on your PC, Mac, iPad, iPhone, or Android device as a standalone desktop app.
                   Works 100% offline with zero server dependencies.
                 </p>
@@ -120,13 +120,13 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
               className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-amber-400/40 flex-shrink-0"
             />
             <div className="space-y-1">
-              <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+              <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-sky-300' : 'text-slate-900'}`}>
                 <span>Gawkyy — Generic Application Wrapper</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono font-normal">
                   v1.2.0
                 </span>
               </h3>
-              <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                 A modern, web-native offline-first replacement for MS Access. Portable SQLite database architecture
                 with client-side dynamic TSX plugins, interactive query grids, Excel-compatible spreadsheets, and publication reports.
               </p>
@@ -146,7 +146,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
         }`}>
           <div className="flex items-center gap-2 pb-3 border-b border-slate-800/40">
             <Keyboard className="w-4 h-4 text-indigo-400" />
-            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-slate-900'}`}>
               Keyboard Shortcuts Reference
             </h3>
           </div>
@@ -166,7 +166,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
                   isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 }`}
               >
-                <span className={`text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{desc}</span>
+                <span className={`text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-800 font-medium'}`}>{desc}</span>
                 <kbd className="px-2 py-1 rounded bg-black/40 text-sky-300 font-mono text-[10px] font-bold border border-white/10 flex-shrink-0">
                   {shortcut}
                 </kbd>
@@ -182,7 +182,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
           <div className="flex items-center justify-between pb-3 border-b border-slate-800/40">
             <div className="flex items-center gap-2">
               <Cloud className="w-4 h-4 text-sky-400" />
-              <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+              <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-slate-900'}`}>
                 Dropbox Cloud Synchronization
               </h3>
             </div>
@@ -195,7 +195,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
             </button>
           </div>
 
-          <p className={`text-xs mt-3 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <p className={`text-xs mt-3 leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
             Gawkyy can seamlessly synchronize your SQLite database with Dropbox.
             Enter your Dropbox App Token in the Dropbox Sync plugin or Settings modal to enable one-click cloud pull, push, and remote file browsing.
           </p>

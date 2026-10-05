@@ -38,6 +38,15 @@ export class DropboxSyncEngine {
     this.loadPersistedConfig();
     this.setupCrossTabSync();
     this.startAutoSync();
+
+    FileStorageEngine.getInstance().registerRemoteSyncChecker((internalModifiedTime) => ({
+      hasRemote: this.hasRemoteFile(),
+      isSynced: this.isDropboxSynced(internalModifiedTime),
+    }));
+
+    SQLiteEngine.getInstance().setOnDatabaseReset(() => {
+      this.resetActiveRemote();
+    });
   }
 
   public static getInstance(): DropboxSyncEngine {
@@ -45,6 +54,24 @@ export class DropboxSyncEngine {
       DropboxSyncEngine.instance = new DropboxSyncEngine();
     }
     return DropboxSyncEngine.instance;
+  }
+
+  public hasRemoteFile(): boolean {
+    return this.currentRemoteFile !== null;
+  }
+
+  public isDropboxSynced(internalModifiedTime: number | null): boolean {
+    if (!this.currentRemoteFile) return true;
+    if (internalModifiedTime === null) return true;
+    return this.lastDropboxSyncInternalTime !== null && this.lastDropboxSyncInternalTime >= internalModifiedTime;
+  }
+
+  public resetActiveRemote(): void {
+    this.currentRemoteFile = null;
+    this.lastDropboxSyncRev = null;
+    this.lastDropboxSyncRemoteTime = null;
+    this.lastDropboxSyncInternalTime = null;
+    this.notify();
   }
 
   private setupCrossTabSync(): void {
@@ -646,10 +673,13 @@ export class DropboxSyncEngine {
   // --- Manual Save to Dropbox ---
   public async save(): Promise<DropboxFileItem> {
     const item = await this.uploadActiveDatabase();
+    const storage = FileStorageEngine.getInstance();
     this.lastDropboxSyncRev = item.rev;
     this.lastDropboxSyncRemoteTime = item.server_modified;
-    this.lastDropboxSyncInternalTime = FileStorageEngine.getInstance().getInternalStateModifiedTime();
-    FileStorageEngine.getInstance().markSaved();
+    this.lastDropboxSyncInternalTime = storage.getInternalStateModifiedTime() || Date.now();
+    if (storage.isLocalSynced()) {
+      storage.markSaved();
+    }
     RecentFilesManager.addRecentFile({
       name: item.name,
       source: 'dropbox',
@@ -669,13 +699,16 @@ export class DropboxSyncEngine {
       : `${defaultName}.sqlite`;
 
     const item = await this.uploadActiveDatabase('/' + cleanName);
+    const storage = FileStorageEngine.getInstance();
     engine.activeDbName = item.name;
     this.currentRemoteFile = item;
     this.lastDropboxSyncRev = item.rev;
     this.lastDropboxSyncRemoteTime = item.server_modified;
-    this.lastDropboxSyncInternalTime = FileStorageEngine.getInstance().getInternalStateModifiedTime();
-    FileStorageEngine.getInstance().setFileName(item.name);
-    FileStorageEngine.getInstance().markSaved();
+    this.lastDropboxSyncInternalTime = storage.getInternalStateModifiedTime() || Date.now();
+    storage.setFileName(item.name);
+    if (storage.isLocalSynced()) {
+      storage.markSaved();
+    }
     RecentFilesManager.addRecentFile({
       name: item.name,
       source: 'dropbox',

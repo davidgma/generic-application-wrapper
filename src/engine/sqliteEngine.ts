@@ -18,13 +18,24 @@ export class SQLiteEngine {
   private static instance: SQLiteEngine | null = null;
   private sqlJs: SqlJsStatic | null = null;
   private db: Database | null = null;
-  private listeners: Set<() => void> = new Set();
+  private listeners: Set<(isUserMutation?: boolean) => void> = new Set();
   private isInitializing: Promise<void> | null = null;
-  private onDatabaseResetHandler: ((dbName: string) => void) | null = null;
+  private resetListeners: Set<(dbName: string) => void> = new Set();
   public activeDbName: string = 'new_database.sqlite';
 
-  public setOnDatabaseReset(handler: (dbName: string) => void): void {
-    this.onDatabaseResetHandler = handler;
+  public setOnDatabaseReset(handler: (dbName: string) => void): () => void {
+    this.resetListeners.add(handler);
+    return () => this.resetListeners.delete(handler);
+  }
+
+  public notifyDatabaseReset(dbName: string): void {
+    this.resetListeners.forEach((fn) => {
+      try {
+        fn(dbName);
+      } catch (e) {
+        console.error('Reset listener error:', e);
+      }
+    });
   }
 
   private constructor() {}
@@ -63,15 +74,15 @@ export class SQLiteEngine {
     await this.isInitializing;
   }
 
-  public subscribe(listener: () => void): () => void {
+  public subscribe(listener: (isUserMutation?: boolean) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
-  public notifyChange(): void {
+  public notifyChange(isUserMutation: boolean = false): void {
     this.listeners.forEach((fn) => {
       try {
-        fn();
+        fn(isUserMutation);
       } catch (err) {
         console.error('SQLiteEngine listener error:', err);
       }
@@ -135,7 +146,8 @@ export class SQLiteEngine {
     `);
 
     this.ensureSystemTables();
-    this.notifyChange();
+    this.notifyDatabaseReset(dbName);
+    this.notifyChange(false);
   }
 
   public createMinimalDatabase(
@@ -221,10 +233,8 @@ export class SQLiteEngine {
     // 5. Seed 1 sample report on t_plugins
     this.seedMinimalReports(companyName);
 
-    if (this.onDatabaseResetHandler) {
-      this.onDatabaseResetHandler(dbName);
-    }
-    this.notifyChange();
+    this.notifyDatabaseReset(dbName);
+    this.notifyChange(false);
   }
 
   public createNorthwindDemoDatabase(): void {
@@ -309,10 +319,8 @@ export class SQLiteEngine {
     // 6. Seed Built-In TSX Plugins
     this.seedPlugins();
 
-    if (this.onDatabaseResetHandler) {
-      this.onDatabaseResetHandler('northwind_commerce.db');
-    }
-    this.notifyChange();
+    this.notifyDatabaseReset('northwind_commerce.db');
+    this.notifyChange(false);
   }
 
   public createDefaultDatabase(): void {
@@ -916,7 +924,7 @@ export class SQLiteEngine {
     if (!this.db) throw new Error('Database not initialized');
     this.db.run(sql, params);
     const affected = this.db.getRowsModified();
-    this.notifyChange();
+    this.notifyChange(affected > 0);
     return { rowsAffected: affected };
   }
 
@@ -977,7 +985,7 @@ export class SQLiteEngine {
     }
 
     if (hasMutations) {
-      this.notifyChange();
+      this.notifyChange(true);
     }
 
     return results;
@@ -1127,7 +1135,7 @@ export class SQLiteEngine {
       this.activeDbName = dbName;
     }
     this.ensureSystemTables();
-    this.notifyChange();
+    this.notifyChange(false);
   }
 
   private ensureSystemTables(): void {
@@ -1251,7 +1259,7 @@ export class SQLiteEngine {
       new Date().toISOString(),
       pluginId,
     ]);
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public deletePlugin(pluginId: string): void {
@@ -1261,7 +1269,7 @@ export class SQLiteEngine {
     }
     if (!this.db) return;
     this.run('DELETE FROM t_plugins WHERE id = ?;', [pluginId]);
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public savePlugin(plugin: Partial<PluginRecord> & { id: string; name: string; code: string }): void {
@@ -1313,7 +1321,7 @@ export class SQLiteEngine {
         ]
       );
     }
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public getSavedQueries(): SavedQuery[] {
@@ -1344,7 +1352,7 @@ export class SQLiteEngine {
   public setSetting(key: string, value: string): void {
     const now = new Date().toISOString();
     this.run('INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES (?, ?, ?);', [key, value, now]);
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public isSystemTable(tableName: string): boolean {
@@ -1373,17 +1381,17 @@ export class SQLiteEngine {
       throw new Error(`Cannot delete system table: ${tableName}`);
     }
     this.run(`DROP TABLE IF EXISTS "${tableName}";`);
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public deleteQuery(id: string): void {
     this.run('DELETE FROM t_sql_queries WHERE id = ?;', [id]);
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public deleteReport(id: string): void {
     this.run('DELETE FROM t_reports WHERE id = ?;', [id]);
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public saveReport(report: SavedReport): void {
@@ -1400,7 +1408,7 @@ export class SQLiteEngine {
         report.created_at || now,
       ]
     );
-    this.notifyChange();
+    this.notifyChange(true);
   }
 
   public attemptReconcile(externalBinary: Uint8Array): { success: boolean; message?: string } {
@@ -1517,7 +1525,7 @@ export class SQLiteEngine {
 
         this.db.run('COMMIT;');
         extDb.close();
-        this.notifyChange();
+        this.notifyChange(false);
         return { success: true };
       } catch (err: any) {
         try {

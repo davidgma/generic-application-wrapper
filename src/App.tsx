@@ -246,7 +246,6 @@ export default function App() {
         };
       },
       emit: (event: string, ...args: any[]) => {
-        storageEngine.markDirty();
         const set = eventBusListeners.current.get(event);
         if (set) {
           set.forEach((cb: (...args: any[]) => void) => {
@@ -270,6 +269,7 @@ export default function App() {
         const engine = SQLiteEngine.getInstance();
         await engine.init();
         if (mounted) {
+          storageEngine.markSaved();
           setIsEngineReady(true);
           refreshDatabaseState();
         }
@@ -328,6 +328,7 @@ export default function App() {
   useEffect(() => {
     storageEngine.setUserModified(false);
     storageEngine.setInternalStateModifiedTime(null);
+    storageEngine.markSaved();
   }, [storageEngine]);
 
   // Automatically connect to previous active storage target on startup (remember local or dropbox)
@@ -534,12 +535,14 @@ export default function App() {
   // Subscribe to SQLiteEngine internal changes
   useEffect(() => {
     const engine = SQLiteEngine.getInstance();
-    const unsub = engine.subscribe(() => {
-      storageEngine.markDirty();
+    const unsub = engine.subscribe((isUserMutation?: boolean) => {
+      if (isUserMutation && isEngineReady) {
+        storageEngine.markDirty(true);
+      }
       refreshDatabaseState();
     });
     return unsub;
-  }, [storageEngine, refreshDatabaseState]);
+  }, [storageEngine, refreshDatabaseState, isEngineReady]);
 
   // Sync real-time storage & sync target changes
   useEffect(() => {

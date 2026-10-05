@@ -51,13 +51,43 @@
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Started Developing An App Using Gawkky
 
-### Prerequisites
+You can start designing and running your own database applications immediately in your browser—no command line or build tools required:
+
+1. **Launch Gawkyy**: Open the live application at [**gawkky.freshfood.rocks**](https://gawkky.freshfood.rocks).
+2. **Access the Application User Guide**:
+   - Click the **Help** (`?`) icon in the top navigation bar or select **Help & System Guide** from the left navigation drawer.
+   - Click the **Application User Guide** tab at the top of the Help screen.
+   - Here you will find in-depth operational manuals covering:
+     - **Database Studio & Table Editor**: Designing relational tables, editing data inline, and executing raw SQL queries.
+     - **Visual Report Generator & Executive Designer**: Creating publication-grade reports with KPI summary scorecards, SVG charts, aggregation tables, and clean PDF exports.
+     - **Spreadsheet Studio**: Using the reactive Excel-compatible formula grid (`=SUM`, `=AVERAGE`, `=COUNT`, `=IF`) and pushing datasets to and from SQLite.
+     - **File Storage & 4-Way Auto-Sync Reconciliation**: Configuring lock-free local disk sync via the File System Access API and multi-device Dropbox cloud synchronization with automated conflict resolution.
+3. **Start Building**:
+   - Create tables, import CSV data, write queries, or click **Add Plugin** to develop interactive custom micro-apps directly within your `.sqlite` file.
+
+---
+
+## 💻 Developing Gawkyy itself
+
+Gawkyy can be developed and extended in two ways: through **Google AI Studio** using AI prompt-assisted vibe coding, or locally on your machine via standard TypeScript / Vite tooling.
+
+### 🤖 Developing via Google AI Studio (Vibe Coding)
+
+Gawkyy was created and engineered using Google AI Studio. You can inspect, fork, or clone this exact project to build your own custom features through conversational AI prompts and vibe coding:
+
+- **AI Studio Project Link**: [https://aistudio.google.com/apps/2e169a2f-c69d-4d82-846b-143256ba31f5](https://aistudio.google.com/apps/2e169a2f-c69d-4d82-846b-143256ba31f5)
+- Open the link above in Google AI Studio to clone the workspace.
+- Use natural language prompts to describe new features, custom plugins, UI enhancements, or storage connectors, and AI Studio will update and build the code in real time.
+
+### 🖥️ Local TypeScript / Vite Development
+
+#### Prerequisites
 - Node.js (v18 or higher)
 - npm, pnpm, or bun
 
-### Local Development Setup
+#### Local Setup
 
 ```bash
 # 1. Clone the public repository
@@ -73,7 +103,7 @@ npm run dev
 
 Open your browser at `http://localhost:3000`.
 
-### Production Build & PWA Generation
+#### Production Build & PWA Generation
 
 ```bash
 # Build the production bundle and generate service workers
