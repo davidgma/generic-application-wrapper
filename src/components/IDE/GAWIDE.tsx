@@ -32,6 +32,12 @@ import {
   RefreshCw,
   Folder,
   ArrowRight,
+  Sun,
+  Moon,
+  Undo,
+  Redo,
+  Info,
+  HelpCircle,
 } from 'lucide-react';
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
@@ -70,10 +76,13 @@ interface GAWIDEProps {
   onOpenSpreadsheet?: (data: { columns: string[]; values: any[][] }, sheetName?: string) => void;
   onOpenAI?: () => void;
   theme?: 'vs-dark' | 'vs-light';
+  onToggleTheme?: () => void;
   gawContext?: any;
   isVSCodeMode?: boolean;
   onToggleVSCodeMode?: () => void;
 }
+
+export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Help';
 
 type ActivityBarTab = 'explorer' | 'search' | 'extensions' | 'debug' | 'settings';
 
@@ -84,18 +93,24 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   onOpenSpreadsheet,
   onOpenAI,
   theme = 'vs-dark',
+  onToggleTheme,
   gawContext,
   isVSCodeMode = false,
   onToggleVSCodeMode,
 }) => {
   const engine = SQLiteEngine.getInstance();
   const editorRef = useRef<any>(null);
+  const isDark = theme === 'vs-dark';
 
   // VS Code Layout state
   const [activeActivity, setActiveActivity] = useState<ActivityBarTab>('explorer');
   const [isPrimarySidebarOpen, setIsPrimarySidebarOpen] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
+  const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
+  const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const menubarRef = useRef<HTMLDivElement>(null);
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return localStorage.getItem('gaw_format_on_save') !== 'false';
   });
@@ -356,6 +371,108 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   const lastTargetTimestampRef = useRef<number | null>(null);
 
+  const handleCloseCommandPalette = useCallback(() => {
+    setShowCommandPalette(false);
+    setCommandPaletteQuery('');
+    setPaletteSelectedIndex(0);
+    setTimeout(() => {
+      editorRef.current?.focus();
+    }, 20);
+  }, []);
+
+  // Reset selected command palette index when query changes
+  useEffect(() => {
+    setPaletteSelectedIndex(0);
+  }, [commandPaletteQuery]);
+
+  // Click outside listener for menubar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menubarRef.current && !menubarRef.current.contains(e.target as Node)) {
+        setActiveMenu(null);
+      }
+    };
+    if (activeMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [activeMenu]);
+
+  // Global capture-phase keydown handler to intercept browser menus (like Alt+F) and handle VS Code keys
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Alt-key combinations for menubar (Alt+F, Alt+E, Alt+S, Alt+V, Alt+G, Alt+R, Alt+T, Alt+H)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        const key = e.key.toLowerCase();
+        const map: Record<string, MenuKey> = {
+          f: 'File',
+          e: 'Edit',
+          s: 'Selection',
+          v: 'View',
+          g: 'Go',
+          r: 'Run',
+          t: 'Terminal',
+          h: 'Help',
+        };
+        if (map[key]) {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveMenu((prev) => (prev === map[key] ? null : map[key]));
+          return;
+        }
+      }
+
+      // Escape key handling
+      if (e.key === 'Escape') {
+        if (showCommandPalette) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleCloseCommandPalette();
+          return;
+        }
+        if (activeMenu) {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveMenu(null);
+          setTimeout(() => editorRef.current?.focus(), 10);
+          return;
+        }
+        if (showAboutModal) {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowAboutModal(false);
+          setTimeout(() => editorRef.current?.focus(), 10);
+          return;
+        }
+      }
+
+      // Ctrl+Shift+P / F1 for Command Palette
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowCommandPalette(true);
+        return;
+      }
+      if (e.key === 'F1') {
+        e.preventDefault();
+        e.stopPropagation();
+        setShowCommandPalette(true);
+        return;
+      }
+
+      // Ctrl+B: Toggle primary sidebar
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B') && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsPrimarySidebarOpen((prev) => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, [showCommandPalette, activeMenu, showAboutModal, handleCloseCommandPalette]);
+
   // Sync external targetTab request (from Sidebar edit options)
   useEffect(() => {
     if (targetTab) {
@@ -485,6 +602,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       handleSaveActiveTab();
     });
+    // Ctrl+Z: Undo in Monaco
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => {
+      editor.trigger('keyboard', 'undo', null);
+    });
+    // Ctrl+Y / Ctrl+Shift+Z: Redo in Monaco
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () => {
+      editor.trigger('keyboard', 'redo', null);
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ, () => {
+      editor.trigger('keyboard', 'redo', null);
+    });
     // Shift+Alt+F: Format Document with Prettier
     editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
       handleFormatDocument();
@@ -496,6 +624,26 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     // Ctrl+B: Toggle Sidebar
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
       setIsPrimarySidebarOpen((prev) => !prev);
+    });
+    // Alt+N: New Query Tab
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyN, () => {
+      addSqlTab();
+    });
+    // Alt+F: Open File Menu
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
+      setActiveMenu((prev) => (prev === 'File' ? null : 'File'));
+    });
+    // Alt+E: Open Edit Menu
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyE, () => {
+      setActiveMenu((prev) => (prev === 'Edit' ? null : 'Edit'));
+    });
+    // Alt+S: Open Selection Menu
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyS, () => {
+      setActiveMenu((prev) => (prev === 'Selection' ? null : 'Selection'));
+    });
+    // Alt+V: Open View Menu
+    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyV, () => {
+      setActiveMenu((prev) => (prev === 'View' ? null : 'View'));
     });
   };
 
@@ -732,10 +880,34 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         action: () => runCurrentQuery(),
       },
       {
+        id: 'cmd_undo',
+        title: 'Edit: Undo',
+        shortcut: 'Ctrl+Z',
+        action: () => {
+          editorRef.current?.trigger('commandPalette', 'undo', null);
+          editorRef.current?.focus();
+        },
+      },
+      {
+        id: 'cmd_redo',
+        title: 'Edit: Redo',
+        shortcut: 'Ctrl+Y',
+        action: () => {
+          editorRef.current?.trigger('commandPalette', 'redo', null);
+          editorRef.current?.focus();
+        },
+      },
+      {
         id: 'cmd_save',
         title: 'File: Save Current File',
         shortcut: 'Ctrl+S',
         action: () => handleSaveActiveTab(),
+      },
+      {
+        id: 'cmd_toggle_theme',
+        title: `Preferences: Color Theme (Switch to ${isDark ? 'Light' : 'Dark'} Mode)`,
+        shortcut: '',
+        action: () => onToggleTheme?.(),
       },
       {
         id: 'cmd_toggle_sidebar',
@@ -756,8 +928,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       {
         id: 'cmd_new_sql',
         title: 'File: New SQL Query File',
-        shortcut: '',
+        shortcut: 'Alt+N',
         action: () => addSqlTab(),
+      },
+      {
+        id: 'cmd_toggle_minimap',
+        title: 'View: Toggle Minimap',
+        shortcut: '',
+        action: () => setShowMinimap((prev) => !prev),
+      },
+      {
+        id: 'cmd_about',
+        title: 'Help: About Gawkyy IDE',
+        shortcut: '',
+        action: () => setShowAboutModal(true),
+      },
+      {
+        id: 'cmd_help',
+        title: 'Help: Open Help & System Guide',
+        shortcut: '',
+        action: () => {
+          gawContext?.navigation?.navigate?.('help', 'help');
+        },
       },
       {
         id: 'cmd_open_types',
@@ -795,7 +987,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     const q = commandPaletteQuery.toLowerCase().trim();
     if (!q) return list;
     return list.filter((item) => item.title.toLowerCase().includes(q));
-  }, [allPlugins, allTables, isVSCodeMode, onToggleVSCodeMode, commandPaletteQuery]);
+  }, [allPlugins, allTables, isVSCodeMode, onToggleVSCodeMode, commandPaletteQuery, isDark, onToggleTheme]);
 
   // Tab editor language
   const editorLanguage = useMemo(() => {
@@ -806,54 +998,544 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   // Active query result to render
   const currentResult = queryResults[activeResultIndex] || queryResults[0];
-  const isDark = theme === 'vs-dark';
+
+  // Menubar definitions with full VS Code action binding
+  const menuDefinitions: Record<
+    MenuKey,
+    Array<{
+      label: string;
+      shortcut?: string;
+      action: () => void;
+      divider?: boolean;
+    }>
+  > = {
+    App: [
+      {
+        label: 'About Gawkyy IDE...',
+        action: () => setShowAboutModal(true),
+      },
+      {
+        label: `Preferences: Color Theme (${isDark ? 'Switch to Light' : 'Switch to Dark'})`,
+        action: () => onToggleTheme?.(),
+        divider: true,
+      },
+      {
+        label: 'Settings & Keybindings...',
+        shortcut: 'Ctrl+,',
+        action: () => {
+          setActiveActivity('settings');
+          setIsPrimarySidebarOpen(true);
+        },
+      },
+      {
+        label: 'Command Palette...',
+        shortcut: 'Ctrl+Shift+P',
+        action: () => setShowCommandPalette(true),
+      },
+      {
+        label: isVSCodeMode ? 'Exit VS Code Mode' : 'Enter VS Code Mode',
+        shortcut: 'Ctrl+Shift+F',
+        action: () => onToggleVSCodeMode?.(),
+        divider: true,
+      },
+    ],
+    File: [
+      {
+        label: 'New SQL Query Tab',
+        shortcut: 'Alt+N',
+        action: () => addSqlTab(),
+      },
+      {
+        label: 'Open Object / File...',
+        shortcut: 'Ctrl+O',
+        action: () => setShowCommandPalette(true),
+      },
+      {
+        label: 'Save Current Tab',
+        shortcut: 'Ctrl+S',
+        action: () => handleSaveActiveTab(),
+      },
+      {
+        label: 'Save All Tabs',
+        action: () => {
+          tabs.forEach((tab) => {
+            if (tab.isDirty && tab.type === 'plugin' && tab.pluginId) {
+              try {
+                engine.run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
+                  tab.content,
+                  new Date().toISOString(),
+                  tab.pluginId,
+                ]);
+              } catch (e) {}
+            }
+          });
+          setTabs((prev) => prev.map((t) => ({ ...t, isDirty: false })));
+          engine.notifyChange(true);
+        },
+      },
+      {
+        label: 'Format with Prettier & Save',
+        shortcut: 'Shift+Alt+F',
+        action: async () => {
+          await handleFormatDocument();
+          handleSaveActiveTab();
+        },
+        divider: true,
+      },
+      {
+        label: 'Close Active Tab',
+        shortcut: 'Ctrl+W',
+        action: () => {
+          if (activeTabId) closeTab(activeTabId);
+        },
+      },
+      {
+        label: 'Close All Tabs',
+        action: () => {
+          tabs.forEach((t) => closeTab(t.id));
+        },
+        divider: true,
+      },
+      {
+        label: 'Exit VS Code Mode',
+        action: () => onToggleVSCodeMode?.(),
+      },
+    ],
+    Edit: [
+      {
+        label: 'Undo',
+        shortcut: 'Ctrl+Z',
+        action: () => {
+          editorRef.current?.trigger('menu', 'undo', null);
+          editorRef.current?.focus();
+        },
+      },
+      {
+        label: 'Redo',
+        shortcut: 'Ctrl+Y',
+        action: () => {
+          editorRef.current?.trigger('menu', 'redo', null);
+          editorRef.current?.focus();
+        },
+        divider: true,
+      },
+      {
+        label: 'Cut',
+        shortcut: 'Ctrl+X',
+        action: () => {
+          editorRef.current?.focus();
+          document.execCommand('cut');
+        },
+      },
+      {
+        label: 'Copy',
+        shortcut: 'Ctrl+C',
+        action: () => {
+          editorRef.current?.focus();
+          document.execCommand('copy');
+        },
+      },
+      {
+        label: 'Paste',
+        shortcut: 'Ctrl+V',
+        action: () => {
+          navigator.clipboard?.readText?.().then((text) => {
+            if (text && editorRef.current) {
+              editorRef.current.trigger('menu', 'type', { text });
+              editorRef.current.focus();
+            }
+          });
+        },
+        divider: true,
+      },
+      {
+        label: 'Find in File',
+        shortcut: 'Ctrl+F',
+        action: () => {
+          editorRef.current?.getAction('actions.find')?.run();
+          editorRef.current?.focus();
+        },
+      },
+      {
+        label: 'Replace in File',
+        shortcut: 'Ctrl+H',
+        action: () => {
+          editorRef.current?.getAction('editor.action.startFindReplaceAction')?.run();
+          editorRef.current?.focus();
+        },
+        divider: true,
+      },
+      {
+        label: 'Format Document (Prettier)',
+        shortcut: 'Shift+Alt+F',
+        action: () => handleFormatDocument(),
+      },
+    ],
+    Selection: [
+      {
+        label: 'Select All',
+        shortcut: 'Ctrl+A',
+        action: () => {
+          if (editorRef.current) {
+            const model = editorRef.current.getModel();
+            if (model) {
+              editorRef.current.setSelection(model.getFullModelRange());
+              editorRef.current.focus();
+            }
+          }
+        },
+      },
+      {
+        label: 'Expand Selection',
+        shortcut: 'Shift+Alt+Right',
+        action: () => {
+          editorRef.current?.getAction('editor.action.smartSelect.expand')?.run();
+        },
+      },
+      {
+        label: 'Shrink Selection',
+        shortcut: 'Shift+Alt+Left',
+        action: () => {
+          editorRef.current?.getAction('editor.action.smartSelect.shrink')?.run();
+        },
+        divider: true,
+      },
+      {
+        label: 'Copy Line Up',
+        shortcut: 'Shift+Alt+Up',
+        action: () => {
+          editorRef.current?.getAction('editor.action.copyLinesUpAction')?.run();
+        },
+      },
+      {
+        label: 'Copy Line Down',
+        shortcut: 'Shift+Alt+Down',
+        action: () => {
+          editorRef.current?.getAction('editor.action.copyLinesDownAction')?.run();
+        },
+      },
+      {
+        label: 'Move Line Up',
+        shortcut: 'Alt+Up',
+        action: () => {
+          editorRef.current?.getAction('editor.action.moveLinesUpAction')?.run();
+        },
+      },
+      {
+        label: 'Move Line Down',
+        shortcut: 'Alt+Down',
+        action: () => {
+          editorRef.current?.getAction('editor.action.moveLinesDownAction')?.run();
+        },
+      },
+    ],
+    View: [
+      {
+        label: 'Command Palette...',
+        shortcut: 'Ctrl+Shift+P',
+        action: () => setShowCommandPalette(true),
+        divider: true,
+      },
+      {
+        label: 'Explorer',
+        shortcut: 'Ctrl+Shift+E',
+        action: () => {
+          setActiveActivity('explorer');
+          setIsPrimarySidebarOpen(true);
+        },
+      },
+      {
+        label: 'Search in Files',
+        shortcut: 'Ctrl+Shift+F',
+        action: () => {
+          setActiveActivity('search');
+          setIsPrimarySidebarOpen(true);
+        },
+      },
+      {
+        label: 'Extensions / Plugins',
+        action: () => {
+          setActiveActivity('extensions');
+          setIsPrimarySidebarOpen(true);
+        },
+      },
+      {
+        label: 'Run & Debug / Diagnostics',
+        action: () => {
+          setActiveActivity('debug');
+          setIsPrimarySidebarOpen(true);
+        },
+        divider: true,
+      },
+      {
+        label: 'Toggle Primary Side Bar',
+        shortcut: 'Ctrl+B',
+        action: () => setIsPrimarySidebarOpen((p) => !p),
+      },
+      {
+        label: 'Toggle Live TSX Preview',
+        shortcut: 'Ctrl+J',
+        action: () => setShowLivePreview((p) => !p),
+      },
+      {
+        label: 'Toggle Minimap',
+        action: () => setShowMinimap((p) => !p),
+        divider: true,
+      },
+      {
+        label: `Color Theme: ${isDark ? 'Switch to Light' : 'Switch to Dark'}`,
+        action: () => onToggleTheme?.(),
+      },
+    ],
+    Go: [
+      {
+        label: 'Go to Line / Column...',
+        shortcut: 'Ctrl+G',
+        action: () => {
+          editorRef.current?.getAction('editor.action.gotoLine')?.run();
+        },
+        divider: true,
+      },
+      {
+        label: 'Next Tab',
+        shortcut: 'Alt+Right',
+        action: () => {
+          const idx = tabs.findIndex((t) => t.id === activeTabId);
+          if (idx !== -1 && tabs.length > 1) {
+            const nextTab = tabs[(idx + 1) % tabs.length];
+            setActiveTabId(nextTab.id);
+          }
+        },
+      },
+      {
+        label: 'Previous Tab',
+        shortcut: 'Alt+Left',
+        action: () => {
+          const idx = tabs.findIndex((t) => t.id === activeTabId);
+          if (idx !== -1 && tabs.length > 1) {
+            const prevTab = tabs[(idx - 1 + tabs.length) % tabs.length];
+            setActiveTabId(prevTab.id);
+          }
+        },
+      },
+    ],
+    Run: [
+      {
+        label: 'Run Current Query / Document',
+        shortcut: 'Ctrl+Enter',
+        action: () => runCurrentQuery(),
+      },
+      {
+        label: 'Validate TSX Plugin Syntax',
+        action: () => {
+          if (activeTab?.type === 'plugin') {
+            const res = PluginEngine.compile(activeTab.content, activeTab.pluginId || 'test');
+            setCompileStatus({ valid: res.success, error: res.error });
+            setActiveActivity('debug');
+            setIsPrimarySidebarOpen(true);
+          }
+        },
+        divider: true,
+      },
+      {
+        label: 'Clear Results',
+        action: () => setQueryResults([]),
+      },
+    ],
+    Terminal: [
+      {
+        label: 'Toggle Output / Terminal Panel',
+        shortcut: 'Ctrl+`',
+        action: () => {
+          if (queryResults.length === 0 && activeTab) {
+            runCurrentQuery();
+          } else {
+            setQueryResults([]);
+          }
+        },
+      },
+      {
+        label: 'Clear Terminal Output',
+        action: () => setQueryResults([]),
+      },
+    ],
+    Help: [
+      {
+        label: 'Help & System Guide',
+        action: () => {
+          gawContext?.navigation?.navigate?.('help', 'help');
+        },
+      },
+      {
+        label: 'Keyboard Shortcuts Reference',
+        action: () => {
+          setActiveActivity('settings');
+          setIsPrimarySidebarOpen(true);
+        },
+        divider: true,
+      },
+      {
+        label: 'About Gawkyy IDE',
+        action: () => setShowAboutModal(true),
+      },
+    ],
+  };
+
+  const renderMenuDropdown = (mKey: MenuKey) => {
+    const items = menuDefinitions[mKey] || [];
+    return (
+      <div
+        className={`absolute left-0 top-full mt-1 min-w-[230px] rounded-lg shadow-2xl py-1.5 z-50 select-text border backdrop-blur-md ${
+          isDark
+            ? 'bg-[#252526] border-[#454545] text-slate-200'
+            : 'bg-white border-[#d4d4d4] text-slate-800'
+        }`}
+      >
+        {items.map((item, idx) => (
+          <React.Fragment key={idx}>
+            <button
+              onClick={() => {
+                setActiveMenu(null);
+                item.action();
+              }}
+              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-xs transition ${
+                isDark
+                  ? 'hover:bg-[#094771] hover:text-white'
+                  : 'hover:bg-[#e8f0fe] hover:text-blue-900'
+              }`}
+            >
+              <span>{item.label}</span>
+              {item.shortcut && (
+                <span
+                  className={`text-[10px] font-mono ml-4 ${
+                    isDark ? 'text-slate-400' : 'text-slate-500'
+                  }`}
+                >
+                  {item.shortcut}
+                </span>
+              )}
+            </button>
+            {item.divider && (
+              <div
+                className={`my-1 border-t ${
+                  isDark ? 'border-[#3c3c3c]' : 'border-[#e5e5e5]'
+                }`}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className={`flex flex-col h-full ${isDark ? 'bg-[#1e1e1e] text-slate-200' : 'bg-white text-slate-800'} overflow-hidden select-text font-sans`}>
       {/* 1. VS CODE TITLE BAR & MENUBAR (When in Full VS Code Mode) */}
       {isVSCodeMode ? (
-        <div className="flex items-center justify-between px-3 py-1 bg-[#323233] text-slate-200 text-xs border-b border-[#252526] select-text">
+        <div
+          ref={menubarRef}
+          className={`flex items-center justify-between px-3 py-1 text-xs border-b select-text ${
+            isDark ? 'bg-[#323233] text-slate-200 border-[#252526]' : 'bg-[#f3f3f3] text-slate-800 border-[#e5e5e5]'
+          }`}
+        >
           {/* Left Menus */}
-          <div className="flex items-center gap-2">
-            <Code2 className="w-4 h-4 text-blue-400" />
-            <div className="flex items-center gap-1 font-medium text-[11px]">
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">File</button>
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">Edit</button>
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">Selection</button>
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">View</button>
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">Go</button>
+          <div className="flex items-center gap-1.5">
+            {/* Top-left Blue Symbol </> Application Menu */}
+            <div className="relative">
               <button
-                onClick={runCurrentQuery}
-                className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] text-emerald-400 transition"
+                onClick={() => setActiveMenu((prev) => (prev === 'App' ? null : 'App'))}
+                onMouseEnter={() => {
+                  if (activeMenu && activeMenu !== 'App') setActiveMenu('App');
+                }}
+                className={`p-1.5 rounded transition flex items-center justify-center ${
+                  activeMenu === 'App'
+                    ? isDark
+                      ? 'bg-[#3c3c3c]'
+                      : 'bg-slate-300'
+                    : isDark
+                    ? 'hover:bg-[#3c3c3c]'
+                    : 'hover:bg-slate-200'
+                }`}
+                title="Gawkyy IDE Application Menu"
               >
-                Run
+                <Code2 className="w-4 h-4 text-blue-400" />
               </button>
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">Terminal</button>
-              <button className="px-2 py-0.5 rounded hover:bg-[#3c3c3c] transition">Help</button>
+              {activeMenu === 'App' && renderMenuDropdown('App')}
+            </div>
+
+            <div className="flex items-center gap-0.5 font-medium text-[11px]">
+              {(['File', 'Edit', 'Selection', 'View', 'Go', 'Run', 'Terminal', 'Help'] as MenuKey[]).map((mKey) => (
+                <div key={mKey} className="relative">
+                  <button
+                    onClick={() => setActiveMenu((prev) => (prev === mKey ? null : mKey))}
+                    onMouseEnter={() => {
+                      if (activeMenu && activeMenu !== mKey) setActiveMenu(mKey);
+                    }}
+                    className={`px-2 py-0.5 rounded transition ${
+                      activeMenu === mKey
+                        ? isDark
+                          ? 'bg-[#3c3c3c] text-white'
+                          : 'bg-slate-300 text-slate-900 font-semibold'
+                        : isDark
+                        ? 'hover:bg-[#3c3c3c] text-slate-200'
+                        : 'hover:bg-slate-200 text-slate-800'
+                    }`}
+                  >
+                    {mKey}
+                  </button>
+                  {activeMenu === mKey && renderMenuDropdown(mKey)}
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Center Command Palette Quick Search Box */}
           <div
             onClick={() => setShowCommandPalette(true)}
-            className="flex items-center justify-between w-80 max-w-sm px-3 py-1 bg-[#1e1e1e] hover:bg-[#2a2d2e] border border-[#3c3c3c] rounded text-[11px] text-slate-400 cursor-pointer shadow-inner"
+            className={`flex items-center justify-between w-80 max-w-sm px-3 py-1 rounded text-[11px] cursor-pointer shadow-inner border transition ${
+              isDark
+                ? 'bg-[#1e1e1e] hover:bg-[#2a2d2e] border-[#3c3c3c] text-slate-400'
+                : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-600'
+            }`}
             title="Open Command Palette (Ctrl+Shift+P)"
           >
             <div className="flex items-center gap-2 truncate">
               <Search className="w-3.5 h-3.5 text-slate-400" />
               <span className="truncate">gaw-workspace &gt; {activeTab?.title || 'search...'}</span>
             </div>
-            <kbd className="px-1.5 py-0.2 bg-[#2d2d2d] border border-[#3e3e3e] rounded text-[10px] font-mono">
+            <kbd
+              className={`px-1.5 py-0.2 rounded text-[10px] font-mono border ${
+                isDark
+                  ? 'bg-[#2d2d2d] border-[#3e3e3e] text-slate-300'
+                  : 'bg-slate-100 border-slate-300 text-slate-600'
+              }`}
+            >
               Ctrl+Shift+P
             </kbd>
           </div>
 
           {/* Right Layout Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {onToggleTheme && (
+              <button
+                onClick={onToggleTheme}
+                className={`p-1.5 rounded transition ${
+                  isDark ? 'text-amber-400 hover:bg-[#3c3c3c]' : 'text-slate-700 hover:bg-slate-200'
+                }`}
+                title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+              >
+                {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              </button>
+            )}
+
             <button
               onClick={handleFormatDocument}
               disabled={isFormatting}
-              className="flex items-center gap-1 px-2 py-0.5 rounded hover:bg-[#3c3c3c] text-[11px] text-indigo-300 transition"
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition ${
+                isDark
+                  ? 'hover:bg-[#3c3c3c] text-indigo-300'
+                  : 'hover:bg-slate-200 text-indigo-700'
+              }`}
               title="Format Document with Prettier (Shift+Alt+F)"
             >
               <Sparkles className="w-3 h-3 text-indigo-400" />
@@ -862,7 +1544,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
             <button
               onClick={() => setIsPrimarySidebarOpen(!isPrimarySidebarOpen)}
-              className="p-1 rounded hover:bg-[#3c3c3c] text-slate-300 transition"
+              className={`p-1.5 rounded transition ${
+                isDark ? 'hover:bg-[#3c3c3c] text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+              }`}
               title="Toggle Primary Side Bar (Ctrl+B)"
             >
               <Files className="w-3.5 h-3.5" />
@@ -871,7 +1555,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             {onToggleVSCodeMode && (
               <button
                 onClick={onToggleVSCodeMode}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] shadow transition active:scale-95 ml-2"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] shadow transition active:scale-95 ml-1"
                 title="Exit to standard Gawkyy application view (Ctrl+Shift+F)"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
@@ -1018,67 +1702,38 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* VS CODE ACTIVITY BAR (Vertical Strip, 48px) */}
         {isVSCodeMode && (
-          <div className="w-12 bg-[#333333] border-r border-[#252526] flex flex-col items-center justify-between py-2 select-text z-10">
+          <div
+            className={`w-12 border-r flex flex-col items-center justify-between py-2 select-text z-10 ${
+              isDark ? 'bg-[#333333] border-[#252526]' : 'bg-[#f8f8f8] border-[#e5e5e5]'
+            }`}
+          >
             <div className="flex flex-col items-center gap-3 w-full">
-              <button
-                onClick={() => {
-                  setActiveActivity('explorer');
-                  setIsPrimarySidebarOpen(true);
-                }}
-                className={`p-2.5 rounded transition ${
-                  activeActivity === 'explorer' && isPrimarySidebarOpen
-                    ? 'border-l-2 border-white text-white bg-[#252526]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Explorer (Ctrl+Shift+E)"
-              >
-                <Files className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveActivity('search');
-                  setIsPrimarySidebarOpen(true);
-                }}
-                className={`p-2.5 rounded transition ${
-                  activeActivity === 'search' && isPrimarySidebarOpen
-                    ? 'border-l-2 border-white text-white bg-[#252526]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Search in Files (Ctrl+Shift+F)"
-              >
-                <Search className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveActivity('extensions');
-                  setIsPrimarySidebarOpen(true);
-                }}
-                className={`p-2.5 rounded transition ${
-                  activeActivity === 'extensions' && isPrimarySidebarOpen
-                    ? 'border-l-2 border-white text-white bg-[#252526]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Extensions: Prettier, Themes, SQLite (Ctrl+Shift+X)"
-              >
-                <Puzzle className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveActivity('debug');
-                  setIsPrimarySidebarOpen(true);
-                }}
-                className={`p-2.5 rounded transition ${
-                  activeActivity === 'debug' && isPrimarySidebarOpen
-                    ? 'border-l-2 border-white text-white bg-[#252526]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Run & Debug / Diagnostics (Ctrl+Shift+D)"
-              >
-                <Bug className="w-5 h-5" />
-              </button>
+              {[
+                { id: 'explorer', icon: Files, title: 'Explorer (Ctrl+Shift+E)' },
+                { id: 'search', icon: Search, title: 'Search in Files (Ctrl+Shift+F)' },
+                { id: 'extensions', icon: Puzzle, title: 'Extensions: Prettier, Themes, SQLite (Ctrl+Shift+X)' },
+                { id: 'debug', icon: Bug, title: 'Run & Debug / Diagnostics (Ctrl+Shift+D)' },
+              ].map(({ id, icon: Icon, title }) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setActiveActivity(id as ActivityBarTab);
+                    setIsPrimarySidebarOpen(true);
+                  }}
+                  className={`p-2.5 rounded transition ${
+                    activeActivity === id && isPrimarySidebarOpen
+                      ? isDark
+                        ? 'border-l-2 border-white text-white bg-[#252526]'
+                        : 'border-l-2 border-blue-600 text-blue-600 bg-white shadow-xs'
+                      : isDark
+                      ? 'text-slate-400 hover:text-white'
+                      : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                  title={title}
+                >
+                  <Icon className="w-5 h-5" />
+                </button>
+              ))}
             </div>
 
             <div className="flex flex-col items-center gap-2">
@@ -1087,8 +1742,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   setActiveActivity('settings');
                   setIsPrimarySidebarOpen(true);
                 }}
-                className={`p-2 rounded text-slate-400 hover:text-white transition ${
-                  activeActivity === 'settings' ? 'text-white bg-[#252526]' : ''
+                className={`p-2 rounded transition ${
+                  activeActivity === 'settings'
+                    ? isDark
+                      ? 'text-white bg-[#252526]'
+                      : 'text-blue-600 bg-white shadow-xs'
+                    : isDark
+                    ? 'text-slate-400 hover:text-white'
+                    : 'text-slate-500 hover:text-slate-900'
                 }`}
                 title="Settings & Keybindings (Ctrl+,)"
               >
@@ -1100,9 +1761,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
         {/* PRIMARY SIDE BAR (Explorer, Search, Extensions, Debug, Settings) */}
         {isVSCodeMode && isPrimarySidebarOpen && (
-          <div className="w-64 bg-[#252526] border-r border-[#1e1e1e] flex flex-col text-xs text-slate-300 select-text overflow-hidden flex-shrink-0">
+          <div
+            className={`w-64 border-r flex flex-col text-xs select-text overflow-hidden flex-shrink-0 ${
+              isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-[#f3f3f3] border-[#e5e5e5] text-slate-700'
+            }`}
+          >
             {/* Header of Primary Sidebar */}
-            <div className="flex items-center justify-between px-4 py-2.5 uppercase tracking-wider text-[11px] font-bold text-slate-300 border-b border-[#333333]">
+            <div
+              className={`flex items-center justify-between px-4 py-2.5 uppercase tracking-wider text-[11px] font-bold border-b ${
+                isDark ? 'text-slate-300 border-[#333333]' : 'text-slate-700 border-[#e5e5e5]'
+              }`}
+            >
               <span>
                 {activeActivity === 'explorer' && 'Explorer: Workspace'}
                 {activeActivity === 'search' && 'Search in Files'}
@@ -1112,7 +1781,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               </span>
               <button
                 onClick={() => setIsPrimarySidebarOpen(false)}
-                className="text-slate-400 hover:text-white"
+                className={`p-0.5 rounded transition ${
+                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+                }`}
                 title="Close Side Bar"
               >
                 <X className="w-3.5 h-3.5" />
@@ -1372,14 +2043,32 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     </div>
                   </div>
 
-                  <div className="space-y-2 pt-2 border-t border-[#333]">
-                    <span className="font-bold text-white text-[11px]">Editor Preferences:</span>
+                  <div className={`space-y-2 pt-2 border-t ${isDark ? 'border-[#333]' : 'border-[#e5e5e5]'}`}>
+                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-900'}`}>Editor & Theme Preferences:</span>
+                    {onToggleTheme && (
+                      <div className="flex items-center justify-between">
+                        <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Color Theme:</span>
+                        <button
+                          onClick={onToggleTheme}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border transition ${
+                            isDark
+                              ? 'bg-[#1e1e1e] border-[#444] text-amber-300 hover:bg-[#2a2d2e]'
+                              : 'bg-white border-[#ccc] text-slate-800 hover:bg-[#f5f5f5]'
+                          }`}
+                        >
+                          {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
+                          <span>{isDark ? 'Dark Theme' : 'Light Theme'}</span>
+                        </button>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Font Size:</span>
+                      <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Font Size:</span>
                       <select
                         value={editorFontSize}
                         onChange={(e) => setEditorFontSize(Number(e.target.value))}
-                        className="bg-[#1e1e1e] border border-[#444] rounded px-2 py-0.5 text-xs text-white"
+                        className={`rounded px-2 py-0.5 text-xs border ${
+                          isDark ? 'bg-[#1e1e1e] border-[#444] text-white' : 'bg-white border-[#ccc] text-slate-900'
+                        }`}
                       >
                         <option value={12}>12 px</option>
                         <option value={13}>13 px</option>
@@ -1389,7 +2078,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Minimap:</span>
+                      <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Minimap:</span>
                       <input
                         type="checkbox"
                         checked={showMinimap}
@@ -1405,20 +2094,30 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         )}
 
         {/* 3. CENTER MONACO EDITOR CANVAS & TABS */}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#1e1e1e] overflow-hidden">
+        <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
           {/* VS Code Tab Bar */}
           {isVSCodeMode && (
-            <div className="flex items-center bg-[#252526] border-b border-[#1e1e1e] overflow-x-auto text-xs select-text">
+            <div
+              className={`flex items-center border-b overflow-x-auto text-xs select-text ${
+                isDark ? 'bg-[#252526] border-[#1e1e1e]' : 'bg-[#f3f3f3] border-[#e5e5e5]'
+              }`}
+            >
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTabId;
                 return (
                   <div
                     key={tab.id}
                     onClick={() => setActiveTabId(tab.id)}
-                    className={`group flex items-center gap-2 px-3 py-2 border-r border-[#1e1e1e] cursor-pointer transition ${
+                    className={`group flex items-center gap-2 px-3 py-2 border-r cursor-pointer transition ${
+                      isDark ? 'border-[#1e1e1e]' : 'border-[#e5e5e5]'
+                    } ${
                       isActive
-                        ? 'bg-[#1e1e1e] text-white border-t-2 border-t-blue-500 font-medium'
-                        : 'bg-[#2d2d2d] text-slate-400 hover:bg-[#252526] hover:text-slate-200'
+                        ? isDark
+                          ? 'bg-[#1e1e1e] text-white border-t-2 border-t-blue-500 font-medium'
+                          : 'bg-white text-slate-900 border-t-2 border-t-blue-600 font-semibold shadow-xs'
+                        : isDark
+                        ? 'bg-[#2d2d2d] text-slate-400 hover:bg-[#252526] hover:text-slate-200'
+                        : 'bg-[#ececec] text-slate-600 hover:bg-[#e0e0e0] hover:text-slate-900'
                     }`}
                   >
                     {tab.type === 'plugin' ? (
@@ -1448,7 +2147,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               })}
               <button
                 onClick={addSqlTab}
-                className="p-2 text-slate-400 hover:text-white hover:bg-[#333333] transition"
+                className={`p-2 transition ${
+                  isDark ? 'text-slate-400 hover:text-white hover:bg-[#333333]' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'
+                }`}
                 title="New Query Tab"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -1463,7 +2164,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                 <Editor
                   height="100%"
                   language={editorLanguage}
-                  theme={isDark ? 'vs-dark' : 'light'}
+                  theme={isDark ? 'vs-dark' : 'vs'}
+                  path={activeTab ? `file:///${activeTab.id}.${editorLanguage === 'typescript' ? 'tsx' : editorLanguage === 'json' ? 'json' : 'sql'}` : undefined}
                   value={activeTab?.content || ''}
                   onChange={(value) => {
                     setTabs((prev) =>
@@ -1488,20 +2190,30 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               {/* Output Panel for SQL & Execution results */}
               {(activeTab?.type === 'sql' || activeTab?.type === 'table' || activeTab?.type === 'query' || activeTab?.type === 'report') &&
                 queryResults.length > 0 && (
-                  <div className="h-60 border-t border-[#333333] flex flex-col bg-[#181818]">
-                    <div className="flex items-center justify-between px-3 py-1 bg-[#252526] border-b border-[#333333] text-xs">
+                  <div
+                    className={`h-60 border-t flex flex-col ${
+                      isDark ? 'border-[#333333] bg-[#181818]' : 'border-[#e5e5e5] bg-white'
+                    }`}
+                  >
+                    <div
+                      className={`flex items-center justify-between px-3 py-1 border-b text-xs ${
+                        isDark ? 'bg-[#252526] border-[#333333] text-slate-200' : 'bg-[#f3f3f3] border-[#e5e5e5] text-slate-800'
+                      }`}
+                    >
                       <div className="flex items-center gap-2">
                         <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                        <span className="font-semibold text-slate-200">Terminal / SQL Output</span>
+                        <span className="font-semibold">Terminal / SQL Output</span>
                         {queryResults.length > 1 && (
-                          <span className="text-[10px] text-slate-400 font-mono">
+                          <span className={`text-[10px] font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
                             ({queryResults.length} statement outputs)
                           </span>
                         )}
                       </div>
                       <button
                         onClick={() => setQueryResults([])}
-                        className="text-slate-400 hover:text-white"
+                        className={`hover:text-red-400 p-0.5 rounded transition ${
+                          isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+                        }`}
                         title="Clear output"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1529,15 +2241,23 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
             {/* Split Live Preview for Plugins */}
             {activeTab?.type === 'plugin' && showLivePreview && (
-              <div className="flex-1 flex flex-col bg-slate-900 border-l border-slate-800 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-950 text-xs">
-                  <span className="font-bold text-white flex items-center gap-1.5">
+              <div
+                className={`flex-1 flex flex-col border-l overflow-hidden ${
+                  isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div
+                  className={`flex items-center justify-between px-4 py-2 border-b text-xs ${
+                    isDark ? 'border-slate-800 bg-slate-950 text-white' : 'border-slate-200 bg-white text-slate-800'
+                  }`}
+                >
+                  <span className="font-bold flex items-center gap-1.5">
                     <Eye className="w-3.5 h-3.5 text-indigo-400" />
                     <span>Live Sandboxed Plugin Preview</span>
                   </span>
                   <button
                     onClick={() => setShowLivePreview(false)}
-                    className="text-slate-400 hover:text-white"
+                    className={`hover:text-red-400 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1601,41 +2321,173 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       {/* 5. VS CODE COMMAND PALETTE OVERLAY (Ctrl+Shift+P) */}
       {showCommandPalette && (
         <div
-          onClick={() => setShowCommandPalette(false)}
+          onClick={handleCloseCommandPalette}
           className="fixed inset-0 z-50 flex items-start justify-center pt-16 bg-black/60 backdrop-blur-xs select-text"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-xl bg-[#252526] border border-[#454545] rounded-lg shadow-2xl overflow-hidden flex flex-col text-xs text-slate-200"
+            className={`w-full max-w-xl rounded-lg shadow-2xl overflow-hidden flex flex-col text-xs border ${
+              isDark
+                ? 'bg-[#252526] border-[#454545] text-slate-200'
+                : 'bg-white border-[#d4d4d4] text-slate-800'
+            }`}
           >
-            <div className="p-2 border-b border-[#3c3c3c] bg-[#1e1e1e]">
+            <div
+              className={`p-2 border-b ${
+                isDark ? 'border-[#3c3c3c] bg-[#1e1e1e]' : 'border-[#e5e5e5] bg-[#fafafa]'
+              }`}
+            >
               <input
                 type="text"
                 autoFocus
-                placeholder="> Type a command or file name..."
+                placeholder="> Type a command or file name... (Esc to return to editor)"
                 value={commandPaletteQuery}
                 onChange={(e) => setCommandPaletteQuery(e.target.value)}
-                className="w-full px-3 py-1.5 bg-[#3c3c3c] border border-[#555] rounded text-white text-xs focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    handleCloseCommandPalette();
+                    return;
+                  }
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setPaletteSelectedIndex((prev) =>
+                      commandPaletteItems.length > 0 ? (prev + 1) % commandPaletteItems.length : 0
+                    );
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setPaletteSelectedIndex((prev) =>
+                      commandPaletteItems.length > 0
+                        ? (prev - 1 + commandPaletteItems.length) % commandPaletteItems.length
+                        : 0
+                    );
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const selected = commandPaletteItems[paletteSelectedIndex];
+                    if (selected) {
+                      selected.action();
+                      handleCloseCommandPalette();
+                    }
+                    return;
+                  }
+                }}
+                className={`w-full px-3 py-1.5 rounded text-xs focus:outline-none border ${
+                  isDark
+                    ? 'bg-[#3c3c3c] border-[#555] text-white placeholder-slate-400'
+                    : 'bg-white border-[#ccc] text-slate-900 placeholder-slate-500'
+                }`}
               />
             </div>
-            <div className="max-h-80 overflow-y-auto p-1 divide-y divide-[#333]">
-              {commandPaletteItems.map((cmd) => (
+            <div
+              className={`max-h-80 overflow-y-auto p-1 divide-y ${
+                isDark ? 'divide-[#333]' : 'divide-[#f0f0f0]'
+              }`}
+            >
+              {commandPaletteItems.map((cmd, idx) => (
                 <button
                   key={cmd.id}
                   onClick={() => {
                     cmd.action();
-                    setShowCommandPalette(false);
+                    handleCloseCommandPalette();
                   }}
-                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[#094771] hover:text-white transition group"
+                  onMouseEnter={() => setPaletteSelectedIndex(idx)}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-left transition group ${
+                    idx === paletteSelectedIndex
+                      ? isDark
+                        ? 'bg-[#094771] text-white font-medium'
+                        : 'bg-[#e8f0fe] text-blue-900 font-medium'
+                      : isDark
+                      ? 'hover:bg-[#2a2d2e] text-slate-200'
+                      : 'hover:bg-[#f5f5f5] text-slate-800'
+                  }`}
                 >
                   <span className="truncate">{cmd.title}</span>
                   {cmd.shortcut && (
-                    <kbd className="px-1.5 py-0.5 bg-[#333] group-hover:bg-[#005a9e] border border-[#444] rounded text-[10px] font-mono text-slate-300">
+                    <kbd
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
+                        idx === paletteSelectedIndex
+                          ? isDark
+                            ? 'bg-[#005a9e] border-[#007acc] text-white'
+                            : 'bg-blue-100 border-blue-300 text-blue-900'
+                          : isDark
+                          ? 'bg-[#333] border-[#444] text-slate-300'
+                          : 'bg-slate-100 border-slate-300 text-slate-600'
+                      }`}
+                    >
                       {cmd.shortcut}
                     </kbd>
                   )}
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. ABOUT GAWKYY IDE MODAL */}
+      {showAboutModal && (
+        <div
+          onClick={() => {
+            setShowAboutModal(false);
+            setTimeout(() => editorRef.current?.focus(), 10);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-text"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-xl p-6 shadow-2xl border ${
+              isDark
+                ? 'bg-[#252526] border-[#454545] text-slate-200'
+                : 'bg-white border-[#d4d4d4] text-slate-800'
+            }`}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                <Code2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold">Gawkyy IDE Studio</h3>
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Visual Studio Code In-Browser Environment
+                </p>
+              </div>
+            </div>
+
+            <div className={`space-y-2 text-xs mb-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+              <p>
+                <strong>Version</strong>: 1.2.0 (Gawkyy Studio Edition)
+              </p>
+              <p>
+                <strong>Editor Engine</strong>: Monaco Editor (VS Code core engine)
+              </p>
+              <p>
+                <strong>Database Engine</strong>: SQLite WebAssembly via sql.js
+              </p>
+              <p>
+                <strong>Plugin Transpiler</strong>: Sucrase TSX / React 19 in-browser compiler
+              </p>
+              <p>
+                <strong>Code Formatter</strong>: Prettier In-Browser Standalone Formatter
+              </p>
+              <p>
+                <strong>Theme Integration</strong>: Linked with Gawkyy application theme ({theme})
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowAboutModal(false);
+                  setTimeout(() => editorRef.current?.focus(), 10);
+                }}
+                className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

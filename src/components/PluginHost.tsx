@@ -42,10 +42,9 @@ export const PluginHost: React.FC<PluginHostProps> = ({
 
   // Compile the TSX source code into an executable React component
   const { success, component: Component, error } = useMemo(() => {
-    const res = PluginEngine.compile(effectiveCode, pluginId);
-    // If the plugin failed to compile, but it is a core system plugin (especially plugin_help)
-    // and the effective code differs from the known clean factory default:
-    if (!res.success && DEFAULT_PLUGIN_REGISTRY[pluginId] && effectiveCode !== DEFAULT_PLUGIN_REGISTRY[pluginId]) {
+    let res = PluginEngine.compile(effectiveCode, pluginId);
+    // If the plugin failed to compile, but it is a core system plugin (especially plugin_help):
+    if (!res.success && DEFAULT_PLUGIN_REGISTRY[pluginId]) {
       const fallback = PluginEngine.compile(DEFAULT_PLUGIN_REGISTRY[pluginId], pluginId);
       if (fallback.success) {
         // Automatically repair the SQLite table so the corrupted version is replaced
@@ -55,6 +54,7 @@ export const PluginHost: React.FC<PluginHostProps> = ({
             new Date().toISOString(),
             pluginId,
           ]);
+          SQLiteEngine.getInstance().notifyChange(true);
         } catch (e) {
           // ignore
         }

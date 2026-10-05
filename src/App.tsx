@@ -54,12 +54,20 @@ export default function App() {
   const [isEngineReady, setIsEngineReady] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
 
-  // Theme (reads from localStorage immediately for zero-flicker initialization)
   const [theme, setTheme] = useState<'vs-dark' | 'vs-light'>(() => {
     const saved = localStorage.getItem('gaw_theme');
     if (saved === 'vs-dark' || saved === 'vs-light') return saved;
     return 'vs-dark';
   });
+
+  // Synchronize documentElement dark class with active theme
+  useEffect(() => {
+    if (theme === 'vs-dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   // Navigation: Active Route & Active View
   // Routes: 'file' | 'view' | 'database' | 'plugins' | 'help'
@@ -260,6 +268,13 @@ export default function App() {
     }),
     [storageEngine]
   );
+
+  const handleToggleTheme = useCallback(() => {
+    const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
+    setTheme(next);
+    localStorage.setItem('gaw_theme', next);
+    eventBusApi.emit('theme_changed', next);
+  }, [theme, eventBusApi]);
 
   // Initialize SQLite Engine
   useEffect(() => {
@@ -561,6 +576,10 @@ export default function App() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // In full VS Code mode, let the IDE handle keyboard shortcuts natively
+      if (activeView === 'ide' && isVSCodeMode) {
+        return;
+      }
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       if (isCmdOrCtrl && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -584,7 +603,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [storageEngine, toastApi, refreshDatabaseState]);
+  }, [storageEngine, toastApi, refreshDatabaseState, activeView, isVSCodeMode]);
 
   // Navigate to Table View
   const handleSelectTable = useCallback((tableName: string, updateHash: boolean = true) => {
@@ -1051,12 +1070,7 @@ export default function App() {
               navigateTo(route, route);
             }
           }}
-          onThemeToggle={() => {
-            const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
-            setTheme(next);
-            localStorage.setItem('gaw_theme', next);
-            eventBusApi.emit('theme_changed', next);
-          }}
+          onThemeToggle={handleToggleTheme}
           onToggleSidebar={handleToggleSidebar}
           isSidebarOpen={sidebarOpen}
           onOpenSettings={() => setShowSettingsModal(true)}
@@ -1363,6 +1377,7 @@ export default function App() {
                 onOpenSpreadsheet={handleOpenSpreadsheet}
                 onOpenAI={() => setShowAIModal(true)}
                 theme={theme}
+                onToggleTheme={handleToggleTheme}
                 gawContext={gawContext}
                 isVSCodeMode={isVSCodeMode}
                 onToggleVSCodeMode={handleToggleVSCodeMode}
