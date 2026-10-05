@@ -567,13 +567,20 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       allowSyntheticDefaultImports: true,
       jsx: monaco.languages.typescript.JsxEmit.React,
       jsxFactory: 'React.createElement',
+      jsxFragmentFactory: 'React.Fragment',
       reactNamespace: 'React',
       allowJs: true,
     });
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: false,
       noSyntaxValidation: false,
-      diagnosticCodesToIgnore: [2307], // Ignore Cannot find module ... error
+      diagnosticCodesToIgnore: [
+        2305, // Module '...' has no exported member '...'
+        2307, // Cannot find module '...'
+        2614, // Module '...' has no exported member '...'. Did you mean to use 'import ... from "..."' instead?
+        2724, // '...' has no exported member named '...'. Did you mean '...'?
+        17016, // The 'jsxFragmentFactory' compiler option must be provided
+      ],
     });
 
     // 2. Schema-aware SQL Autocomplete
