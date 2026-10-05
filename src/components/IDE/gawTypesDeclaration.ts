@@ -1,6 +1,6 @@
 export const GAW_TYPES_DECLARATION = `
 /**
- * Generic Application Wrapper (GAW) Plugin API Definitions
+ * Generic Application Wrapper (gawkyy) Plugin API Definitions
  */
 export interface ColumnInfo {
   cid: number;

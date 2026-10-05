@@ -44,24 +44,24 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className={`border-b select-text transition-colors ${
       isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
     }`}>
-      {/* Top Application Bar */}
-      <div className={`flex items-center justify-between px-3 py-1.5 gap-2 border-b ${
+      {/* Top Application Bar - Centered: Cat Icon, Gawkyy / Generic Application Wrapper, and Action Icons */}
+      <div className={`flex items-center justify-center px-3 py-1.5 gap-3 sm:gap-5 border-b ${
         isDark ? 'border-slate-850 border-slate-800/60' : 'border-slate-250 border-slate-300/80'
       }`}>
-        {/* Left: Transparent Cat Icon + Gawkyy + Generic Application Wrapper */}
-        <div className="flex items-center gap-2 min-w-0">
+        {/* Centered Brand: Cat Icon + Gawkyy / Generic Application Wrapper */}
+        <div className="flex items-center gap-2">
           <img
             src="/gawkyy-cat-64x64.png"
             alt="Gawkyy"
             className="w-7 h-7 object-contain bg-transparent flex-shrink-0"
           />
-          <div className="flex items-baseline gap-1.5 min-w-0 truncate">
-            <span className={`font-black text-sm md:text-base tracking-tight ${
+          <div className="flex flex-col text-left leading-tight">
+            <span className={`font-black text-sm md:text-base tracking-tight leading-none ${
               isDark ? 'text-sky-300' : 'text-blue-950'
             }`}>
               Gawkyy
             </span>
-            <span className={`text-[11px] md:text-xs truncate font-medium ${
+            <span className={`text-[10px] md:text-[11px] font-medium tracking-tight mt-0.5 ${
               isDark ? 'text-sky-300/80' : 'text-blue-900/80'
             }`}>
               Generic Application Wrapper
@@ -69,12 +69,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right Action Icons: Toggle Side Panel + Theme Toggle + Settings Cog */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        {/* Action Icons right next to it in the middle */}
+        <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-slate-700/50">
           {/* Toggle Navigation Pane Icon */}
           <button
             onClick={onToggleSidebar}
-            className={`p-1.5 rounded-lg border transition active:scale-95 ${
+            className={`p-1.5 rounded-lg border transition active:scale-95 cursor-pointer ${
               isSidebarOpen
                 ? isDark ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
                 : isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850' : 'bg-slate-50 border-slate-300 text-slate-600 hover:text-slate-900'
@@ -88,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Theme Toggle Button */}
           <button
             onClick={onThemeToggle}
-            className={`p-1.5 rounded-lg border transition active:scale-95 ${
+            className={`p-1.5 rounded-lg border transition active:scale-95 cursor-pointer ${
               isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850' : 'bg-slate-50 border-slate-300 text-slate-600 hover:text-slate-900'
             }`}
             title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
@@ -100,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Settings Cog Button */}
           <button
             onClick={onOpenSettings}
-            className={`p-1.5 rounded-lg border transition active:scale-95 ${
+            className={`p-1.5 rounded-lg border transition active:scale-95 cursor-pointer ${
               isDark ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850' : 'bg-slate-50 border-slate-300 text-slate-600 hover:text-slate-900'
             }`}
             title="Settings & Storage Preferences"

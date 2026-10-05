@@ -852,7 +852,7 @@ export default function ExecutivePulsePlugin({ gaw }) {
 export const DEFAULT_HELLO_WORLD_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
 
 /**
- * GAW (Generic Application Wrapper) - Hello World Plugin
+ * Gawkyy (Generic Application Wrapper) - Hello World Plugin
  * --------------------------------------------------------
  * This simple example demonstrates how to write a dynamic plugin in GAW.
  *
@@ -1170,6 +1170,8 @@ export default function DropboxSyncPlugin({ gaw }) {
       setIsSaving(false);
     }
   };
+
+  const handlePushNow = handleSave;
 
   const handleSaveAs = async () => {
     if (!config.connected) {

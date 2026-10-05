@@ -48,12 +48,14 @@ import { QueryGrid } from '../QueryGrid';
 import { PluginHost } from '../PluginHost';
 import { CodeFormatter } from '../../engine/formatter';
 import { GAW_TYPES_DECLARATION } from './gawTypesDeclaration';
+import { REACT_TYPES_DECLARATION, LUCIDE_TYPES_DECLARATION } from './vendorTypesDeclaration';
 
 export interface TabItem {
   id: string;
   title: string;
   type: 'sql' | 'plugin' | 'table' | 'query' | 'report' | 'types' | 'json';
   content: string;
+  savedContent?: string;
   isDirty?: boolean;
   pluginId?: string;
   queryId?: string;
@@ -138,8 +140,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   // Tab management
   const [tabs, setTabs] = useState<TabItem[]>(() => {
+    let initialList: TabItem[] = [];
     if (initialTab?.type === 'sql') {
-      return [
+      initialList = [
         {
           id: 'tab_sql_1',
           title: initialTab.name ? `${initialTab.name}.sql` : 'Query.sql',
@@ -149,12 +152,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             'SELECT ship_country, COUNT(id) AS total_orders, ROUND(SUM(total_amount), 2) AS total_revenue\nFROM orders\nGROUP BY ship_country\nORDER BY total_revenue DESC;',
         },
       ];
-    }
-    if (initialTab?.type === 'plugin' && initialTab.id) {
+    } else if (initialTab?.type === 'plugin' && initialTab.id) {
       const plugins = engine.getPlugins();
       const p = plugins.find((item) => item.id === initialTab.id);
       if (p) {
-        return [
+        initialList = [
           {
             id: `tab_plugin_${p.id}`,
             title: `${p.name}.tsx`,
@@ -165,28 +167,35 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         ];
       }
     }
-    const defaultPlugins = engine.getPlugins();
-    const helloPlugin = defaultPlugins.find((p) => p.id === 'plugin_hello_world') || defaultPlugins[0];
-    return [
-      ...(helloPlugin
-        ? [
-            {
-              id: `tab_plugin_${helloPlugin.id}`,
-              title: `${helloPlugin.name}.tsx`,
-              type: 'plugin' as const,
-              content: helloPlugin.code,
-              pluginId: helloPlugin.id,
-            },
-          ]
-        : []),
-      {
-        id: 'tab_sql_1',
-        title: 'Executive_Query.sql',
-        type: 'sql',
-        content:
-          '-- Multi-part analytical query (separated by semicolons)\nSELECT COUNT(*) AS total_customers, (SELECT COUNT(*) FROM orders) AS total_orders, (SELECT ROUND(SUM(total_amount), 2) FROM orders) AS gross_revenue FROM customers;\n\nSELECT status, COUNT(*) AS order_count, ROUND(SUM(total_amount), 2) AS status_revenue FROM orders GROUP BY status;\n\nSELECT c.name AS category_name, COUNT(p.id) AS product_count, SUM(p.units_in_stock) AS total_inventory FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id;',
-      },
-    ];
+    if (initialList.length === 0) {
+      const defaultPlugins = engine.getPlugins();
+      const helloPlugin = defaultPlugins.find((p) => p.id === 'plugin_hello_world') || defaultPlugins[0];
+      initialList = [
+        ...(helloPlugin
+          ? [
+              {
+                id: `tab_plugin_${helloPlugin.id}`,
+                title: `${helloPlugin.name}.tsx`,
+                type: 'plugin' as const,
+                content: helloPlugin.code,
+                pluginId: helloPlugin.id,
+              },
+            ]
+          : []),
+        {
+          id: 'tab_sql_1',
+          title: 'Executive_Query.sql',
+          type: 'sql',
+          content:
+            '-- Multi-part analytical query (separated by semicolons)\nSELECT COUNT(*) AS total_customers, (SELECT COUNT(*) FROM orders) AS total_orders, (SELECT ROUND(SUM(total_amount), 2) FROM orders) AS gross_revenue FROM customers;\n\nSELECT status, COUNT(*) AS order_count, ROUND(SUM(total_amount), 2) AS status_revenue FROM orders GROUP BY status;\n\nSELECT c.name AS category_name, COUNT(p.id) AS product_count, SUM(p.units_in_stock) AS total_inventory FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id;',
+        },
+      ];
+    }
+    return initialList.map((t) => ({
+      ...t,
+      savedContent: t.content,
+      isDirty: false,
+    }));
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || 'tab_sql_1');
@@ -354,6 +363,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           title,
           type: item.type as any,
           content,
+          savedContent: content,
+          isDirty: false,
           pluginId: item.type === 'plugin' ? item.id : undefined,
           tableName: item.type === 'table' ? item.name : undefined,
           queryId: item.type === 'query' ? item.id : undefined,
@@ -506,7 +517,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       const formatted = await CodeFormatter.format(activeTab.content, lang);
       if (formatted && formatted !== activeTab.content) {
         setTabs((prev) =>
-          prev.map((t) => (t.id === activeTab.id ? { ...t, content: formatted, isDirty: true } : t))
+          prev.map((t) =>
+            t.id === activeTab.id
+              ? {
+                  ...t,
+                  content: formatted,
+                  isDirty: formatted !== (t.savedContent !== undefined ? t.savedContent : t.content),
+                }
+              : t
+          )
         );
       }
     } catch (e) {
@@ -525,10 +544,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
 
-    // 1. Add TypeScript definitions for GAW Plugin APIs
+    // 1. Add TypeScript definitions for GAW Plugin APIs, React, and Lucide React
     monaco.languages.typescript.typescriptDefaults.addExtraLib(
       GAW_TYPES_DECLARATION,
       'file:///node_modules/@types/gaw/index.d.ts'
+    );
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(
+      REACT_TYPES_DECLARATION,
+      'file:///node_modules/@types/react/index.d.ts'
+    );
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(
+      LUCIDE_TYPES_DECLARATION,
+      'file:///node_modules/@types/lucide-react/index.d.ts'
     );
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.ESNext,
@@ -536,10 +563,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
       module: monaco.languages.typescript.ModuleKind.CommonJS,
       noEmit: true,
+      esModuleInterop: true,
+      allowSyntheticDefaultImports: true,
       jsx: monaco.languages.typescript.JsxEmit.React,
       jsxFactory: 'React.createElement',
       reactNamespace: 'React',
       allowJs: true,
+    });
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: false,
+      noSyntaxValidation: false,
+      diagnosticCodesToIgnore: [2307], // Ignore Cannot find module ... error
     });
 
     // 2. Schema-aware SQL Autocomplete
@@ -734,7 +768,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       ]);
       PluginEngine.clearCache(activeTab.pluginId);
       setTabs((prev) =>
-        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
+        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
       engine.notifyChange(true);
     } else if (activeTab.type === 'table') {
@@ -743,7 +777,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         setQueryResults(results);
         setActiveResultIndex(0);
         setTabs((prev) =>
-          prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
+          prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
         engine.notifyChange(true);
       } catch (err: any) {
@@ -768,7 +802,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           created_at: parsed.created_at || new Date().toISOString(),
         });
         setTabs((prev) =>
-          prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
+          prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
       } catch (err: any) {
         alert('Invalid JSON in Report configuration: ' + err.message);
@@ -790,7 +824,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       }
       engine.notifyChange(true);
       setTabs((prev) =>
-        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, isDirty: false } : t))
+        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
     }
   };
@@ -798,11 +832,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   // Add new SQL tab
   const addSqlTab = () => {
     const id = `tab_sql_${Date.now()}`;
+    const content = 'SELECT * FROM customers LIMIT 25;';
     const newTab: TabItem = {
       id,
       title: `Query_${tabs.length + 1}.sql`,
       type: 'sql',
-      content: 'SELECT * FROM customers LIMIT 25;',
+      content,
+      savedContent: content,
+      isDirty: false,
     };
     setTabs([...tabs, newTab]);
     setActiveTabId(id);
@@ -1069,7 +1106,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               } catch (e) {}
             }
           });
-          setTabs((prev) => prev.map((t) => ({ ...t, isDirty: false })));
+          setTabs((prev) => prev.map((t) => ({ ...t, savedContent: t.content, isDirty: false })));
           engine.notifyChange(true);
         },
       },
@@ -1763,13 +1800,13 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         {isVSCodeMode && isPrimarySidebarOpen && (
           <div
             className={`w-64 border-r flex flex-col text-xs select-text overflow-hidden flex-shrink-0 ${
-              isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-[#f3f3f3] border-[#e5e5e5] text-slate-700'
+              isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-900'
             }`}
           >
             {/* Header of Primary Sidebar */}
             <div
               className={`flex items-center justify-between px-4 py-2.5 uppercase tracking-wider text-[11px] font-bold border-b ${
-                isDark ? 'text-slate-300 border-[#333333]' : 'text-slate-700 border-[#e5e5e5]'
+                isDark ? 'text-slate-300 border-[#333333]' : 'text-slate-900 border-slate-200'
               }`}
             >
               <span>
@@ -1782,7 +1819,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               <button
                 onClick={() => setIsPrimarySidebarOpen(false)}
                 className={`p-0.5 rounded transition ${
-                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black hover:bg-slate-200/80'
                 }`}
                 title="Close Side Bar"
               >
@@ -1799,10 +1836,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('plugins')}
-                      className="flex items-center gap-1.5 px-2 py-1 font-semibold text-slate-300 hover:text-white cursor-pointer hover:bg-[#2a2d2e] rounded"
+                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 hover:text-black hover:bg-slate-200/80'
+                      }`}
                     >
                       {expandedFolders.plugins ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-blue-400" />
+                      <Folder className="w-3.5 h-3.5 text-blue-500" />
                       <span>plugins ({allPlugins.length})</span>
                     </div>
                     {expandedFolders.plugins && (
@@ -1811,9 +1850,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                           <div
                             key={p.id}
                             onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                            className="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-[#2a2d2e] text-slate-300 hover:text-white transition truncate"
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                            }`}
                           >
-                            <FileCode className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <FileCode className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                             <span className="truncate">{p.name}.tsx</span>
                           </div>
                         ))}
@@ -1825,10 +1866,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('tables')}
-                      className="flex items-center gap-1.5 px-2 py-1 font-semibold text-slate-300 hover:text-white cursor-pointer hover:bg-[#2a2d2e] rounded"
+                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 hover:text-black hover:bg-slate-200/80'
+                      }`}
                     >
-                      {expandedFolders.tables ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-amber-400" />
+                      {expandedFolders.tables ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      <Folder className="w-3.5 h-3.5 text-amber-500" />
                       <span>tables ({allTables.length})</span>
                     </div>
                     {expandedFolders.tables && (
@@ -1837,9 +1880,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                           <div
                             key={t.name}
                             onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
-                            className="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-[#2a2d2e] text-slate-300 hover:text-white transition truncate"
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                            }`}
                           >
-                            <TableIcon className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                            <TableIcon className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                             <span className="truncate">{t.name}.sql</span>
                           </div>
                         ))}
@@ -1851,10 +1896,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('queries')}
-                      className="flex items-center gap-1.5 px-2 py-1 font-semibold text-slate-300 hover:text-white cursor-pointer hover:bg-[#2a2d2e] rounded"
+                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 hover:text-black hover:bg-slate-200/80'
+                      }`}
                     >
                       {expandedFolders.queries ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-cyan-400" />
+                      <Folder className="w-3.5 h-3.5 text-cyan-500" />
                       <span>queries ({allQueries.length})</span>
                     </div>
                     {expandedFolders.queries && (
@@ -1863,9 +1910,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                           <div
                             key={q.id}
                             onClick={() => openOrActivateItem({ type: 'query', id: q.id, name: q.name })}
-                            className="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-[#2a2d2e] text-slate-300 hover:text-white transition truncate"
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                            }`}
                           >
-                            <Database className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                            <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
                             <span className="truncate">{q.name}.sql</span>
                           </div>
                         ))}
@@ -1874,19 +1923,23 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   </div>
 
                   {/* Root Files */}
-                  <div className="pt-2 border-t border-[#333333] space-y-0.5">
+                  <div className={`pt-2 border-t space-y-0.5 ${isDark ? 'border-[#333333]' : 'border-slate-200'}`}>
                     <div
                       onClick={() => openOrActivateItem({ type: 'types' })}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-[#2a2d2e] text-slate-300 hover:text-white transition truncate"
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                      }`}
                     >
-                      <FileCode className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                      <FileCode className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
                       <span>types/gaw.d.ts</span>
                     </div>
                     <div
                       onClick={() => openOrActivateItem({ type: 'json', name: 'package.json' })}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer hover:bg-[#2a2d2e] text-slate-300 hover:text-white transition truncate"
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                      }`}
                     >
-                      <FileText className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                      <FileText className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                       <span>package.json</span>
                     </div>
                   </div>
@@ -1903,10 +1956,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       autoFocus
-                      className="w-full px-2.5 py-1.5 bg-[#3c3c3c] border border-[#555] rounded text-slate-100 text-xs focus:outline-none"
+                      className={`w-full px-2.5 py-1.5 rounded text-xs focus:outline-none border ${
+                        isDark ? 'bg-[#3c3c3c] border-[#555] text-slate-100 placeholder:text-slate-400' : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-500 shadow-2xs'
+                      }`}
                     />
                   </div>
-                  <div className="text-[11px] text-slate-400">
+                  <div className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                     {searchQuery ? `${searchResults.length} matches found` : 'Type a query to search codebase'}
                   </div>
                   <div className="space-y-1">
@@ -1914,13 +1969,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       <div
                         key={i}
                         onClick={() => openOrActivateItem(res.tabItem)}
-                        className="p-2 bg-[#1e1e1e] hover:bg-[#2a2d2e] rounded border border-[#333] cursor-pointer text-xs space-y-0.5"
+                        className={`p-2 rounded border cursor-pointer text-xs space-y-0.5 transition ${
+                          isDark ? 'bg-[#1e1e1e] hover:bg-[#2a2d2e] border-[#333]' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-900 shadow-2xs'
+                        }`}
                       >
-                        <div className="font-semibold text-blue-400 flex items-center justify-between">
+                        <div className="font-bold text-blue-500 flex items-center justify-between">
                           <span>{res.file}</span>
-                          <span className="text-[10px] text-slate-500 font-mono">Ln {res.line}</span>
+                          <span className={`text-[10px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>Ln {res.line}</span>
                         </div>
-                        <p className="text-slate-300 font-mono text-[11px] truncate">{res.text}</p>
+                        <p className={`font-mono text-[11px] truncate ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>{res.text}</p>
                       </div>
                     ))}
                   </div>
@@ -1931,24 +1988,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               {activeActivity === 'extensions' && (
                 <div className="space-y-3">
                   {/* Prettier Extension */}
-                  <div className="p-3 bg-[#1e1e1e] border border-indigo-700/60 rounded-xl space-y-2">
+                  <div className={`p-3 rounded-xl space-y-2 border ${
+                    isDark ? 'bg-[#1e1e1e] border-indigo-700/60' : 'bg-white border-indigo-200 shadow-2xs'
+                  }`}>
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="flex items-center gap-1.5 font-bold text-white">
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                        <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                           <span>Prettier Formatter</span>
                         </div>
-                        <p className="text-[10px] text-emerald-400 font-mono">v3.4.2 Installed & Active</p>
+                        <p className={`text-[10px] font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-700 font-semibold'}`}>v3.4.2 Installed & Active</p>
                       </div>
-                      <span className="px-1.5 py-0.5 bg-indigo-950 border border-indigo-700/50 rounded text-[9px] text-indigo-300">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${
+                        isDark ? 'bg-indigo-950 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      }`}>
                         Default
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-300">
+                    <p className={`text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
                       Standard opinionated code formatter for TypeScript, TSX, SQL, and JSON.
                     </p>
-                    <div className="pt-2 border-t border-[#333] flex flex-col gap-2">
-                      <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+                    <div className={`pt-2 border-t flex flex-col gap-2 ${isDark ? 'border-[#333]' : 'border-slate-200'}`}>
+                      <label className={`flex items-center gap-2 text-[11px] cursor-pointer ${isDark ? 'text-slate-300' : 'text-slate-800 font-medium'}`}>
                         <input
                           type="checkbox"
                           checked={formatOnSave}
@@ -1963,7 +2024,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       <button
                         onClick={handleFormatDocument}
                         disabled={isFormatting}
-                        className="w-full py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95"
+                        className="w-full py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
                       >
                         Format Document (Shift+Alt+F)
                       </button>
@@ -1971,23 +2032,27 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   </div>
 
                   {/* ESLint Extension */}
-                  <div className="p-3 bg-[#1e1e1e] border border-[#333] rounded-xl space-y-1.5">
-                    <div className="font-bold text-white flex items-center justify-between">
+                  <div className={`p-3 rounded-xl space-y-1.5 border ${
+                    isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
+                  }`}>
+                    <div className={`font-bold flex items-center justify-between ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       <span>ESLint & TS Diagnostics</span>
-                      <span className="text-[10px] text-emerald-400 font-mono">Active</span>
+                      <span className={`text-[10px] font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-700 font-semibold'}`}>Active</span>
                     </div>
-                    <p className="text-[11px] text-slate-400">
+                    <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                       Real-time syntax validator and React TSX compiler lint checks.
                     </p>
                   </div>
 
                   {/* SQLite Tools Extension */}
-                  <div className="p-3 bg-[#1e1e1e] border border-[#333] rounded-xl space-y-1.5">
-                    <div className="font-bold text-white flex items-center justify-between">
+                  <div className={`p-3 rounded-xl space-y-1.5 border ${
+                    isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
+                  }`}>
+                    <div className={`font-bold flex items-center justify-between ${isDark ? 'text-white' : 'text-slate-900'}`}>
                       <span>SQLite WASM Inspector</span>
-                      <span className="text-[10px] text-indigo-400 font-mono">Active</span>
+                      <span className={`text-[10px] font-mono ${isDark ? 'text-indigo-400' : 'text-indigo-700 font-semibold'}`}>Active</span>
                     </div>
-                    <p className="text-[11px] text-slate-400">
+                    <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                       Direct engine schema query introspection & performance profiling.
                     </p>
                   </div>
@@ -1997,10 +2062,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               {/* TAB D: DEBUG / DIAGNOSTICS */}
               {activeActivity === 'debug' && (
                 <div className="space-y-3">
-                  <div className="p-3 bg-[#1e1e1e] border border-[#333] rounded-xl space-y-2">
-                    <span className="font-bold text-white">Compiler Output:</span>
+                  <div className={`p-3 rounded-xl space-y-2 border ${
+                    isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
+                  }`}>
+                    <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Compiler Output:</span>
                     {compileStatus.valid ? (
-                      <p className="text-emerald-400 flex items-center gap-1">
+                      <p className={`flex items-center gap-1 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
                         <CheckCircle className="w-3.5 h-3.5" />
                         <span>TSX Syntax Valid</span>
                       </p>
@@ -2011,10 +2078,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     )}
                   </div>
 
-                  <div className="p-3 bg-[#1e1e1e] border border-[#333] rounded-xl space-y-2">
-                    <span className="font-bold text-white">Execution Metrics:</span>
-                    <p className="text-slate-400">Last execution rows: {currentResult?.values?.length || 0}</p>
-                    <p className="text-slate-400">Time: {currentResult?.execTimeMs || 0} ms</p>
+                  <div className={`p-3 rounded-xl space-y-2 border ${
+                    isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
+                  }`}>
+                    <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Execution Metrics:</span>
+                    <p className={isDark ? 'text-slate-400' : 'text-slate-800 font-medium'}>Last execution rows: {currentResult?.values?.length || 0}</p>
+                    <p className={isDark ? 'text-slate-400' : 'text-slate-800 font-medium'}>Time: {currentResult?.execTimeMs || 0} ms</p>
                   </div>
                 </div>
               )}
@@ -2023,7 +2092,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               {activeActivity === 'settings' && (
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <span className="font-bold text-white text-[11px]">Keyboard Shortcuts:</span>
+                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-900'}`}>Keyboard Shortcuts:</span>
                     <div className="space-y-1.5">
                       {[
                         ['Ctrl + Shift + F', 'Toggle VS Code / Gawkyy Shell'],
@@ -2033,9 +2102,16 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                         ['Ctrl + Shift + P', 'Command Palette'],
                         ['Ctrl + B', 'Toggle Primary Side Bar'],
                       ].map(([keys, desc], idx) => (
-                        <div key={idx} className="p-1.5 bg-[#1e1e1e] rounded border border-[#333] flex items-center justify-between text-[10px]">
-                          <span className="text-slate-400">{desc}</span>
-                          <kbd className="px-1.5 py-0.5 bg-[#2d2d2d] border border-[#444] rounded font-mono text-slate-200">
+                        <div
+                          key={idx}
+                          className={`p-1.5 rounded border flex items-center justify-between text-[10px] ${
+                            isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 text-slate-900 shadow-2xs'
+                          }`}
+                        >
+                          <span className={isDark ? 'text-slate-400' : 'text-slate-800 font-medium'}>{desc}</span>
+                          <kbd className={`px-1.5 py-0.5 rounded font-mono ${
+                            isDark ? 'bg-[#2d2d2d] border border-[#444] text-slate-200' : 'bg-slate-100 border border-slate-300 text-slate-900 font-bold'
+                          }`}>
                             {keys}
                           </kbd>
                         </div>
@@ -2043,17 +2119,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     </div>
                   </div>
 
-                  <div className={`space-y-2 pt-2 border-t ${isDark ? 'border-[#333]' : 'border-[#e5e5e5]'}`}>
+                  <div className={`space-y-2 pt-2 border-t ${isDark ? 'border-[#333]' : 'border-slate-200'}`}>
                     <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-900'}`}>Editor & Theme Preferences:</span>
                     {onToggleTheme && (
                       <div className="flex items-center justify-between">
-                        <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Color Theme:</span>
+                        <span className={isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}>Color Theme:</span>
                         <button
                           onClick={onToggleTheme}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border transition ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
                             isDark
                               ? 'bg-[#1e1e1e] border-[#444] text-amber-300 hover:bg-[#2a2d2e]'
-                              : 'bg-white border-[#ccc] text-slate-800 hover:bg-[#f5f5f5]'
+                              : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
                           }`}
                         >
                           {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
@@ -2062,12 +2138,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       </div>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Font Size:</span>
+                      <span className={isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}>Font Size:</span>
                       <select
                         value={editorFontSize}
                         onChange={(e) => setEditorFontSize(Number(e.target.value))}
                         className={`rounded px-2 py-0.5 text-xs border ${
-                          isDark ? 'bg-[#1e1e1e] border-[#444] text-white' : 'bg-white border-[#ccc] text-slate-900'
+                          isDark ? 'bg-[#1e1e1e] border-[#444] text-white' : 'bg-white border-slate-300 text-slate-900'
                         }`}
                       >
                         <option value={12}>12 px</option>
@@ -2078,7 +2154,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Minimap:</span>
+                      <span className={isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}>Minimap:</span>
                       <input
                         type="checkbox"
                         checked={showMinimap}
@@ -2168,10 +2244,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   path={activeTab ? `file:///${activeTab.id}.${editorLanguage === 'typescript' ? 'tsx' : editorLanguage === 'json' ? 'json' : 'sql'}` : undefined}
                   value={activeTab?.content || ''}
                   onChange={(value) => {
+                    const newContent = value ?? '';
                     setTabs((prev) =>
-                      prev.map((t) =>
-                        t.id === activeTabId ? { ...t, content: value || '', isDirty: true } : t
-                      )
+                      prev.map((t) => {
+                        if (t.id !== activeTabId) return t;
+                        const original = t.savedContent !== undefined ? t.savedContent : t.content;
+                        const isDirty = newContent !== original;
+                        return { ...t, content: newContent, isDirty };
+                      })
                     );
                   }}
                   onMount={handleEditorDidMount}
@@ -2277,46 +2357,79 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         </div>
       </div>
 
-      {/* 4. VS CODE STATUS BAR (Bottom Strip) */}
-      {isVSCodeMode && (
-        <div className="flex items-center justify-between px-3 py-1 bg-[#007acc] text-white text-[11px] font-sans select-text">
-          <div className="flex items-center gap-3">
-            <span className="font-semibold flex items-center gap-1">
-              <Code2 className="w-3.5 h-3.5" />
-              <span>main*</span>
-            </span>
-            <span className="opacity-80">0 errors, 0 warnings</span>
-          </div>
+      {/* 4. BLUE IDE INFORMATION BOTTOM BAR */}
+      <div className="flex items-center justify-between px-3 py-1 bg-[#007acc] text-white text-[11px] font-sans select-text flex-shrink-0 z-20 shadow-xs">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="font-semibold flex items-center gap-1 flex-shrink-0">
+            <Code2 className="w-3.5 h-3.5" />
+            <span>main</span>
+          </span>
 
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleFormatDocument}
-              className="flex items-center gap-1 hover:underline cursor-pointer"
-              title="Click to format document with Prettier"
+          {/* Full name of currently-active item being edited */}
+          {activeTab && (
+            <div
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-900/60 border border-blue-400/40 text-white font-mono text-[11px] min-w-0"
+              title={`Active item: ${activeTab.title}`}
             >
-              <Sparkles className="w-3 h-3" />
-              <span>Prettier: ✓</span>
-            </button>
+              {activeTab.type === 'plugin' ? (
+                <FileCode className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
+              ) : activeTab.type === 'table' ? (
+                <TableIcon className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
+              ) : activeTab.type === 'report' ? (
+                <FileText className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
+              ) : (
+                <Database className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0" />
+              )}
+              {/* Full name without truncation */}
+              <span className="font-bold whitespace-nowrap overflow-x-auto max-w-[260px] sm:max-w-[420px] md:max-w-[550px] scrollbar-none" title={activeTab.title}>
+                {activeTab.title}
+              </span>
+              {/* Saved / Unsaved Status */}
+              {activeTab.isDirty ? (
+                <span className="inline-flex items-center gap-1 ml-1 text-amber-300 font-bold text-[10px] flex-shrink-0" title="Unsaved changes in active tab">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+                  Unsaved
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 ml-1 text-emerald-200 text-[10px] flex-shrink-0" title="File is saved">
+                  <Check className="w-3 h-3 text-emerald-300" />
+                  Saved
+                </span>
+              )}
+            </div>
+          )}
 
-            <span>
-              Ln {cursorPos.line}, Col {cursorPos.col}
-            </span>
-            <span>Spaces: {editorTabSize}</span>
-            <span>UTF-8</span>
-            <span className="capitalize">{editorLanguage}</span>
-
-            {onToggleVSCodeMode && (
-              <button
-                onClick={onToggleVSCodeMode}
-                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-800/80 hover:bg-blue-900 text-white font-bold text-[10px] cursor-pointer"
-                title="Toggle between VS Code and Gawkyy mode (Ctrl+Shift+F)"
-              >
-                <span>⚡ VS Code: ON (Ctrl+Shift+F)</span>
-              </button>
-            )}
-          </div>
+          <span className="opacity-80 hidden md:inline flex-shrink-0">0 errors, 0 warnings</span>
         </div>
-      )}
+
+        <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+          <button
+            onClick={handleFormatDocument}
+            className="flex items-center gap-1 hover:underline cursor-pointer"
+            title="Click to format document with Prettier"
+          >
+            <Sparkles className="w-3 h-3" />
+            <span className="hidden sm:inline">Prettier: ✓</span>
+          </button>
+
+          <span>
+            Ln {cursorPos.line}, Col {cursorPos.col}
+          </span>
+          <span className="hidden sm:inline">Spaces: {editorTabSize}</span>
+          <span className="hidden sm:inline">UTF-8</span>
+          <span className="capitalize">{editorLanguage}</span>
+
+          {onToggleVSCodeMode && (
+            <button
+              onClick={onToggleVSCodeMode}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-800/80 hover:bg-blue-900 text-white font-bold text-[10px] cursor-pointer"
+              title="Toggle between VS Code and Gawkyy mode (Ctrl+Shift+F)"
+            >
+              <span>{isVSCodeMode ? '⚡ Full IDE: ON' : '⚡ Full IDE (Ctrl+Shift+F)'}</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* 5. VS CODE COMMAND PALETTE OVERLAY (Ctrl+Shift+P) */}
       {showCommandPalette && (
