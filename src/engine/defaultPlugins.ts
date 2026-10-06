@@ -2467,7 +2467,7 @@ export default function HelpPlugin({ gaw }) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 text-xs">
                 {[
-                  ['Ctrl + Shift + F', 'Toggle Full VS Code Studio Mode / Gawkyy Shell'],
+                  ['Ctrl + Shift + F', 'Toggle Full Monaco IDE Mode / Gawkyy Shell'],
                   ['Ctrl + O', 'Open Local SQLite Database File'],
                   ['Ctrl + S', 'Save Active Database to Disk / Cloud'],
                   ['Ctrl + Enter', 'Run SQL Query / Test Plugin in IDE'],
@@ -3209,7 +3209,7 @@ export default function PluginManagerPlugin({ gaw }) {
       '    </div>',
       '  );',
       '}'
-    ].join('\n');
+    ].join('\\n');
 
     gaw.plugins.importPlugin({
       id,

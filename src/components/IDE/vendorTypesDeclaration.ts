@@ -338,5 +338,8 @@ declare module 'lucide-react' {
   export const ZapOff: LucideIcon;
   export const ZoomIn: LucideIcon;
   export const ZoomOut: LucideIcon;
+
+  const icons: { [key: string]: LucideIcon } & Record<string, any>;
+  export default icons;
 }
 `;

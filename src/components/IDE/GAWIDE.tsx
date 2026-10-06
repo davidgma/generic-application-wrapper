@@ -20,7 +20,6 @@ import {
   Search,
   Files,
   Puzzle,
-  Bug,
   Settings,
   Terminal,
   Check,
@@ -86,7 +85,7 @@ interface GAWIDEProps {
 
 export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Help';
 
-type ActivityBarTab = 'explorer' | 'search' | 'extensions' | 'debug' | 'settings';
+type ActivityBarTab = 'explorer' | 'search' | 'extensions' | 'settings';
 
 export const GAWIDE: React.FC<GAWIDEProps> = ({
   initialTab,
@@ -104,7 +103,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const editorRef = useRef<any>(null);
   const isDark = theme === 'vs-dark';
 
-  // VS Code Layout state
+  // Monaco IDE Layout state
   const [activeActivity, setActiveActivity] = useState<ActivityBarTab>('explorer');
   const [isPrimarySidebarOpen, setIsPrimarySidebarOpen] = useState(true);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -113,6 +112,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const menubarRef = useRef<HTMLDivElement>(null);
+  const handleSaveActiveTabRef = useRef<() => void>(() => {});
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return localStorage.getItem('gaw_format_on_save') !== 'false';
   });
@@ -471,6 +471,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         return;
       }
 
+      // Ctrl+S / Cmd+S: Save current tab
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S') && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSaveActiveTabRef.current?.();
+        return;
+      }
+
       // Ctrl+B: Toggle primary sidebar
       if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B') && !e.shiftKey && !e.altKey) {
         e.preventDefault();
@@ -557,7 +565,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       LUCIDE_TYPES_DECLARATION,
       'file:///node_modules/@types/lucide-react/index.d.ts'
     );
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+    const compilerOptions = {
       target: monaco.languages.typescript.ScriptTarget.ESNext,
       allowNonTextExtensions: true,
       moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
@@ -566,12 +574,13 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       esModuleInterop: true,
       allowSyntheticDefaultImports: true,
       jsx: monaco.languages.typescript.JsxEmit.React,
-      jsxFactory: 'React.createElement',
-      jsxFragmentFactory: 'React.Fragment',
       reactNamespace: 'React',
       allowJs: true,
-    });
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    };
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
+
+    const diagnosticsOptions = {
       noSemanticValidation: false,
       noSyntaxValidation: false,
       diagnosticCodesToIgnore: [
@@ -580,8 +589,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         2614, // Module '...' has no exported member '...'. Did you mean to use 'import ... from "..."' instead?
         2724, // '...' has no exported member named '...'. Did you mean '...'?
         17016, // The 'jsxFragmentFactory' compiler option must be provided
+        7016, // Could not find a declaration file for module
+        7006, // Parameter implicitly has an 'any' type
       ],
-    });
+    };
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
 
     // 2. Schema-aware SQL Autocomplete
     monaco.languages.registerCompletionItemProvider('sql', {
@@ -641,7 +654,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     });
     // Ctrl+S: Save (with optional Prettier format on save)
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      handleSaveActiveTab();
+      handleSaveActiveTabRef.current?.();
     });
     // Ctrl+Z: Undo in Monaco
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => {
@@ -751,7 +764,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const handleSaveActiveTab = async () => {
     if (!activeTab) return;
 
-    let contentToSave = activeTab.content;
+    const currentEditorVal = editorRef.current ? editorRef.current.getValue() : activeTab.content;
+    let contentToSave = currentEditorVal;
 
     // Optional Format on Save with Prettier
     if (formatOnSave && activeTab.type !== 'types') {
@@ -833,8 +847,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       setTabs((prev) =>
         prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
+    } else {
+      setTabs((prev) =>
+        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+      );
     }
   };
+
+  handleSaveActiveTabRef.current = handleSaveActiveTab;
 
   // Add new SQL tab
   const addSqlTab = () => {
@@ -963,7 +983,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         ? [
             {
               id: 'cmd_toggle_vscode',
-              title: isVSCodeMode ? 'View: Switch to Gawkyy Application Shell' : 'View: Switch to Full VS Code Studio Mode',
+              title: isVSCodeMode ? 'View: Switch to Gawkyy Application Shell' : 'View: Switch to Full Monaco IDE Mode',
               shortcut: 'Ctrl+Shift+F',
               action: () => onToggleVSCodeMode(),
             },
@@ -1077,7 +1097,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         action: () => setShowCommandPalette(true),
       },
       {
-        label: isVSCodeMode ? 'Exit VS Code Mode' : 'Enter VS Code Mode',
+        label: isVSCodeMode ? 'Exit Monaco IDE Mode' : 'Enter Monaco IDE Mode',
         shortcut: 'Ctrl+Shift+F',
         action: () => onToggleVSCodeMode?.(),
         divider: true,
@@ -1097,7 +1117,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       {
         label: 'Save Current Tab',
         shortcut: 'Ctrl+S',
-        action: () => handleSaveActiveTab(),
+        action: () => handleSaveActiveTabRef.current?.(),
       },
       {
         label: 'Save All Tabs',
@@ -1122,7 +1142,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         shortcut: 'Shift+Alt+F',
         action: async () => {
           await handleFormatDocument();
-          handleSaveActiveTab();
+          handleSaveActiveTabRef.current?.();
         },
         divider: true,
       },
@@ -1141,7 +1161,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         divider: true,
       },
       {
-        label: 'Exit VS Code Mode',
+        label: 'Exit Monaco IDE Mode',
         action: () => onToggleVSCodeMode?.(),
       },
     ],
@@ -1302,13 +1322,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           setActiveActivity('extensions');
           setIsPrimarySidebarOpen(true);
         },
-      },
-      {
-        label: 'Run & Debug / Diagnostics',
-        action: () => {
-          setActiveActivity('debug');
-          setIsPrimarySidebarOpen(true);
-        },
         divider: true,
       },
       {
@@ -1375,8 +1388,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           if (activeTab?.type === 'plugin') {
             const res = PluginEngine.compile(activeTab.content, activeTab.pluginId || 'test');
             setCompileStatus({ valid: res.success, error: res.error });
-            setActiveActivity('debug');
-            setIsPrimarySidebarOpen(true);
+            if (res.success) {
+              alert('TSX Syntax Valid: No compilation errors found.');
+            } else {
+              alert('TSX Syntax Error:\n' + (res.error || 'Unknown error'));
+            }
           }
         },
         divider: true,
@@ -1603,7 +1619,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                 title="Exit to standard Gawkyy application view (Ctrl+Shift+F)"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
-                <span>Exit VS Code Mode</span>
+                <span>Exit Monaco IDE Mode</span>
               </button>
             )}
           </div>
@@ -1732,10 +1748,10 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               <button
                 onClick={onToggleVSCodeMode}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95 ml-1"
-                title="Switch to Full VS Code Studio Interface (Ctrl+Shift+F)"
+                title="Switch to Full Monaco IDE Interface (Ctrl+Shift+F)"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
-                <span>VS Code Mode</span>
+                <span>Monaco IDE Mode</span>
               </button>
             )}
           </div>
@@ -1744,7 +1760,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
       {/* 2. HORIZONTAL BODY (Activity Bar + Primary Side Bar + Monaco Canvas) */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* VS CODE ACTIVITY BAR (Vertical Strip, 48px) */}
+        {/* MONACO IDE ACTIVITY BAR (Vertical Strip, 48px) */}
         {isVSCodeMode && (
           <div
             className={`w-12 border-r flex flex-col items-center justify-between py-2 select-text z-10 ${
@@ -1756,7 +1772,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                 { id: 'explorer', icon: Files, title: 'Explorer (Ctrl+Shift+E)' },
                 { id: 'search', icon: Search, title: 'Search in Files (Ctrl+Shift+F)' },
                 { id: 'extensions', icon: Puzzle, title: 'Extensions: Prettier, Themes, SQLite (Ctrl+Shift+X)' },
-                { id: 'debug', icon: Bug, title: 'Run & Debug / Diagnostics (Ctrl+Shift+D)' },
               ].map(({ id, icon: Icon, title }) => (
                 <button
                   key={id}
@@ -1803,24 +1818,23 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           </div>
         )}
 
-        {/* PRIMARY SIDE BAR (Explorer, Search, Extensions, Debug, Settings) */}
+        {/* PRIMARY SIDE BAR (Explorer, Search, Extensions, Settings) */}
         {isVSCodeMode && isPrimarySidebarOpen && (
           <div
             className={`w-64 border-r flex flex-col text-xs select-text overflow-hidden flex-shrink-0 ${
-              isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-900'
+              isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
             {/* Header of Primary Sidebar */}
             <div
               className={`flex items-center justify-between px-4 py-2.5 uppercase tracking-wider text-[11px] font-bold border-b ${
-                isDark ? 'text-slate-300 border-[#333333]' : 'text-slate-900 border-slate-200'
+                isDark ? 'text-slate-300 border-[#333333]' : 'text-slate-950 border-slate-200 bg-slate-100/90'
               }`}
             >
               <span>
                 {activeActivity === 'explorer' && 'Explorer: Workspace'}
                 {activeActivity === 'search' && 'Search in Files'}
                 {activeActivity === 'extensions' && 'Extensions'}
-                {activeActivity === 'debug' && 'Run & Diagnostics'}
                 {activeActivity === 'settings' && 'Settings & Shortcuts'}
               </span>
               <button
@@ -1844,7 +1858,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     <div
                       onClick={() => toggleFolder('plugins')}
                       className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 hover:text-black hover:bg-slate-200/80'
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
                       {expandedFolders.plugins ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -1858,7 +1872,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                             key={p.id}
                             onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
                             className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
                             }`}
                           >
                             <FileCode className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
@@ -1874,7 +1888,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     <div
                       onClick={() => toggleFolder('tables')}
                       className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 hover:text-black hover:bg-slate-200/80'
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
                       {expandedFolders.tables ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -1888,7 +1902,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                             key={t.name}
                             onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
                             className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
                             }`}
                           >
                             <TableIcon className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
@@ -1904,7 +1918,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     <div
                       onClick={() => toggleFolder('queries')}
                       className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 hover:text-black hover:bg-slate-200/80'
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
                       {expandedFolders.queries ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
@@ -1918,7 +1932,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                             key={q.id}
                             onClick={() => openOrActivateItem({ type: 'query', id: q.id, name: q.name })}
                             className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
                             }`}
                           >
                             <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
@@ -1934,7 +1948,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     <div
                       onClick={() => openOrActivateItem({ type: 'types' })}
                       className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
                       }`}
                     >
                       <FileCode className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
@@ -1943,7 +1957,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     <div
                       onClick={() => openOrActivateItem({ type: 'json', name: 'package.json' })}
                       className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-900 font-medium hover:text-black hover:bg-slate-200/80'
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
@@ -1968,7 +1982,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       }`}
                     />
                   </div>
-                  <div className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
+                  <div className={`text-[11px] font-medium ${isDark ? 'text-slate-400' : 'text-slate-950 font-bold'}`}>
                     {searchQuery ? `${searchResults.length} matches found` : 'Type a query to search codebase'}
                   </div>
                   <div className="space-y-1">
@@ -1977,14 +1991,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                         key={i}
                         onClick={() => openOrActivateItem(res.tabItem)}
                         className={`p-2 rounded border cursor-pointer text-xs space-y-0.5 transition ${
-                          isDark ? 'bg-[#1e1e1e] hover:bg-[#2a2d2e] border-[#333]' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-900 shadow-2xs'
+                          isDark ? 'bg-[#1e1e1e] hover:bg-[#2a2d2e] border-[#333]' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-950 shadow-2xs'
                         }`}
                       >
                         <div className="font-bold text-blue-500 flex items-center justify-between">
                           <span>{res.file}</span>
-                          <span className={`text-[10px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>Ln {res.line}</span>
+                          <span className={`text-[10px] font-mono ${isDark ? 'text-slate-500' : 'text-slate-700 font-bold'}`}>Ln {res.line}</span>
                         </div>
-                        <p className={`font-mono text-[11px] truncate ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>{res.text}</p>
+                        <p className={`font-mono text-[11px] truncate ${isDark ? 'text-slate-300' : 'text-slate-950 font-medium'}`}>{res.text}</p>
                       </div>
                     ))}
                   </div>
@@ -2000,23 +2014,23 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   }`}>
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        <div className={`flex items-center gap-1.5 font-bold ${isDark ? 'text-white' : 'text-slate-950'}`}>
                           <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                           <span>Prettier Formatter</span>
                         </div>
-                        <p className={`text-[10px] font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-700 font-semibold'}`}>v3.4.2 Installed & Active</p>
+                        <p className={`text-[10px] font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-700 font-bold'}`}>v3.4.2 Installed & Active</p>
                       </div>
                       <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${
-                        isDark ? 'bg-indigo-950 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                        isDark ? 'bg-indigo-950 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold'
                       }`}>
                         Default
                       </span>
                     </div>
-                    <p className={`text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                    <p className={`text-[11px] ${isDark ? 'text-slate-300' : 'text-slate-900'}`}>
                       Standard opinionated code formatter for TypeScript, TSX, SQL, and JSON.
                     </p>
                     <div className={`pt-2 border-t flex flex-col gap-2 ${isDark ? 'border-[#333]' : 'border-slate-200'}`}>
-                      <label className={`flex items-center gap-2 text-[11px] cursor-pointer ${isDark ? 'text-slate-300' : 'text-slate-800 font-medium'}`}>
+                      <label className={`flex items-center gap-2 text-[11px] cursor-pointer ${isDark ? 'text-slate-300' : 'text-slate-950 font-semibold'}`}>
                         <input
                           type="checkbox"
                           checked={formatOnSave}
@@ -2042,11 +2056,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div className={`p-3 rounded-xl space-y-1.5 border ${
                     isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
                   }`}>
-                    <div className={`font-bold flex items-center justify-between ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    <div className={`font-bold flex items-center justify-between ${isDark ? 'text-white' : 'text-slate-950'}`}>
                       <span>ESLint & TS Diagnostics</span>
-                      <span className={`text-[10px] font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-700 font-semibold'}`}>Active</span>
+                      <span className={`text-[10px] font-mono ${isDark ? 'text-emerald-400' : 'text-emerald-700 font-bold'}`}>Active</span>
                     </div>
-                    <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
+                    <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>
                       Real-time syntax validator and React TSX compiler lint checks.
                     </p>
                   </div>
@@ -2055,54 +2069,25 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div className={`p-3 rounded-xl space-y-1.5 border ${
                     isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
                   }`}>
-                    <div className={`font-bold flex items-center justify-between ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    <div className={`font-bold flex items-center justify-between ${isDark ? 'text-white' : 'text-slate-950'}`}>
                       <span>SQLite WASM Inspector</span>
-                      <span className={`text-[10px] font-mono ${isDark ? 'text-indigo-400' : 'text-indigo-700 font-semibold'}`}>Active</span>
+                      <span className={`text-[10px] font-mono ${isDark ? 'text-indigo-400' : 'text-indigo-700 font-bold'}`}>Active</span>
                     </div>
-                    <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
+                    <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>
                       Direct engine schema query introspection & performance profiling.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* TAB D: DEBUG / DIAGNOSTICS */}
-              {activeActivity === 'debug' && (
-                <div className="space-y-3">
-                  <div className={`p-3 rounded-xl space-y-2 border ${
-                    isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
-                  }`}>
-                    <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Compiler Output:</span>
-                    {compileStatus.valid ? (
-                      <p className={`flex items-center gap-1 font-semibold ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>TSX Syntax Valid</span>
-                      </p>
-                    ) : (
-                      <div className="p-2 bg-red-950/40 border border-red-800 rounded text-red-300 font-mono text-[10px]">
-                        {compileStatus.error}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className={`p-3 rounded-xl space-y-2 border ${
-                    isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 shadow-2xs'
-                  }`}>
-                    <span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>Execution Metrics:</span>
-                    <p className={isDark ? 'text-slate-400' : 'text-slate-800 font-medium'}>Last execution rows: {currentResult?.values?.length || 0}</p>
-                    <p className={isDark ? 'text-slate-400' : 'text-slate-800 font-medium'}>Time: {currentResult?.execTimeMs || 0} ms</p>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB E: SETTINGS & KEYBINDINGS */}
+              {/* TAB D: SETTINGS & KEYBINDINGS */}
               {activeActivity === 'settings' && (
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-900'}`}>Keyboard Shortcuts:</span>
+                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-950'}`}>Keyboard Shortcuts:</span>
                     <div className="space-y-1.5">
                       {[
-                        ['Ctrl + Shift + F', 'Toggle VS Code / Gawkyy Shell'],
+                        ['Ctrl + Shift + F', 'Toggle Monaco IDE / Gawkyy Shell'],
                         ['Shift + Alt + F', 'Format Document (Prettier)'],
                         ['Ctrl + Enter', 'Run Query / Test Plugin'],
                         ['Ctrl + S', 'Save File'],
@@ -2112,12 +2097,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                         <div
                           key={idx}
                           className={`p-1.5 rounded border flex items-center justify-between text-[10px] ${
-                            isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 text-slate-900 shadow-2xs'
+                            isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 text-slate-950 shadow-2xs'
                           }`}
                         >
-                          <span className={isDark ? 'text-slate-400' : 'text-slate-800 font-medium'}>{desc}</span>
+                          <span className={isDark ? 'text-slate-400' : 'text-slate-950 font-medium'}>{desc}</span>
                           <kbd className={`px-1.5 py-0.5 rounded font-mono ${
-                            isDark ? 'bg-[#2d2d2d] border border-[#444] text-slate-200' : 'bg-slate-100 border border-slate-300 text-slate-900 font-bold'
+                            isDark ? 'bg-[#2d2d2d] border border-[#444] text-slate-200' : 'bg-slate-100 border border-slate-300 text-slate-950 font-bold'
                           }`}>
                             {keys}
                           </kbd>
@@ -2127,16 +2112,16 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   </div>
 
                   <div className={`space-y-2 pt-2 border-t ${isDark ? 'border-[#333]' : 'border-slate-200'}`}>
-                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-900'}`}>Editor & Theme Preferences:</span>
+                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-950'}`}>Editor & Theme Preferences:</span>
                     {onToggleTheme && (
                       <div className="flex items-center justify-between">
-                        <span className={isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}>Color Theme:</span>
+                        <span className={isDark ? 'text-slate-400' : 'text-slate-950 font-semibold'}>Color Theme:</span>
                         <button
                           onClick={onToggleTheme}
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
                             isDark
                               ? 'bg-[#1e1e1e] border-[#444] text-amber-300 hover:bg-[#2a2d2e]'
-                              : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+                              : 'bg-white border-slate-300 text-slate-900 hover:bg-slate-100 font-semibold'
                           }`}
                         >
                           {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-slate-700" />}
@@ -2145,12 +2130,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       </div>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className={isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}>Font Size:</span>
+                      <span className={isDark ? 'text-slate-400' : 'text-slate-950 font-semibold'}>Font Size:</span>
                       <select
                         value={editorFontSize}
                         onChange={(e) => setEditorFontSize(Number(e.target.value))}
                         className={`rounded px-2 py-0.5 text-xs border ${
-                          isDark ? 'bg-[#1e1e1e] border-[#444] text-white' : 'bg-white border-slate-300 text-slate-900'
+                          isDark ? 'bg-[#1e1e1e] border-[#444] text-white' : 'bg-white border-slate-300 text-slate-950 font-semibold'
                         }`}
                       >
                         <option value={12}>12 px</option>
@@ -2161,7 +2146,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className={isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}>Minimap:</span>
+                      <span className={isDark ? 'text-slate-400' : 'text-slate-950 font-semibold'}>Minimap:</span>
                       <input
                         type="checkbox"
                         checked={showMinimap}
@@ -2255,9 +2240,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     setTabs((prev) =>
                       prev.map((t) => {
                         if (t.id !== activeTabId) return t;
-                        const original = t.savedContent !== undefined ? t.savedContent : t.content;
-                        const isDirty = newContent !== original;
-                        return { ...t, content: newContent, isDirty };
+                        const saved = t.savedContent !== undefined ? t.savedContent : t.content;
+                        const isDirty = newContent !== saved;
+                        return { ...t, content: newContent, savedContent: saved, isDirty };
                       })
                     );
                   }}
@@ -2430,15 +2415,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             <button
               onClick={onToggleVSCodeMode}
               className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-800/80 hover:bg-blue-900 text-white font-bold text-[10px] cursor-pointer"
-              title="Toggle between VS Code and Gawkyy mode (Ctrl+Shift+F)"
+              title="Toggle between Monaco IDE and Gawkyy mode (Ctrl+Shift+F)"
             >
-              <span>{isVSCodeMode ? '⚡ Full IDE: ON' : '⚡ Full IDE (Ctrl+Shift+F)'}</span>
+              <span>{isVSCodeMode ? '⚡ Full Monaco IDE: ON' : '⚡ Full Monaco IDE (Ctrl+Shift+F)'}</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* 5. VS CODE COMMAND PALETTE OVERLAY (Ctrl+Shift+P) */}
+      {/* 5. MONACO IDE COMMAND PALETTE OVERLAY (Ctrl+Shift+P) */}
       {showCommandPalette && (
         <div
           onClick={handleCloseCommandPalette}
@@ -2572,17 +2557,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               <div>
                 <h3 className="text-base font-bold">Gawkyy IDE Studio</h3>
                 <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Visual Studio Code In-Browser Environment
+                  Monaco IDE In-Browser Environment
                 </p>
               </div>
             </div>
 
-            <div className={`space-y-2 text-xs mb-6 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+            <div className={`space-y-2 text-xs mb-6 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               <p>
                 <strong>Version</strong>: 1.2.0 (Gawkyy Studio Edition)
               </p>
               <p>
-                <strong>Editor Engine</strong>: Monaco Editor (VS Code core engine)
+                <strong>Editor Engine</strong>: Monaco IDE (Browser-based code editor engine)
               </p>
               <p>
                 <strong>Database Engine</strong>: SQLite WebAssembly via sql.js

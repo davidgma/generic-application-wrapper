@@ -52,7 +52,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         </div>
       </div>
 
-      {/* Center: Full-Screen VS Code Studio Toggle */}
+      {/* Center: Full-Screen Monaco IDE Toggle */}
       {onToggleVSCodeMode && (
         <button
           onClick={onToggleVSCodeMode}
@@ -61,10 +61,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
               ? 'bg-blue-600 text-white border-blue-400 shadow-sm'
               : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700/80 hover:text-white'
           }`}
-          title="Toggle between standard Gawkyy shell and full VS Code Studio layout (Ctrl+Shift+F)"
+          title="Toggle between standard Gawkyy shell and full Monaco IDE layout (Ctrl+Shift+F)"
         >
           <Code2 className="w-3.5 h-3.5 text-cyan-400" />
-          <span>{isVSCodeMode ? 'VS Code: FULL' : 'VS Code Studio'}</span>
+          <span>{isVSCodeMode ? 'Monaco IDE: FULL' : 'Monaco IDE'}</span>
           <kbd className="opacity-80 text-[9px] px-1 bg-black/40 rounded border border-white/10 font-mono">
             Ctrl+Shift+F
           </kbd>

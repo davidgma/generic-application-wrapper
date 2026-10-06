@@ -99,7 +99,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
               </div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">Monaco Code IDE</h3>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                In-browser VS Code editor with TypeScript autocomplete, live TSX compiling, and SQLite query runner.
+                In-browser Monaco editor with TypeScript autocomplete, live TSX compiling, and SQLite query runner.
               </p>
             </div>
             <button
@@ -111,7 +111,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
             </button>
           </div>
 
-          {/* Full VS Code Studio Layout */}
+          {/* Full Monaco IDE Studio Layout */}
           <div className={`p-4 md:p-5 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ${
             isDark ? 'bg-slate-950/80 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-300'
           }`}>
@@ -120,7 +120,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
                 <Code2 className="w-5 h-5" />
               </div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">VS Code Studio Mode</h3>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Monaco IDE Mode</h3>
                 <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-900/40 text-sky-300 border border-blue-700/50">
                   Ctrl+Shift+F
                 </span>
@@ -138,7 +138,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
               }`}
             >
               <Code2 className="w-4 h-4" />
-              <span>{isVSCodeMode ? 'Exit VS Code Mode' : 'Enter VS Code Mode'}</span>
+              <span>{isVSCodeMode ? 'Exit Monaco IDE Mode' : 'Enter Monaco IDE Mode'}</span>
             </button>
           </div>
         </div>
