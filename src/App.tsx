@@ -1201,6 +1201,8 @@ export default function App() {
               reports={reports}
               plugins={plugins}
               isVSCodeMode={isVSCodeMode}
+              isSidebarOpen={sidebarOpen}
+              onToggleSidebar={handleToggleSidebar}
               onOpenSpreadsheet={() => handleOpenSpreadsheet()}
               onOpenIDE={handleOpenInIDE}
               onToggleVSCodeMode={handleToggleVSCodeMode}

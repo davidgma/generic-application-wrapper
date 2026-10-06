@@ -12,6 +12,7 @@ import {
   DEFAULT_HELP_PLUGIN_CODE,
   DEFAULT_PLUGIN_MANAGER_CODE,
   DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+  DEFAULT_DATABASE_MANAGEMENT_PLUGIN_CODE,
 } from './defaultPlugins';
 
 export class SQLiteEngine {
@@ -102,6 +103,21 @@ export class SQLiteEngine {
         route: '/files',
         description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
         code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+      },
+      {
+        id: 'plugin_database_management',
+        name: 'Database Engine & SQL Management',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Database',
+        menu_category: 'System & Database',
+        route: '/database-management',
+        description: 'Embedded SQLite (sql.js WebAssembly) runtime management: execute queries, inspect PRAGMA diagnostics, export binary .db, and review active tables.',
+        code: DEFAULT_DATABASE_MANAGEMENT_PLUGIN_CODE,
         created_at: now,
         updated_at: now,
         is_system: true,
@@ -1129,7 +1145,7 @@ export class SQLiteEngine {
       // System plugins are maintained in-memory as part of Gawkyy core.
       // Remove any previously stored system plugins from t_plugins to keep database clean.
       this.db.run(
-        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_help');"
+        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help');"
       );
 
       // Ensure the starter user-generated plugin (Hello World) exists
@@ -1172,7 +1188,7 @@ export class SQLiteEngine {
 
   public setPluginEnabled(pluginId: string, enabled: boolean): void {
     if (SYSTEM_PLUGIN_IDS.has(pluginId)) {
-      if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') && !enabled) {
+      if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager' || pluginId === 'plugin_database_management') && !enabled) {
         console.warn('Cannot disable core system plugin:', pluginId);
         return;
       }

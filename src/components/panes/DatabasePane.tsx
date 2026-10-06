@@ -73,7 +73,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
         </div>
 
         {/* Database Primary Options Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           {/* 1. Open SQL Query Editor */}
           <div className={`p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ${
             isDark ? 'bg-slate-950/80 border-slate-800 hover:border-indigo-500/50' : 'bg-white border-slate-200 hover:border-indigo-300'
@@ -96,31 +96,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
             </button>
           </div>
 
-          {/* 2. Schema & Engine Diagnostics */}
-          <div className={`p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ${
-            isDark ? 'bg-slate-950/80 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-300'
-          }`}>
-            <div className="space-y-2">
-              <div className="w-9 h-9 rounded-xl bg-blue-600/20 text-sky-400 border border-blue-500/30 flex items-center justify-center">
-                <Settings className="w-4 h-4" />
-              </div>
-              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Engine Diagnostics</h3>
-              <p className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-                Inspect PRAGMA settings, database metadata, application title, and storage engine status.
-              </p>
-            </div>
-            <button
-              onClick={onOpenSettings}
-              className={`mt-3 w-full py-2 rounded-xl text-xs font-semibold border transition active:scale-95 flex items-center justify-center gap-1.5 ${
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-              }`}
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>Open Diagnostics</span>
-            </button>
-          </div>
-
-          {/* 3. Export Database Binary */}
+          {/* 2. Export Database Binary */}
           <div className={`p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ${
             isDark ? 'bg-slate-950/80 border-slate-800 hover:border-emerald-500/50' : 'bg-white border-slate-200 hover:border-emerald-300'
           }`}>
@@ -145,7 +121,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
             </button>
           </div>
 
-          {/* 4. Reset to Northwind Template */}
+          {/* 3. Reset to Northwind Template */}
           <div className={`p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ${
             isDark ? 'bg-slate-950/80 border-slate-800 hover:border-red-500/50' : 'bg-white border-slate-200 hover:border-red-300'
           }`}>
@@ -250,6 +226,50 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* SQLite Engine Diagnostics (Moved below Database Tables card) */}
+        <div className={`p-4 md:p-5 rounded-2xl border shadow-sm space-y-3 ${
+          isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+        }`}>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800/40">
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+              SQLite Engine Diagnostics
+            </h3>
+            <span className="text-[10px] font-mono text-emerald-400">PRAGMA Inspector</span>
+          </div>
+          <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs p-3.5 rounded-xl border font-mono ${
+            isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Database Name: </span>
+              <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {SQLiteEngine.getInstance().activeDbName}
+              </span>
+            </div>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Schema Version: </span>
+              <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {stats.schemaVer}
+              </span>
+            </div>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Page Count: </span>
+              <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {stats.pageCount}
+              </span>
+            </div>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Page Size: </span>
+              <span className={`font-bold ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>
+                {stats.pageSize} bytes
+              </span>
+            </div>
+            <div className="sm:col-span-2 pt-1 border-t border-slate-800/40 flex items-center justify-between">
+              <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Total File Footprint:</span>
+              <span className="text-emerald-500 font-bold text-sm">{(stats.totalBytes / 1024).toFixed(1)} KB</span>
+            </div>
           </div>
         </div>
       </div>

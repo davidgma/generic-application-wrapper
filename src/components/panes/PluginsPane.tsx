@@ -44,7 +44,7 @@ export const PluginsPane: React.FC<PluginsPaneProps> = ({
           </div>
           <div>
             <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
-              Dynamic TSX Plugins & Marketplace
+              Dynamic TSX Plugins
             </h2>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
               Client-compiled React TSX micro-apps running directly inside SQLite.

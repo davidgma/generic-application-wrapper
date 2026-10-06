@@ -7,6 +7,7 @@ export const SYSTEM_PLUGIN_IDS = new Set<string>([
   'plugin_local_storage',
   'plugin_manager',
   'plugin_file_manager',
+  'plugin_database_management',
   'plugin_help',
 ]);
 

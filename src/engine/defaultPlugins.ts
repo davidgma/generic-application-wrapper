@@ -1030,6 +1030,313 @@ export default function HelloWorldPlugin({ gaw }) {
 }
 `;
 
+export const DEFAULT_DATABASE_MANAGEMENT_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import {
+  Database,
+  Terminal,
+  Download,
+  RotateCcw,
+  Table as TableIcon,
+  Sparkles,
+  RefreshCw,
+  HardDrive,
+  Layers,
+  Code2
+} from 'lucide-react';
+
+export default function DatabaseManagementPlugin({ gaw }) {
+  const isDark = gaw.theme === 'vs-dark';
+  const [tables, setTables] = useState(() => {
+    try {
+      return gaw.db.getSchema() || [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [stats, setStats] = useState(() => {
+    try {
+      const pageCount = gaw.db.query('PRAGMA page_count;').values[0]?.[0] || 0;
+      const pageSize = gaw.db.query('PRAGMA page_size;').values[0]?.[0] || 4096;
+      const schemaVer = gaw.db.query('PRAGMA schema_version;').values[0]?.[0] || 1;
+      return { pageCount, pageSize, schemaVer, totalBytes: pageCount * pageSize };
+    } catch {
+      return { pageCount: 0, pageSize: 4096, schemaVer: 1, totalBytes: 0 };
+    }
+  });
+
+  const refreshState = () => {
+    try {
+      setTables(gaw.db.getSchema() || []);
+      const pageCount = gaw.db.query('PRAGMA page_count;').values[0]?.[0] || 0;
+      const pageSize = gaw.db.query('PRAGMA page_size;').values[0]?.[0] || 4096;
+      const schemaVer = gaw.db.query('PRAGMA schema_version;').values[0]?.[0] || 1;
+      setStats({ pageCount, pageSize, schemaVer, totalBytes: pageCount * pageSize });
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('db:change', () => refreshState());
+    return () => {
+      if (unsub) unsub();
+    };
+  }, [gaw.eventBus]);
+
+  const handleResetDefault = async () => {
+    const confirmed = await gaw.dialog.confirm(
+      'Reset database to Northwind Modern Commerce template? All current data will be replaced.'
+    );
+    if (!confirmed) return;
+    gaw.workspace.loadNorthwindDemo();
+    refreshState();
+    gaw.toast.success('Loaded Northwind Modern Commerce template.');
+  };
+
+  const handleExportBinary = () => {
+    gaw.storage.exportDownload();
+    gaw.toast.success('Exported SQLite binary file.');
+  };
+
+  return (
+    <div className={'flex-1 overflow-y-auto p-4 md:p-6 select-text transition-colors ' + (
+      isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'
+    )}>
+      <div className="max-w-5xl mx-auto space-y-6 pb-20">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
+              isDark ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30' : 'bg-purple-50 text-purple-700 border border-purple-200'
+            )}>
+              <Database className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className={'text-base font-bold ' + (isDark ? 'text-sky-300' : 'text-blue-950')}>
+                Database Engine & SQL Management
+              </h2>
+              <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                Embedded SQLite (sql.js WebAssembly) with in-memory execution and zero-latency local queries.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={refreshState}
+            className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-sm transition active:scale-95 ' + (
+              isDark ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-750' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+            )}
+            title="Refresh database schema and telemetry"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh State</span>
+          </button>
+        </div>
+
+        {/* Database Primary Options Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+          {/* 1. Open SQL Query Editor */}
+          <div className={'p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ' + (
+            isDark ? 'bg-slate-950/80 border-slate-800 hover:border-indigo-500/50' : 'bg-white border-slate-200 hover:border-indigo-300'
+          )}>
+            <div className="space-y-2">
+              <div className="w-9 h-9 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                <Terminal className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white">SQL Query Editor</h3>
+              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                Execute custom SQL statements, JOINs, aggregations, and DDL queries in Monaco editor.
+              </p>
+            </div>
+            <button
+              onClick={() => gaw.navigation.openIDE({ type: 'sql' })}
+              className="mt-3 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Open Query Editor</span>
+            </button>
+          </div>
+
+          {/* 2. Export Database Binary */}
+          <div className={'p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ' + (
+            isDark ? 'bg-slate-950/80 border-slate-800 hover:border-emerald-500/50' : 'bg-white border-slate-200 hover:border-emerald-300'
+          )}>
+            <div className="space-y-2">
+              <div className="w-9 h-9 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                <Download className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Export SQLite Binary</h3>
+              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                Download the raw .db binary file directly to your disk. Opens in DB Browser or standard SQLite tools.
+              </p>
+            </div>
+            <button
+              onClick={handleExportBinary}
+              className="mt-3 w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center justify-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download .db</span>
+            </button>
+          </div>
+
+          {/* 3. Reset to Northwind Template */}
+          <div className={'p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ' + (
+            isDark ? 'bg-slate-950/80 border-slate-800 hover:border-red-500/50' : 'bg-white border-slate-200 hover:border-red-300'
+          )}>
+            <div className="space-y-2">
+              <div className="w-9 h-9 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 flex items-center justify-center">
+                <RotateCcw className="w-4 h-4" />
+              </div>
+              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Reset Database</h3>
+              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                Revert back to the pristine Northwind Modern Commerce sample suite with all initial tables.
+              </p>
+            </div>
+            <button
+              onClick={handleResetDefault}
+              className={'mt-3 w-full py-2 rounded-xl text-xs font-semibold border transition active:scale-95 flex items-center justify-center gap-1.5 ' + (
+                isDark ? 'bg-red-950/40 hover:bg-red-900/60 text-red-300 border-red-800/40' : 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200'
+              )}
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Database</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Database Telemetry Stats */}
+        <div className={'p-4 md:p-5 rounded-2xl border shadow-sm ' + (
+          isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <h3 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+            Database Engine Telemetry
+          </h3>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+              <span className={'block text-[10px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Page Count</span>
+              <span className="font-mono font-bold text-sm">{stats.pageCount} pages</span>
+            </div>
+            <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+              <span className={'block text-[10px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Page Size</span>
+              <span className="font-mono font-bold text-sm">{stats.pageSize} bytes</span>
+            </div>
+            <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+              <span className={'block text-[10px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Storage Size</span>
+              <span className="font-mono font-bold text-sm">{(stats.totalBytes / 1024).toFixed(1)} KB</span>
+            </div>
+            <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
+              <span className={'block text-[10px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Schema Version</span>
+              <span className="font-mono font-bold text-sm">v{stats.schemaVer}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Database Tables Explorer */}
+        <div className={'p-4 md:p-5 rounded-2xl border shadow-sm ' + (
+          isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800/40">
+            <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+              Database Tables ({tables.length})
+            </h3>
+            <button
+              onClick={() => gaw.navigation.openIDE({ type: 'sql' })}
+              className="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+            >
+              + Create Table in SQL
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-800/40 pt-1">
+            {tables.map((t) => (
+              <div
+                key={t.name}
+                className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+              >
+                <div className="flex items-center gap-2.5">
+                  <TableIcon className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                  <div>
+                    <span className="font-mono font-bold text-xs text-slate-900 dark:text-white">
+                      {t.name}
+                    </span>
+                    <span className={'ml-2 text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                      ({t.columns.length} columns)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    onClick={() => gaw.navigation.navigate('/table/' + t.name)}
+                    className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] shadow transition active:scale-95"
+                  >
+                    View Grid
+                  </button>
+                  <button
+                    onClick={() => gaw.navigation.openIDE({ type: 'table', name: t.name })}
+                    className={'px-2.5 py-1 rounded border text-[11px] font-medium transition active:scale-95 ' + (
+                      isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                    )}
+                  >
+                    Edit Schema
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* SQLite Engine Diagnostics */}
+        <div className={'p-4 md:p-5 rounded-2xl border shadow-sm space-y-3 ' + (
+          isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800/40">
+            <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+              SQLite Engine Diagnostics
+            </h3>
+            <span className="text-[10px] font-mono text-emerald-400">PRAGMA Inspector</span>
+          </div>
+          <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs p-3.5 rounded-xl border font-mono ' + (
+            isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+          )}>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Database Name: </span>
+              <span className={'font-bold ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+                {gaw.storage?.getMetadata?.()?.activeFileName || 'sqlite.db'}
+              </span>
+            </div>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Schema Version: </span>
+              <span className={'font-bold ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+                {stats.schemaVer}
+              </span>
+            </div>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Page Count: </span>
+              <span className={'font-bold ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+                {stats.pageCount}
+              </span>
+            </div>
+            <div>
+              <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Page Size: </span>
+              <span className={'font-bold ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+                {stats.pageSize} bytes
+              </span>
+            </div>
+            <div className="sm:col-span-2 pt-1 border-t border-slate-800/40 flex items-center justify-between">
+              <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Total File Footprint:</span>
+              <span className="text-emerald-500 font-bold text-sm">{(stats.totalBytes / 1024).toFixed(1)} KB</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+`;
+
 export const DEFAULT_DROPBOX_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
 import {
   Cloud,
@@ -2123,13 +2430,96 @@ export default function HelpPlugin({ gaw }) {
 
   const isDark = currentTheme === 'vs-dark';
 
-  const sampleBoilerplate = 'import React, { useState, useEffect } from \\'react\\';\\nimport { Database, Sparkles, RefreshCw } from \\'lucide-react\\';\\n\\nexport default function MyCustomPlugin({ gaw }) {\\n  const [rows, setRows] = useState([]);\\n  const [loading, setLoading] = useState(false);\\n\\n  const loadData = () => {\\n    try {\\n      setLoading(true);\\n      // Query SQLite database objects\\n      const result = gaw.db.queryObjects(\\'SELECT * FROM t_settings LIMIT 20;\\');\\n      setRows(result || []);\\n      gaw.toast.success(\\'Loaded \\' + (result?.length || 0) + \\' records from SQLite!\\');\\n    } catch (err) {\\n      gaw.toast.error(\\'Query error: \\' + (err.message || String(err)));\\n    } finally {\\n      setLoading(false);\\n    }\\n  };\\n\\n  useEffect(() => {\\n    loadData();\\n  }, []);\\n\\n  return (\\n    <div className=\\"p-6 max-w-4xl mx-auto space-y-4\\">\\n      <div className=\\"flex items-center justify-between p-4 rounded-xl border bg-slate-900 border-slate-800\\">\\n        <h2 className=\\"text-base font-bold text-white flex items-center gap-2\\">\\n          <Sparkles className=\\"w-5 h-5 text-indigo-400\\" />\\n          <span>My Custom SQLite Plugin</span>\\n        </h2>\\n        <button\\n          onClick={loadData}\\n          className=\\"px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5\\"\\n        >\\n          <RefreshCw className={\\'w-3.5 h-3.5 \\' + (loading ? \\'animate-spin\\' : \\'\\')} />\\n          <span>Refresh</span>\\n        </button>\\n      </div>\\n\\n      <div className=\\"border rounded-xl p-4 bg-slate-950/70 border-slate-800 text-xs text-slate-300 font-mono\\">\\n        <pre>{JSON.stringify(rows, null, 2)}</pre>\\n      </div>\\n    </div>\\n  );\\n}';
+  const sampleBoilerplate = [
+    "import React, { useState, useEffect } from 'react';",
+    "import { Database, Sparkles, RefreshCw } from 'lucide-react';",
+    "",
+    "export default function MyCustomPlugin({ gaw }) {",
+    "  const [rows, setRows] = useState([]);",
+    "  const [loading, setLoading] = useState(false);",
+    "",
+    "  const loadData = () => {",
+    "    try {",
+    "      setLoading(true);",
+    "      // Query SQLite database objects",
+    "      const result = gaw.db.queryObjects('SELECT * FROM t_settings LIMIT 20;');",
+    "      setRows(result || []);",
+    "      gaw.toast.success('Loaded ' + (result?.length || 0) + ' records from SQLite!');",
+    "    } catch (err) {",
+    "      gaw.toast.error('Query error: ' + (err.message || String(err)));",
+    "    } finally {",
+    "      setLoading(false);",
+    "    }",
+    "  };",
+    "",
+    "  useEffect(() => {",
+    "    loadData();",
+    "  }, []);",
+    "",
+    "  return (",
+    '    <div className="p-6 max-w-4xl mx-auto space-y-4">',
+    '      <div className="flex items-center justify-between p-4 rounded-xl border bg-slate-900 border-slate-800">',
+    '        <h2 className="text-base font-bold text-white flex items-center gap-2">',
+    '          <Sparkles className="w-5 h-5 text-indigo-400" />',
+    '          <span>My Custom SQLite Plugin</span>',
+    '        </h2>',
+    '        <button',
+    '          onClick={loadData}',
+    '          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5"',
+    '        >',
+    "          <RefreshCw className={'w-3.5 h-3.5 ' + (loading ? 'animate-spin' : '')} />",
+    '          <span>Refresh</span>',
+    '        </button>',
+    '      </div>',
+    '',
+    '      <div className="border rounded-xl p-4 bg-slate-950/70 border-slate-800 text-xs text-slate-300 font-mono">',
+    '        <pre>{JSON.stringify(rows, null, 2)}</pre>',
+    '      </div>',
+    '    </div>',
+    '  );',
+    '}'
+  ].join(String.fromCharCode(10));
 
-  const sampleReportSql1 = 'SELECT\\n  c.name AS category_name,\\n  COUNT(p.id) AS product_count,\\n  SUM(p.units_in_stock) AS total_inventory,\\n  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,\\n  ROUND(AVG(p.unit_price), 2) AS avg_unit_price\\nFROM categories c\\nJOIN products p ON p.category_id = c.id\\nGROUP BY c.id, c.name\\nORDER BY gross_inventory_value DESC;';
+  const sampleReportSql1 = [
+    'SELECT',
+    '  c.name AS category_name,',
+    '  COUNT(p.id) AS product_count,',
+    '  SUM(p.units_in_stock) AS total_inventory,',
+    '  ROUND(SUM(p.units_in_stock * p.unit_price), 2) AS gross_inventory_value,',
+    '  ROUND(AVG(p.unit_price), 2) AS avg_unit_price',
+    'FROM categories c',
+    'JOIN products p ON p.category_id = c.id',
+    'GROUP BY c.id, c.name',
+    'ORDER BY gross_inventory_value DESC;'
+  ].join(String.fromCharCode(10));
 
-  const sampleReportSql2 = 'SELECT\\n  c.company_name,\\n  c.country,\\n  COUNT(o.id) AS total_orders,\\n  ROUND(SUM(o.total_amount), 2) AS lifetime_value,\\n  ROUND(AVG(o.total_amount), 2) AS avg_order_value,\\n  MAX(o.order_date) AS last_purchase_date\\nFROM customers c\\nLEFT JOIN orders o ON o.customer_id = c.id\\nGROUP BY c.id\\nORDER BY lifetime_value DESC\\nLIMIT 25;';
+  const sampleReportSql2 = [
+    'SELECT',
+    '  c.company_name,',
+    '  c.country,',
+    '  COUNT(o.id) AS total_orders,',
+    '  ROUND(SUM(o.total_amount), 2) AS lifetime_value,',
+    '  ROUND(AVG(o.total_amount), 2) AS avg_order_value,',
+    '  MAX(o.order_date) AS last_purchase_date',
+    'FROM customers c',
+    'LEFT JOIN orders o ON o.customer_id = c.id',
+    'GROUP BY c.id',
+    'ORDER BY lifetime_value DESC',
+    'LIMIT 25;'
+  ].join(String.fromCharCode(10));
 
-  const sampleReportSql3 = 'SELECT\\n  id,\\n  name,\\n  version,\\n  CASE WHEN enabled = 1 THEN \\'Active\\' ELSE \\'Disabled\\' END AS status,\\n  menu_category,\\n  route,\\n  created_at\\nFROM t_plugins\\nORDER BY menu_category, name;';
+  const sampleReportSql3 = [
+    'SELECT',
+    '  id,',
+    '  name,',
+    '  version,',
+    "  CASE WHEN enabled = 1 THEN 'Active' ELSE 'Disabled' END AS status,",
+    '  menu_category,',
+    '  route,',
+    '  created_at',
+    'FROM t_plugins',
+    'ORDER BY menu_category, name;'
+  ].join(String.fromCharCode(10));
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(sampleBoilerplate);
@@ -2157,7 +2547,7 @@ export default function HelpPlugin({ gaw }) {
       name: 'SQLite',
       badge: 'Database Engine',
       url: 'https://www.sqlite.org/',
-      desc: 'The world\\'s most deployed, self-contained, transactional SQL database engine. Stores your schema, records, settings, and plugins in a single binary file.',
+      desc: 'The world database engine: self-contained, transactional SQL database engine. Stores your schema, records, settings, and plugins in a single binary file.',
       icon: Database,
     },
     {
@@ -3101,6 +3491,7 @@ export default function PluginManagerPlugin({ gaw }) {
       p.id === 'plugin_local_storage' ||
       p.id === 'plugin_manager' ||
       p.id === 'plugin_file_manager' ||
+      p.id === 'plugin_database_management' ||
       p.id === 'plugin_help' ||
       Boolean(p.is_system) ||
       Boolean(p.isSystem) ||
@@ -3131,7 +3522,7 @@ export default function PluginManagerPlugin({ gaw }) {
   const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
 
   const handleToggleActive = (plugin) => {
-    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage' || plugin.id === 'plugin_file_manager') {
+    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage' || plugin.id === 'plugin_file_manager' || plugin.id === 'plugin_database_management') {
       gaw.toast.warning('Core system plugin "' + plugin.name + '" must remain active to keep the application operational.');
       return;
     }
@@ -3145,8 +3536,8 @@ export default function PluginManagerPlugin({ gaw }) {
 
   const handleConfirmDelete = () => {
     if (!deleteModalPlugin) return;
-    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage' || deleteModalPlugin.id === 'plugin_file_manager') {
-      gaw.toast.warning('Core system plugins (Plugin Manager, Local Storage & File Manager) cannot be removed.');
+    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage' || deleteModalPlugin.id === 'plugin_file_manager' || deleteModalPlugin.id === 'plugin_database_management') {
+      gaw.toast.warning('Core system plugins cannot be removed.');
       setDeleteModalPlugin(null);
       return;
     }
@@ -3430,7 +3821,7 @@ export default function PluginManagerPlugin({ gaw }) {
         {filteredPlugins.map((p) => {
           const isActive = p.enabled !== 0;
           const isSystem = isSysPlugin(p);
-          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager';
+          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager' || p.id === 'plugin_database_management';
           return (
             <div
               key={p.id}

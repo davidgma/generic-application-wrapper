@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { SQLiteEngine } from '../engine/sqliteEngine';
-import { FileStorageEngine } from '../engine/fileStorage';
-import { Settings, X, Save, Database, HardDrive, RefreshCw } from 'lucide-react';
+import React from 'react';
+import { Settings, X } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -14,32 +12,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   theme,
   onThemeChange,
 }) => {
-  const engine = SQLiteEngine.getInstance();
-  const storage = FileStorageEngine.getInstance();
-  const meta = storage.getMetadata();
-
-  const [syncInterval, setSyncInterval] = useState(String(meta.autoSyncIntervalSec || 30));
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState(meta.isAutoSyncEnabled);
-
-  const handleSave = () => {
-    engine.setSetting('auto_sync_interval', syncInterval);
-    storage.setAutoSyncInterval(Number(syncInterval));
-    storage.setAutoSyncEnabled(autoSyncEnabled);
-    engine.notifyChange();
-    onClose();
-  };
-
-  const dbStats = (() => {
-    try {
-      const pageCount = engine.query('PRAGMA page_count;').values[0][0];
-      const pageSize = engine.query('PRAGMA page_size;').values[0][0];
-      const schemaVer = engine.query('PRAGMA schema_version;').values[0][0];
-      return { pageCount, pageSize, schemaVer, totalBytes: pageCount * pageSize };
-    } catch (e) {
-      return { pageCount: 0, pageSize: 4096, schemaVer: 1, totalBytes: 0 };
-    }
-  })();
-
   const isDark = theme === 'vs-dark';
 
   return (
@@ -98,89 +70,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           </div>
-
-
-          {/* Storage & Auto-Save */}
-          <div className={`space-y-3 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-            <h3 className="font-bold text-indigo-500 uppercase tracking-wider text-[11px]">Storage & Auto-Save</h3>
-            <div className={`flex items-center justify-between p-3 rounded-lg border ${
-              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div>
-                <span className={`font-semibold block ${isDark ? 'text-white' : 'text-slate-900'}`}>Auto-Save to Native File Handle</span>
-                <span className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Automatically sync in-memory edits to disk file handle.</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={autoSyncEnabled}
-                onChange={(e) => setAutoSyncEnabled(e.target.checked)}
-                className="rounded text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className={`block mb-1 font-medium ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Auto-Save Frequency</label>
-              <select
-                value={syncInterval}
-                onChange={(e) => setSyncInterval(e.target.value)}
-                className={`w-full px-3 py-1.5 rounded border focus:outline-none ${
-                  isDark ? 'bg-slate-800 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
-                }`}
-              >
-                <option value="15">Every 15 Seconds</option>
-                <option value="30">Every 30 Seconds (Default)</option>
-                <option value="60">Every 1 Minute</option>
-                <option value="120">Every 2 Minutes</option>
-                <option value="0">Manual Save Only</option>
-              </select>
-            </div>
-          </div>
-
-          {/* SQLite Engine Diagnostics */}
-          <div className={`pt-3 border-t space-y-2 ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-            <h3 className="font-bold text-indigo-500 uppercase tracking-wider text-[11px]">SQLite Engine Diagnostics</h3>
-            <div className={`grid grid-cols-2 gap-2 text-[11px] p-3 rounded-lg border font-mono ${
-              isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
-            }`}>
-              <div>
-                <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Database Name: </span>
-                <span className={isDark ? 'text-slate-200' : 'text-slate-800'}>{engine.activeDbName}</span>
-              </div>
-              <div>
-                <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Schema Version: </span>
-                <span className={isDark ? 'text-slate-200' : 'text-slate-800'}>{dbStats.schemaVer}</span>
-              </div>
-              <div>
-                <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Page Count: </span>
-                <span className={isDark ? 'text-slate-200' : 'text-slate-800'}>{dbStats.pageCount}</span>
-              </div>
-              <div>
-                <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Page Size: </span>
-                <span className={isDark ? 'text-slate-200' : 'text-slate-800'}>{dbStats.pageSize} B</span>
-              </div>
-              <div className="col-span-2">
-                <span className={isDark ? 'text-slate-500' : 'text-slate-400'}>Total File Footprint: </span>
-                <span className="text-emerald-500 font-bold">{(dbStats.totalBytes / 1024).toFixed(1)} KB</span>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className={`flex justify-end gap-2 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
           <button
             onClick={onClose}
-            className={`px-3.5 py-1.5 rounded text-xs font-medium transition ${
-              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
-            }`}
+            className={`px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition`}
           >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>Save Preferences</span>
+            Done
           </button>
         </div>
       </div>

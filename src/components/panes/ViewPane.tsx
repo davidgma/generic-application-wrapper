@@ -10,7 +10,8 @@ import {
   ArrowRight,
   Sparkles,
   Layers,
-  LayoutGrid
+  LayoutGrid,
+  PanelLeft
 } from 'lucide-react';
 import { TableSchema, SavedQuery } from '../../types/sqlite';
 import { SavedReport } from '../../types/report';
@@ -23,6 +24,8 @@ interface ViewPaneProps {
   reports: SavedReport[];
   plugins: PluginRecord[];
   isVSCodeMode: boolean;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
   onOpenSpreadsheet: () => void;
   onOpenIDE: (tab?: any) => void;
   onToggleVSCodeMode: () => void;
@@ -36,6 +39,8 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
   reports,
   plugins,
   isVSCodeMode,
+  isSidebarOpen = true,
+  onToggleSidebar,
   onOpenSpreadsheet,
   onOpenIDE,
   onToggleVSCodeMode,
@@ -48,21 +53,43 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
       isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'
     }`}>
       <div className="max-w-5xl mx-auto space-y-6 pb-20">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-            isDark ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-          }`}>
-            <LayoutGrid className="w-5 h-5" />
+        {/* Header with Navigation Side Panel Toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              isDark ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+            }`}>
+              <LayoutGrid className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+                View & Workspace Panes
+              </h2>
+              <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                Access spreadsheet studio, code editor, active datasets, and interactive reports.
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
-              View & Workspace Panes
-            </h2>
-            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Access spreadsheet studio, code editor, active datasets, and interactive reports.
-            </p>
-          </div>
+
+          {/* Show Navigation Side Panel Toggle */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer ${
+                isSidebarOpen
+                  ? isDark
+                    ? 'bg-indigo-600/30 border-indigo-500/60 text-indigo-300 hover:bg-indigo-600/40'
+                    : 'bg-indigo-50 border-indigo-300 text-indigo-700 hover:bg-indigo-100'
+                  : isDark
+                  ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-750 hover:text-white'
+                  : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'
+              }`}
+              title={isSidebarOpen ? 'Hide Navigation Side Panel' : 'Show Navigation Side Panel'}
+            >
+              <PanelLeft className="w-4 h-4" />
+              <span>{isSidebarOpen ? 'Hide Navigation Side Panel' : 'Show Navigation Side Panel'}</span>
+            </button>
+          )}
         </div>
 
         {/* Primary View Studios */}
