@@ -16,9 +16,11 @@ import {
   Sliders,
   Shield,
   X,
+  Folder,
+  FolderOpen,
 } from 'lucide-react';
 import { TableSchema, SavedQuery } from '../types/sqlite';
-import { PluginRecord } from '../types/plugin';
+import { PluginRecord, isSystemPlugin } from '../types/plugin';
 import { SavedReport } from '../types/report';
 
 interface SidebarProps {
@@ -67,11 +69,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [search, setSearch] = useState('');
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     plugins: false,
+    pluginsSystem: false,
+    pluginsUser: false,
     tables: false,
+    tablesSystem: false,
+    tablesUser: false,
     queries: false,
     reports: false,
   });
-  const [showSystemTables, setShowSystemTables] = useState(false);
 
   // Active three-dot menu dropdown: { type, id }
   const [activeMenu, setActiveMenu] = useState<{ type: string; id: string } | null>(null);
@@ -122,13 +127,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // Filtered lists
-  const filteredTables = useMemo(() => {
-    return tables.filter((t) => {
-      if (!showSystemTables && t.isSystem) return false;
-      return t.name.toLowerCase().includes(search.toLowerCase());
+  // Filtered lists separated into System and User
+  const { systemPlugins, userPlugins } = useMemo(() => {
+    const sys: PluginRecord[] = [];
+    const usr: PluginRecord[] = [];
+    const query = search.toLowerCase();
+
+    plugins.forEach((p) => {
+      if (p.enabled === 0) return;
+      if (query && !p.name.toLowerCase().includes(query) && !p.description?.toLowerCase().includes(query)) return;
+      if (isSystemPlugin(p)) {
+        sys.push(p);
+      } else {
+        usr.push(p);
+      }
     });
-  }, [tables, search, showSystemTables]);
+
+    return { systemPlugins: sys, userPlugins: usr };
+  }, [plugins, search]);
+
+  const { systemTables, userTables } = useMemo(() => {
+    const sys: TableSchema[] = [];
+    const usr: TableSchema[] = [];
+    const query = search.toLowerCase();
+
+    tables.forEach((t) => {
+      if (query && !t.name.toLowerCase().includes(query)) return;
+      if (t.isSystem) {
+        sys.push(t);
+      } else {
+        usr.push(t);
+      }
+    });
+
+    return { systemTables: sys, userTables: usr };
+  }, [tables, search]);
 
   const filteredQueries = useMemo(() => {
     return queries.filter((q) => q.name.toLowerCase().includes(search.toLowerCase()));
@@ -137,10 +170,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const filteredReports = useMemo(() => {
     return reports.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
   }, [reports, search]);
-
-  const filteredPlugins = useMemo(() => {
-    return plugins.filter((p) => p.enabled !== 0 && p.name.toLowerCase().includes(search.toLowerCase()));
-  }, [plugins, search]);
 
   if (!isOpen) return null;
 
@@ -186,7 +215,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="flex items-center gap-1.5">
               {collapsedSections.plugins ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              <span>Dynamic Plugins ({filteredPlugins.length})</span>
+              <span>Dynamic Plugins ({systemPlugins.length + userPlugins.length})</span>
             </div>
             <button
               onClick={(e) => {
@@ -205,81 +234,162 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {!collapsedSections.plugins && (
-            <div className="mt-1 space-y-0.5">
-              {filteredPlugins.map((p) => {
-                const isActive = activeView === `plugin:${p.id}`;
-                const isMenuOpen = activeMenu?.type === 'plugin' && activeMenu.id === p.id;
-                return (
-                  <div key={p.id} className="relative group flex items-center">
-                    <button
-                      onClick={() => onSelectPlugin(p)}
-                      className={`flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-l text-left transition ${
-                        isActive
-                          ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                          : isDark
-                          ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                          : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`} />
-                        <span className="truncate">{p.name}</span>
-                      </div>
-                      <span className="text-[10px] font-mono opacity-60 ml-1">v{p.version}</span>
-                    </button>
+            <div className="mt-1 space-y-2">
+              {/* Folder: System Plugins */}
+              <div>
+                <div
+                  onClick={() => toggleSection('pluginsSystem')}
+                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-purple-400 hover:text-purple-300 cursor-pointer select-none"
+                >
+                  {collapsedSections.pluginsSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {collapsedSections.pluginsSystem ? <Folder className="w-3.5 h-3.5 text-purple-400" /> : <FolderOpen className="w-3.5 h-3.5 text-purple-400" />}
+                  <span>System ({systemPlugins.length})</span>
+                </div>
 
-                    {/* Three-dot Action Trigger */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
-                      }}
-                      className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                        isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                      }`}
-                      title="Plugin options"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
+                {!collapsedSections.pluginsSystem && (
+                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-purple-900/40 ml-3">
+                    {systemPlugins.map((p) => {
+                      const isActive = activeView === `plugin:${p.id}`;
+                      const isMenuOpen = activeMenu?.type === 'plugin' && activeMenu.id === p.id;
+                      return (
+                        <div key={p.id} className="relative group flex items-center">
+                          <button
+                            onClick={() => onSelectPlugin(p)}
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                              isActive
+                                ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                                : isDark
+                                ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
+                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-purple-400'}`} />
+                              <span className="truncate">{p.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono opacity-60 ml-1">v{p.version}</span>
+                          </button>
 
-                    {/* Three-dot Dropdown Menu */}
-                    {isMenuOpen && (
-                      <div className="absolute right-0 top-full mt-0.5 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
-                        <button
-                          onClick={() => {
-                            setActiveMenu(null);
-                            onOpenIDE({ type: 'plugin', id: p.id, name: p.name });
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Edit in IDE</span>
-                        </button>
-                        {p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager' ? (
-                          <div className="px-3 py-1.5 text-[10px] text-slate-400 flex items-center gap-1.5 border-t border-slate-800 mt-1">
-                            <Shield className="w-3 h-3 text-indigo-400" />
-                            <span>Protected Core Plugin</span>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="h-px bg-slate-800 my-1" />
-                            <button
-                              onClick={() => {
-                                setActiveMenu(null);
-                                onDeleteObject('plugin', p.id, p.name);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete...</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
+                            }}
+                            className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
+                              isActive ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
+                            }`}
+                            title="Plugin options"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isMenuOpen && (
+                            <div className="absolute right-0 top-full mt-0.5 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onOpenIDE({ type: 'plugin', id: p.id, name: p.name });
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-purple-600 hover:text-white transition"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-purple-400" />
+                                <span>Edit in IDE</span>
+                              </button>
+                              <div className="px-3 py-1.5 text-[10px] text-slate-400 flex items-center gap-1.5 border-t border-slate-800 mt-1">
+                                <Shield className="w-3 h-3 text-purple-400" />
+                                <span>Core System Plugin</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Folder: User Plugins */}
+              <div>
+                <div
+                  onClick={() => toggleSection('pluginsUser')}
+                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer select-none"
+                >
+                  {collapsedSections.pluginsUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {collapsedSections.pluginsUser ? <Folder className="w-3.5 h-3.5 text-emerald-400" /> : <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />}
+                  <span>User ({userPlugins.length})</span>
+                </div>
+
+                {!collapsedSections.pluginsUser && (
+                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-emerald-900/40 ml-3">
+                    {userPlugins.length === 0 && (
+                      <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user plugins</div>
+                    )}
+                    {userPlugins.map((p) => {
+                      const isActive = activeView === `plugin:${p.id}`;
+                      const isMenuOpen = activeMenu?.type === 'plugin' && activeMenu.id === p.id;
+                      return (
+                        <div key={p.id} className="relative group flex items-center">
+                          <button
+                            onClick={() => onSelectPlugin(p)}
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                              isActive
+                                ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                : isDark
+                                ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
+                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`} />
+                              <span className="truncate">{p.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono opacity-60 ml-1">v{p.version}</span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
+                            }}
+                            className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
+                              isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+                            }`}
+                            title="Plugin options"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isMenuOpen && (
+                            <div className="absolute right-0 top-full mt-0.5 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onOpenIDE({ type: 'plugin', id: p.id, name: p.name });
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-600 hover:text-white transition"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Edit in IDE</span>
+                              </button>
+                              <div className="h-px bg-slate-800 my-1" />
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onDeleteObject('plugin', p.id, p.name);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete...</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -292,107 +402,145 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="flex items-center gap-1.5">
               {collapsedSections.tables ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              <span>Tables ({filteredTables.length})</span>
+              <span>Tables ({systemTables.length + userTables.length})</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowSystemTables(!showSystemTables);
-              }}
-              title={showSystemTables ? 'Hide system tables (t_*)' : 'Show system tables (t_*)'}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition ${
-                showSystemTables
-                  ? 'border-indigo-500 text-indigo-300 bg-indigo-950/60'
-                  : 'border-slate-700 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Sys: {showSystemTables ? 'ON' : 'OFF'}
-            </button>
           </div>
 
           {!collapsedSections.tables && (
-            <div className="mt-1 space-y-0.5">
-              {filteredTables.map((t) => {
-                const isActive = activeView === `table:${t.name}`;
-                const isMenuOpen = activeMenu?.type === 'table' && activeMenu.id === t.name;
-                return (
-                  <div key={t.name} className="relative group flex items-center">
-                    <button
-                      onClick={() => onSelectTable(t.name)}
-                      className={`flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-l text-left transition ${
-                        isActive
-                          ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                          : isDark
-                          ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                          : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <TableIcon
-                          className={`w-3.5 h-3.5 flex-shrink-0 ${
-                            t.isSystem ? 'text-slate-500' : 'text-amber-400'
-                          }`}
-                        />
-                        <span className="truncate">{t.name}</span>
-                      </div>
-                      <span className="text-[10px] font-mono opacity-60 ml-1">
-                        {t.rowCount} rows
-                      </span>
-                    </button>
+            <div className="mt-1 space-y-2">
+              {/* Folder: System Tables */}
+              <div>
+                <div
+                  onClick={() => toggleSection('tablesSystem')}
+                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-purple-400 hover:text-purple-300 cursor-pointer select-none"
+                >
+                  {collapsedSections.tablesSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {collapsedSections.tablesSystem ? <Folder className="w-3.5 h-3.5 text-purple-400" /> : <FolderOpen className="w-3.5 h-3.5 text-purple-400" />}
+                  <span>System ({systemTables.length})</span>
+                </div>
 
-                    {/* Action button: lock icon if system table, three-dot if user table */}
-                    {t.isSystem ? (
-                      <div
-                        className="p-1.5 text-slate-600 cursor-not-allowed"
-                        title="System table: Protected from editing or deletion"
-                      >
-                        <Lock className="w-3 h-3" />
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMenu(isMenuOpen ? null : { type: 'table', id: t.name });
-                          }}
-                          className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                            isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                          }`}
-                          title="Table options"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
+                {!collapsedSections.tablesSystem && (
+                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-purple-900/40 ml-3">
+                    {systemTables.map((t) => {
+                      const isActive = activeView === `table:${t.name}`;
+                      return (
+                        <div key={t.name} className="relative group flex items-center">
+                          <button
+                            onClick={() => onSelectTable(t.name)}
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                              isActive
+                                ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                                : isDark
+                                ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
+                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-purple-400'}`} />
+                              <span className="truncate">{t.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono opacity-60 ml-1">
+                              {t.rowCount} rows
+                            </span>
+                          </button>
 
-                        {isMenuOpen && (
-                          <div className="absolute right-0 top-full mt-0.5 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
-                            <button
-                              onClick={() => {
-                                setActiveMenu(null);
-                                onOpenIDE({ type: 'table', name: t.name });
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Edit Structure in IDE</span>
-                            </button>
-                            <div className="h-px bg-slate-800 my-1" />
-                            <button
-                              onClick={() => {
-                                setActiveMenu(null);
-                                onDeleteObject('table', t.name, t.name);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete Table...</span>
-                            </button>
+                          <div
+                            className="p-1.5 text-slate-600 cursor-not-allowed"
+                            title="System table: Protected schema"
+                          >
+                            <Lock className="w-3 h-3 text-purple-400/60" />
                           </div>
-                        )}
-                      </>
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Folder: User Tables */}
+              <div>
+                <div
+                  onClick={() => toggleSection('tablesUser')}
+                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer select-none"
+                >
+                  {collapsedSections.tablesUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {collapsedSections.tablesUser ? <Folder className="w-3.5 h-3.5 text-emerald-400" /> : <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />}
+                  <span>User ({userTables.length})</span>
+                </div>
+
+                {!collapsedSections.tablesUser && (
+                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-emerald-900/40 ml-3">
+                    {userTables.length === 0 && (
+                      <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user tables</div>
+                    )}
+                    {userTables.map((t) => {
+                      const isActive = activeView === `table:${t.name}`;
+                      const isMenuOpen = activeMenu?.type === 'table' && activeMenu.id === t.name;
+                      return (
+                        <div key={t.name} className="relative group flex items-center">
+                          <button
+                            onClick={() => onSelectTable(t.name)}
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                              isActive
+                                ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                : isDark
+                                ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
+                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`} />
+                              <span className="truncate">{t.name}</span>
+                            </div>
+                            <span className="text-[10px] font-mono opacity-60 ml-1">
+                              {t.rowCount} rows
+                            </span>
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenu(isMenuOpen ? null : { type: 'table', id: t.name });
+                            }}
+                            className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
+                              isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+                            }`}
+                            title="Table options"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </button>
+
+                          {isMenuOpen && (
+                            <div className="absolute right-0 top-full mt-0.5 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onOpenIDE({ type: 'table', name: t.name });
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-600 hover:text-white transition"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Edit Structure in IDE</span>
+                              </button>
+                              <div className="h-px bg-slate-800 my-1" />
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onDeleteObject('table', t.name, t.name);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete Table...</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

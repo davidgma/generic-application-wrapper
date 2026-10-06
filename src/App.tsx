@@ -576,8 +576,8 @@ export default function App() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // In full VS Code mode, let the IDE handle keyboard shortcuts natively
-      if (activeView === 'ide' && isVSCodeMode) {
+      // When in IDE view, let Monaco IDE handle keyboard shortcuts (Ctrl+S, etc.) natively
+      if (activeView === 'ide') {
         return;
       }
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;

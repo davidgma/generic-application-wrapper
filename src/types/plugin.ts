@@ -2,6 +2,23 @@ import React from 'react';
 import { QueryResult, TableSchema } from './sqlite';
 import { StorageMetadata, DropboxConfig, StorageTarget, RecentFileItem } from './storage';
 
+export const SYSTEM_PLUGIN_IDS = new Set<string>([
+  'plugin_dropbox_sync',
+  'plugin_local_storage',
+  'plugin_manager',
+  'plugin_file_manager',
+  'plugin_help',
+]);
+
+export function isSystemPlugin(plugin: { id: string; is_system?: boolean; isSystem?: boolean; menu_category?: string }): boolean {
+  return (
+    SYSTEM_PLUGIN_IDS.has(plugin.id) ||
+    Boolean(plugin.is_system) ||
+    Boolean(plugin.isSystem) ||
+    (Boolean(plugin.menu_category) && plugin.menu_category!.startsWith('System'))
+  );
+}
+
 export interface PluginRecord {
   id: string;
   name: string;
@@ -14,6 +31,8 @@ export interface PluginRecord {
   code: string; // TSX / TypeScript source code
   created_at?: string;
   updated_at?: string;
+  is_system?: boolean;
+  isSystem?: boolean;
 }
 
 export interface GAWToastApi {

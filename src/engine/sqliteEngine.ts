@@ -1,6 +1,6 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { ColumnInfo, QueryResult, TableSchema, SavedQuery } from '../types/sqlite';
-import { PluginRecord } from '../types/plugin';
+import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../types/plugin';
 import { SavedReport } from '../types/report';
 import {
   DEFAULT_CRM_PLUGIN_CODE,
@@ -22,6 +22,7 @@ export class SQLiteEngine {
   private isInitializing: Promise<void> | null = null;
   private resetListeners: Set<(dbName: string) => void> = new Set();
   public activeDbName: string = 'new_database.sqlite';
+  private systemPlugins: Map<string, PluginRecord> = new Map();
 
   public setOnDatabaseReset(handler: (dbName: string) => void): () => void {
     this.resetListeners.add(handler);
@@ -38,7 +39,94 @@ export class SQLiteEngine {
     });
   }
 
-  private constructor() {}
+  private constructor() {
+    this.resetSystemPlugins();
+  }
+
+  public resetSystemPlugins(): void {
+    this.systemPlugins.clear();
+    const now = new Date().toISOString();
+    const defaults: PluginRecord[] = [
+      {
+        id: 'plugin_dropbox_sync',
+        name: 'Dropbox Cloud Sync',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Cloud',
+        menu_category: 'System & Cloud',
+        route: '/dropbox-sync',
+        description: 'Connect to Dropbox, monitor cloud sync status, configure auto-sync interval, push/pull databases, and browse remote files.',
+        code: DEFAULT_DROPBOX_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+      },
+      {
+        id: 'plugin_local_storage',
+        name: 'Local Storage & Disk Sync',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'HardDrive',
+        menu_category: 'System & Storage',
+        route: '/local-storage',
+        description: 'Manage local disk database saving, File System Access API handles, auto-save timers, direct exports, and file opening.',
+        code: DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+      },
+      {
+        id: 'plugin_manager',
+        name: 'Plugin Manager',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Puzzle',
+        menu_category: 'System & Plugins',
+        route: '/plugin-manager',
+        description: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
+        code: DEFAULT_PLUGIN_MANAGER_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+      },
+      {
+        id: 'plugin_file_manager',
+        name: 'File & Workspace Manager',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'FolderOpen',
+        menu_category: 'System & Storage',
+        route: '/files',
+        description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
+        code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+      },
+      {
+        id: 'plugin_help',
+        name: 'Help & System Guide',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'HelpCircle',
+        menu_category: 'System & Documentation',
+        route: '/help',
+        description: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
+        code: DEFAULT_HELP_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+      },
+    ];
+    for (const p of defaults) {
+      this.systemPlugins.set(p.id, p);
+    }
+  }
 
   public static getInstance(): SQLiteEngine {
     if (!SQLiteEngine.instance) {
@@ -333,28 +421,6 @@ export class SQLiteEngine {
 
     const plugins = [
       {
-        id: 'plugin_dropbox_sync',
-        name: 'Dropbox Cloud Sync',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'Cloud',
-        menu_category: 'System & Cloud',
-        route: '/dropbox-sync',
-        description: 'Connect to Dropbox, monitor cloud sync status, configure auto-sync interval, push/pull databases, and browse remote files.',
-        code: DEFAULT_DROPBOX_PLUGIN_CODE,
-      },
-      {
-        id: 'plugin_file_manager',
-        name: 'File & Workspace Manager',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'FolderOpen',
-        menu_category: 'System & Storage',
-        route: '/files',
-        description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
-        code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
-      },
-      {
         id: 'plugin_hello_world',
         name: 'Hello World Starter',
         version: '1.0.0',
@@ -364,39 +430,6 @@ export class SQLiteEngine {
         route: '/hello-world',
         description: 'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in Gawkyy.',
         code: DEFAULT_HELLO_WORLD_PLUGIN_CODE,
-      },
-      {
-        id: 'plugin_local_storage',
-        name: 'Local Storage & Disk Sync',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'HardDrive',
-        menu_category: 'System & Storage',
-        route: '/local-storage',
-        description: 'Manage local disk database saving, File System Access API handles, auto-save timers, direct exports, and file opening.',
-        code: DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
-      },
-      {
-        id: 'plugin_manager',
-        name: 'Plugin Manager',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'Puzzle',
-        menu_category: 'System & Plugins',
-        route: '/plugin-manager',
-        description: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
-        code: DEFAULT_PLUGIN_MANAGER_CODE,
-      },
-      {
-        id: 'plugin_help',
-        name: 'Help & System Guide',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'HelpCircle',
-        menu_category: 'System & Documentation',
-        route: '/help',
-        description: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
-        code: DEFAULT_HELP_PLUGIN_CODE,
       },
     ];
 
@@ -826,61 +859,6 @@ export class SQLiteEngine {
         description: 'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in GAW.',
         code: DEFAULT_HELLO_WORLD_PLUGIN_CODE,
       },
-      {
-        id: 'plugin_dropbox_sync',
-        name: 'Dropbox Cloud Sync',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'Cloud',
-        menu_category: 'System & Cloud',
-        route: '/dropbox-sync',
-        description: 'Connect to Dropbox, monitor cloud sync status, configure auto-sync interval, push/pull databases, and browse remote files.',
-        code: DEFAULT_DROPBOX_PLUGIN_CODE,
-      },
-      {
-        id: 'plugin_local_storage',
-        name: 'Local Storage & Disk Sync',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'HardDrive',
-        menu_category: 'System & Storage',
-        route: '/local-storage',
-        description: 'Manage local disk database saving, File System Access API handles, auto-save timers, direct exports, and file opening.',
-        code: DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
-      },
-      {
-        id: 'plugin_manager',
-        name: 'Plugin Manager',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'Puzzle',
-        menu_category: 'System & Plugins',
-        route: '/plugin-manager',
-        description: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
-        code: DEFAULT_PLUGIN_MANAGER_CODE,
-      },
-      {
-        id: 'plugin_file_manager',
-        name: 'File & Workspace Manager',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'FolderOpen',
-        menu_category: 'System & Storage',
-        route: '/files',
-        description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
-        code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
-      },
-      {
-        id: 'plugin_help',
-        name: 'Help & System Guide',
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'HelpCircle',
-        menu_category: 'System & Documentation',
-        route: '/help',
-        description: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
-        code: DEFAULT_HELP_PLUGIN_CODE,
-      },
     ];
 
     for (const p of plugins) {
@@ -1148,92 +1126,32 @@ export class SQLiteEngine {
         CREATE TABLE IF NOT EXISTS t_reports (id TEXT PRIMARY KEY, name TEXT, description TEXT, query_id TEXT, custom_sql TEXT, config TEXT, created_at TEXT);
       `);
 
-      // Ensure default system & example plugins exist
-      // Ensure only the 5 minimal essential plugins exist (Northwind plugins are only in demo database)
-      const defaultPluginsToCheck = [
-        {
-          id: 'plugin_hello_world',
-          name: 'Hello World Starter',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'Sparkles',
-          category: 'Examples',
-          route: '/hello-world',
-          desc: 'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in GAW.',
-          code: DEFAULT_HELLO_WORLD_PLUGIN_CODE,
-        },
-        {
-          id: 'plugin_dropbox_sync',
-          name: 'Dropbox Cloud Sync',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'Cloud',
-          category: 'System & Cloud',
-          route: '/dropbox-sync',
-          desc: 'Connect to Dropbox, monitor cloud sync status, configure auto-sync interval, push/pull databases, and browse remote files.',
-          code: DEFAULT_DROPBOX_PLUGIN_CODE,
-        },
-        {
-          id: 'plugin_local_storage',
-          name: 'Local Storage & Disk Sync',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'HardDrive',
-          category: 'System & Storage',
-          route: '/local-storage',
-          desc: 'Manage local disk database saving, File System Access API handles, auto-save timers, direct exports, and file opening.',
-          code: DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
-        },
-        {
-          id: 'plugin_manager',
-          name: 'Plugin Manager',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'Puzzle',
-          category: 'System & Plugins',
-          route: '/plugin-manager',
-          desc: 'Manage dynamic TSX plugins: toggle active/inactive, import new plugins from disk/Dropbox/blank, open in IDE, and remove plugins safely.',
-          code: DEFAULT_PLUGIN_MANAGER_CODE,
-        },
-        {
-          id: 'plugin_file_manager',
-          name: 'File & Workspace Manager',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'FolderOpen',
-          category: 'System & Storage',
-          route: '/files',
-          desc: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
-          code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
-        },
-        {
-          id: 'plugin_help',
-          name: 'Help & System Guide',
-          version: '1.0.0',
-          enabled: 1,
-          icon: 'HelpCircle',
-          category: 'System & Documentation',
-          route: '/help',
-          desc: 'Comprehensive user manual, complete technology stack catalog with documentation links, plugin authoring guide, and application walkthrough.',
-          code: DEFAULT_HELP_PLUGIN_CODE,
-        },
-      ];
+      // System plugins are maintained in-memory as part of Gawkyy core.
+      // Remove any previously stored system plugins from t_plugins to keep database clean.
+      this.db.run(
+        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_help');"
+      );
 
-      const now = new Date().toISOString();
-      for (const p of defaultPluginsToCheck) {
-        const check = this.db.exec("SELECT id FROM t_plugins WHERE id = '" + p.id + "';");
-        if (!check || check.length === 0 || !check[0].values || check[0].values.length === 0) {
-          this.db.run(
-            'INSERT OR IGNORE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [p.id, p.name, p.version, p.enabled, p.icon, p.category, p.route, p.desc, p.code, now, now]
-          );
-        } else {
-          // Update default system and template plugins to latest working code
-          this.db.run(
-            'UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?;',
-            [p.code, now, p.id]
-          );
-        }
+      // Ensure the starter user-generated plugin (Hello World) exists
+      const checkStarter = this.db.exec("SELECT id FROM t_plugins WHERE id = 'plugin_hello_world';");
+      if (!checkStarter || checkStarter.length === 0 || !checkStarter[0].values || checkStarter[0].values.length === 0) {
+        const now = new Date().toISOString();
+        this.db.run(
+          'INSERT OR IGNORE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            'plugin_hello_world',
+            'Hello World Starter',
+            '1.0.0',
+            1,
+            'Sparkles',
+            'Examples',
+            '/hello-world',
+            'Clean starter plugin demonstrating how to query SQLite, show notifications, and use React state in GAW.',
+            DEFAULT_HELLO_WORLD_PLUGIN_CODE,
+            now,
+            now,
+          ]
+        );
       }
     } catch (err) {
       console.error('ensureSystemTables error:', err);
@@ -1241,16 +1159,28 @@ export class SQLiteEngine {
   }
 
   public getPlugins(): PluginRecord[] {
+    const sysList = Array.from(this.systemPlugins.values());
     try {
-      return this.queryObjects<PluginRecord>('SELECT * FROM t_plugins ORDER BY name ASC;');
+      const userList = this.queryObjects<PluginRecord>('SELECT * FROM t_plugins ORDER BY name ASC;')
+        .filter((p) => !SYSTEM_PLUGIN_IDS.has(p.id))
+        .map((p) => ({ ...p, is_system: false, isSystem: false }));
+      return [...sysList, ...userList];
     } catch (e) {
-      return [];
+      return sysList;
     }
   }
 
   public setPluginEnabled(pluginId: string, enabled: boolean): void {
-    if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') && !enabled) {
-      console.warn('Cannot disable core system plugin:', pluginId);
+    if (SYSTEM_PLUGIN_IDS.has(pluginId)) {
+      if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') && !enabled) {
+        console.warn('Cannot disable core system plugin:', pluginId);
+        return;
+      }
+      const sys = this.systemPlugins.get(pluginId);
+      if (sys) {
+        sys.enabled = enabled ? 1 : 0;
+        this.notifyChange(false);
+      }
       return;
     }
     if (!this.db) return;
@@ -1263,7 +1193,7 @@ export class SQLiteEngine {
   }
 
   public deletePlugin(pluginId: string): void {
-    if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') {
+    if (SYSTEM_PLUGIN_IDS.has(pluginId)) {
       console.warn('Cannot delete core system plugin:', pluginId);
       return;
     }
@@ -1273,6 +1203,23 @@ export class SQLiteEngine {
   }
 
   public savePlugin(plugin: Partial<PluginRecord> & { id: string; name: string; code: string }): void {
+    // If it's a system plugin, only update in-memory instance for this session (temporary edit)
+    if (SYSTEM_PLUGIN_IDS.has(plugin.id)) {
+      const existing = this.systemPlugins.get(plugin.id);
+      if (existing) {
+        this.systemPlugins.set(plugin.id, {
+          ...existing,
+          ...plugin,
+          updated_at: new Date().toISOString(),
+          is_system: true,
+          isSystem: true,
+        });
+      }
+      // System plugin edits do not modify SQLite database or mark storage status dirty
+      this.notifyChange(false);
+      return;
+    }
+
     if (!this.db) return;
     const now = new Date().toISOString();
     const existing = this.queryObjects<PluginRecord>('SELECT * FROM t_plugins WHERE id = ? LIMIT 1;', [plugin.id]);
@@ -1290,7 +1237,7 @@ export class SQLiteEngine {
            updated_at = ?
          WHERE id = ?;`,
         [
-          plugin.name,
+          plugin.name || existing[0].name,
           plugin.version || existing[0].version || '1.0.0',
           plugin.enabled !== undefined ? (plugin.enabled ? 1 : 0) : existing[0].enabled,
           plugin.icon || existing[0].icon || 'Puzzle',

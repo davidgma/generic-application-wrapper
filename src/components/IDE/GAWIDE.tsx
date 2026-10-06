@@ -41,7 +41,7 @@ import {
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
 import { QueryResult, SavedQuery, TableSchema } from '../../types/sqlite';
-import { PluginRecord } from '../../types/plugin';
+import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../../types/plugin';
 import { SavedReport } from '../../types/report';
 import { QueryGrid } from '../QueryGrid';
 import { PluginHost } from '../PluginHost';
@@ -762,45 +762,67 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   // Save Plugin, Table DDL, Query, or Report (with Format on Save)
   const handleSaveActiveTab = async () => {
-    if (!activeTab) return;
+    const currentTab = tabs.find((t) => t.id === activeTabId) || activeTab;
+    if (!currentTab) return;
 
-    const currentEditorVal = editorRef.current ? editorRef.current.getValue() : activeTab.content;
+    const currentEditorVal = editorRef.current ? editorRef.current.getValue() : currentTab.content;
     let contentToSave = currentEditorVal;
 
     // Optional Format on Save with Prettier
-    if (formatOnSave && activeTab.type !== 'types') {
+    if (formatOnSave && currentTab.type !== 'types') {
       try {
-        const lang = activeTab.type === 'plugin' ? 'typescript' : activeTab.type === 'report' || activeTab.type === 'json' ? 'json' : 'sql';
+        const lang = currentTab.type === 'plugin' ? 'typescript' : currentTab.type === 'report' || currentTab.type === 'json' ? 'json' : 'sql';
         const formatted = await CodeFormatter.format(contentToSave, lang);
         if (formatted) {
           contentToSave = formatted;
+          if (editorRef.current && editorRef.current.getValue() !== formatted) {
+            editorRef.current.setValue(formatted);
+          }
         }
       } catch {
         // ignore format failure on save
       }
     }
 
-    if (activeTab.type === 'plugin' && activeTab.pluginId) {
-      const now = new Date().toISOString();
-      engine.run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?', [
-        contentToSave,
-        now,
-        activeTab.pluginId,
-      ]);
-      PluginEngine.clearCache(activeTab.pluginId);
-      setTabs((prev) =>
-        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
-      );
-      engine.notifyChange(true);
-    } else if (activeTab.type === 'table') {
+    if (currentTab.type === 'plugin' && currentTab.pluginId) {
+      const isSystem = SYSTEM_PLUGIN_IDS.has(currentTab.pluginId);
+      if (isSystem) {
+        // System plugins are updated in-memory for this session only (not saved to database)
+        engine.savePlugin({
+          id: currentTab.pluginId,
+          name: currentTab.title.replace(/\.(tsx|jsx|ts|js)$/i, ''),
+          code: contentToSave,
+        });
+        PluginEngine.clearCache(currentTab.pluginId);
+        setTabs((prev) =>
+          prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+        );
+        // Note: Do NOT mark global database storage dirty; tab's dot notification clears
+        gawContext?.toast?.success?.(`Saved ${currentTab.title} (temporary in-memory for this session)`);
+      } else {
+        const now = new Date().toISOString();
+        engine.run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?', [
+          contentToSave,
+          now,
+          currentTab.pluginId,
+        ]);
+        PluginEngine.clearCache(currentTab.pluginId);
+        setTabs((prev) =>
+          prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+        );
+        engine.notifyChange(true);
+        gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
+      }
+    } else if (currentTab.type === 'table') {
       try {
         const results = engine.exec(contentToSave);
         setQueryResults(results);
         setActiveResultIndex(0);
         setTabs((prev) =>
-          prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+          prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
         engine.notifyChange(true);
+        gawContext?.toast?.success?.(`Saved and executed table structure for ${currentTab.title}`);
       } catch (err: any) {
         setQueryResults([
           {
@@ -810,12 +832,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           },
         ]);
       }
-    } else if (activeTab.type === 'report' && activeTab.reportId) {
+    } else if (currentTab.type === 'report' && currentTab.reportId) {
       try {
         const parsed = JSON.parse(contentToSave);
         engine.saveReport({
-          id: activeTab.reportId,
-          name: parsed.name || activeTab.title.replace(/\.json$/i, ''),
+          id: currentTab.reportId,
+          name: parsed.name || currentTab.title.replace(/\.json$/i, ''),
           description: parsed.description || '',
           query_id: parsed.query_id || '',
           custom_sql: parsed.custom_sql || '',
@@ -823,21 +845,22 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           created_at: parsed.created_at || new Date().toISOString(),
         });
         setTabs((prev) =>
-          prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+          prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
+        gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
       } catch (err: any) {
         alert('Invalid JSON in Report configuration: ' + err.message);
       }
-    } else if (activeTab.type === 'sql' || activeTab.type === 'query') {
-      const queryName = activeTab.title.replace(/\.sql$/i, '');
+    } else if (currentTab.type === 'sql' || currentTab.type === 'query') {
+      const queryName = currentTab.title.replace(/\.sql$/i, '');
       const existingQueries = engine.getSavedQueries();
-      const existing = existingQueries.find((q) => q.name === queryName || q.id === activeTab.queryId);
+      const existing = existingQueries.find((q) => q.name === queryName || q.id === currentTab.queryId);
 
       const now = new Date().toISOString();
       if (existing) {
         engine.run('UPDATE t_sql_queries SET query = ? WHERE id = ?', [contentToSave, existing.id]);
       } else {
-        const newId = activeTab.queryId || `q_${Date.now()}`;
+        const newId = currentTab.queryId || `q_${Date.now()}`;
         engine.run(
           'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [newId, queryName, 'Custom Query saved from IDE', contentToSave, '{}', '{}', now]
@@ -845,12 +868,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       }
       engine.notifyChange(true);
       setTabs((prev) =>
-        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+        prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
+      gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
     } else {
       setTabs((prev) =>
-        prev.map((t) => (t.id === activeTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+        prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
+      gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
     }
   };
 

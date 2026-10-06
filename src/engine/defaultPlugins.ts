@@ -3043,7 +3043,8 @@ import {
   Eye,
   Shield,
   Tag,
-  AlertTriangle
+  AlertTriangle,
+  User
 } from 'lucide-react';
 
 export default function PluginManagerPlugin({ gaw }) {
@@ -3051,6 +3052,7 @@ export default function PluginManagerPlugin({ gaw }) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState('ALL'); // 'ALL' | 'SYSTEM' | 'USER'
   const [deleteModalPlugin, setDeleteModalPlugin] = useState(null);
 
   const [currentTheme, setCurrentTheme] = useState(() => {
@@ -3093,6 +3095,19 @@ export default function PluginManagerPlugin({ gaw }) {
     return Array.from(set).sort();
   }, [plugins]);
 
+  const isSysPlugin = (p) => {
+    return (
+      p.id === 'plugin_dropbox_sync' ||
+      p.id === 'plugin_local_storage' ||
+      p.id === 'plugin_manager' ||
+      p.id === 'plugin_file_manager' ||
+      p.id === 'plugin_help' ||
+      Boolean(p.is_system) ||
+      Boolean(p.isSystem) ||
+      (Boolean(p.menu_category) && p.menu_category.startsWith('System'))
+    );
+  };
+
   const filteredPlugins = useMemo(() => {
     return plugins.filter((p) => {
       const matchSearch =
@@ -3106,9 +3121,11 @@ export default function PluginManagerPlugin({ gaw }) {
           : statusFilter === 'ACTIVE'
           ? p.enabled !== 0
           : p.enabled === 0;
-      return matchSearch && matchCategory && matchStatus;
+      const isSys = isSysPlugin(p);
+      const matchType = typeFilter === 'ALL' ? true : typeFilter === 'SYSTEM' ? isSys : !isSys;
+      return matchSearch && matchCategory && matchStatus && matchType;
     });
-  }, [plugins, search, categoryFilter, statusFilter]);
+  }, [plugins, search, categoryFilter, statusFilter, typeFilter]);
 
   const activeCount = plugins.filter((p) => p.enabled !== 0).length;
   const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
@@ -3209,7 +3226,7 @@ export default function PluginManagerPlugin({ gaw }) {
       '    </div>',
       '  );',
       '}'
-    ].join('\\n');
+    ].join(String.fromCharCode(10));
 
     gaw.plugins.importPlugin({
       id,
@@ -3307,17 +3324,52 @@ export default function PluginManagerPlugin({ gaw }) {
       <div className={'flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl text-xs border ' + (
         isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
       )}>
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className={'w-3.5 h-3.5 absolute left-3 top-2.5 ' + (isDark ? 'text-slate-500' : 'text-slate-400')} />
-          <input
-            type="text"
-            placeholder="Search plugins by name, category, or description..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className={'w-full pl-9 pr-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 border ' + (
-              isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
-            )}
-          />
+        <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
+          <div className="relative w-full">
+            <Search className={'w-3.5 h-3.5 absolute left-3 top-2.5 ' + (isDark ? 'text-slate-500' : 'text-slate-400')} />
+            <input
+              type="text"
+              placeholder="Search plugins by name, category, or description..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={'w-full pl-9 pr-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 border ' + (
+                isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
+              )}
+            />
+          </div>
+
+          {/* Two toggle icons under search plugins */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTypeFilter((prev) => (prev === 'SYSTEM' ? 'ALL' : 'SYSTEM'))}
+              title={typeFilter === 'SYSTEM' ? 'Showing System Plugins only (Click to show all)' : 'Show System Plugins only'}
+              className={'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition active:scale-95 cursor-pointer ' + (
+                typeFilter === 'SYSTEM'
+                  ? 'bg-purple-600 border-purple-500 text-white shadow-sm'
+                  : isDark
+                  ? 'bg-slate-900 border-slate-700 text-purple-400 hover:text-purple-300 hover:bg-slate-800'
+                  : 'bg-white border-slate-300 text-purple-700 hover:bg-purple-50'
+              )}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>System Plugins</span>
+            </button>
+
+            <button
+              onClick={() => setTypeFilter((prev) => (prev === 'USER' ? 'ALL' : 'USER'))}
+              title={typeFilter === 'USER' ? 'Showing User Plugins only (Click to show all)' : 'Show User Plugins only'}
+              className={'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition active:scale-95 cursor-pointer ' + (
+                typeFilter === 'USER'
+                  ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                  : isDark
+                  ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:text-emerald-300 hover:bg-slate-800'
+                  : 'bg-white border-slate-300 text-emerald-700 hover:bg-emerald-50'
+              )}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>User Plugins</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -3377,6 +3429,7 @@ export default function PluginManagerPlugin({ gaw }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredPlugins.map((p) => {
           const isActive = p.enabled !== 0;
+          const isSystem = isSysPlugin(p);
           const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager';
           return (
             <div
@@ -3384,15 +3437,19 @@ export default function PluginManagerPlugin({ gaw }) {
               className={'p-5 rounded-xl border transition-all flex flex-col justify-between ' + (
                 isActive
                   ? isDark
-                    ? 'bg-slate-950/80 border-slate-800/90 shadow-md hover:border-indigo-500/50'
-                    : 'bg-white border-slate-200 shadow-sm hover:border-indigo-400'
+                    ? isSystem
+                      ? 'bg-slate-950/80 border-purple-800/60 shadow-md hover:border-purple-500'
+                      : 'bg-slate-950/80 border-emerald-800/60 shadow-md hover:border-emerald-500'
+                    : isSystem
+                    ? 'bg-white border-purple-300 shadow-sm hover:border-purple-400'
+                    : 'bg-white border-emerald-300 shadow-sm hover:border-emerald-400'
                   : isDark
                   ? 'bg-slate-950/40 border-slate-800/40 opacity-70'
                   : 'bg-slate-50 border-slate-200 opacity-70'
               )}
             >
               <div className="space-y-3">
-                {/* Header: Title, Category, Toggle */}
+                {/* Header: Title, System/User Badge, Category, Toggle */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
@@ -3403,11 +3460,21 @@ export default function PluginManagerPlugin({ gaw }) {
                         v{p.version || '1.0.0'}
                       </span>
                     </div>
-                    <span className={'inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ' + (
-                      isDark ? 'bg-indigo-950/80 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                    )}>
-                      {p.menu_category || 'Custom'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      <span className={'inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ' + (
+                        isSystem
+                          ? isDark ? 'bg-purple-950/80 border-purple-700/60 text-purple-300' : 'bg-purple-50 border-purple-300 text-purple-700'
+                          : isDark ? 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                      )}>
+                        {isSystem ? <Shield className="w-2.5 h-2.5 text-purple-400" /> : <User className="w-2.5 h-2.5 text-emerald-400" />}
+                        <span>{isSystem ? 'System Plugin' : 'User Plugin'}</span>
+                      </span>
+                      <span className={'inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border ' + (
+                        isDark ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-700'
+                      )}>
+                        {p.menu_category || 'Custom'}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Active / Inactive Switch */}
