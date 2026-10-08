@@ -1352,6 +1352,39 @@ export class SQLiteEngine {
     return `-- Table schema definition for "${tableName}" not found.`;
   }
 
+  public getRecreateTableSQL(tableName: string): string {
+    if (!this.db) return `DROP TABLE IF EXISTS "${tableName}";\n\nCREATE TABLE "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);\n`;
+    try {
+      const res = this.query("SELECT sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      let createDdl = '';
+      if (res.values.length > 0 && res.values[0][0]) {
+        createDdl = String(res.values[0][0]).trim();
+      } else {
+        const colRes = this.query(`PRAGMA table_info("${tableName}");`);
+        if (colRes.values.length > 0) {
+          const colDefs = colRes.values.map((col: any[]) => {
+            const name = col[1];
+            const type = col[2] || 'TEXT';
+            const notNull = col[3] ? ' NOT NULL' : '';
+            const dflt = col[4] !== null && col[4] !== undefined ? ` DEFAULT ${col[4]}` : '';
+            const pk = col[5] ? ' PRIMARY KEY' : '';
+            return `  "${name}" ${type}${pk}${notNull}${dflt}`;
+          });
+          createDdl = `CREATE TABLE "${tableName}" (\n${colDefs.join(',\n')}\n);`;
+        } else {
+          createDdl = `CREATE TABLE IF NOT EXISTS "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);`;
+        }
+      }
+      if (!createDdl.endsWith(';')) {
+        createDdl += ';';
+      }
+      return `DROP TABLE IF EXISTS "${tableName}";\n\n${createDdl}\n`;
+    } catch (e) {
+      console.error('getRecreateTableSQL error:', e);
+      return `DROP TABLE IF EXISTS "${tableName}";\n\nCREATE TABLE "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);\n`;
+    }
+  }
+
   public deleteTable(tableName: string): void {
     if (this.isSystemTable(tableName)) {
       throw new Error(`Cannot delete system table: ${tableName}`);

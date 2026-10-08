@@ -158,14 +158,10 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
             </div>
             <button
               onClick={onToggleVSCodeMode}
-              className={`mt-4 w-full py-2.5 rounded-xl font-semibold text-xs border shadow transition active:scale-95 flex items-center justify-center gap-1.5 ${
-                isVSCodeMode
-                  ? 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500'
-                  : isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-              }`}
+              className="mt-4 w-full py-2.5 rounded-xl font-semibold text-xs border shadow transition active:scale-95 flex items-center justify-center gap-1.5 bg-blue-600 text-white border-blue-500 hover:bg-blue-500 cursor-pointer"
             >
               <Code2 className="w-4 h-4" />
-              <span>{isVSCodeMode ? 'Exit Monaco IDE Mode' : 'Enter Monaco IDE Mode'}</span>
+              <span>Launch Monaco IDE (Full Screen)</span>
             </button>
           </div>
         </div>

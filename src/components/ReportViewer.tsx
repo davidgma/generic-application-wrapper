@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Printer, Download, Edit3, RefreshCw, ChevronLeft, Sparkles } from 'lucide-react';
+import { Printer, Download, Edit3, RefreshCw, ChevronLeft, Sparkles, Code2 } from 'lucide-react';
 import { SQLiteEngine } from '../engine/sqliteEngine';
 import { SavedReport, ReportConfig } from '../types/report';
 import { QueryResult } from '../types/sqlite';
@@ -7,6 +7,7 @@ import { QueryResult } from '../types/sqlite';
 interface ReportViewerProps {
   report: SavedReport;
   onEdit?: () => void;
+  onOpenInIDE?: (tab?: { type: 'report'; id: string; name: string }) => void;
   onBack?: () => void;
   theme?: 'vs-dark' | 'vs-light';
 }
@@ -14,6 +15,7 @@ interface ReportViewerProps {
 export const ReportViewer: React.FC<ReportViewerProps> = ({
   report,
   onEdit,
+  onOpenInIDE,
   onBack,
   theme = 'vs-dark',
 }) => {
@@ -94,6 +96,19 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>Customize Report</span>
+            </button>
+          )}
+          {onOpenInIDE && (
+            <button
+              onClick={() => onOpenInIDE({ type: 'report', id: report.id, name: report.name })}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
+              title="Edit report definition in Monaco IDE (Ctrl+Shift+F)"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>Edit in IDE</span>
+              <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
+                Ctrl+Shift+F
+              </kbd>
             </button>
           )}
           <button

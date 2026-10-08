@@ -256,21 +256,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div
                   onClick={() => toggleSection('pluginsSystem')}
                   className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
-                    isDark ? 'text-sky-400 hover:text-sky-300' : 'text-blue-600 hover:text-blue-700'
+                    isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
                   }`}
                 >
                   {collapsedSections.pluginsSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   {collapsedSections.pluginsSystem ? (
-                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-sky-400' : 'text-blue-600'}`} />
+                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-sky-300' : 'text-sky-500'}`} />
                   ) : (
-                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-sky-400' : 'text-blue-600'}`} />
+                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-sky-300' : 'text-sky-500'}`} />
                   )}
                   <span>System ({systemPlugins.length})</span>
                 </div>
 
                 {!collapsedSections.pluginsSystem && (
                   <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
-                    isDark ? 'border-sky-500/30' : 'border-blue-300'
+                    isDark ? 'border-sky-500/30' : 'border-sky-300'
                   }`}>
                     {systemPlugins.map((p) => {
                       const isActive = activeView === `plugin:${p.id}`;
@@ -283,20 +283,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               isActive
                                 ? isDark
                                   ? 'bg-sky-600 text-white font-semibold shadow-sm'
-                                  : 'bg-blue-600 text-white font-semibold shadow-sm'
+                                  : 'bg-sky-500 text-white font-semibold shadow-sm'
                                 : isDark
                                 ? 'hover:bg-slate-900 text-sky-300 hover:text-white'
-                                : 'hover:bg-blue-50 text-blue-700 hover:text-blue-800 font-medium'
+                                : 'hover:bg-sky-50 text-sky-600 hover:text-sky-700 font-medium'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
                               <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                isActive ? 'text-white' : isDark ? 'text-sky-400' : 'text-blue-600'
+                                isActive ? 'text-white' : isDark ? 'text-sky-300' : 'text-sky-500'
                               }`} />
                               <span className="truncate">{p.name}</span>
                             </div>
                             <span className={`text-[10px] font-mono ml-1 ${
-                              isActive ? 'text-white/80' : isDark ? 'text-sky-400/80' : 'text-blue-600/80 font-medium'
+                              isActive ? 'text-white/80' : isDark ? 'text-sky-300/80' : 'text-sky-500/90 font-medium'
                             }`}>v{p.version}</span>
                           </button>
 
@@ -347,14 +347,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div
                   onClick={() => toggleSection('pluginsUser')}
                   className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
-                    isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'
+                    isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                   }`}
                 >
                   {collapsedSections.pluginsUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   {collapsedSections.pluginsUser ? (
-                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
                   ) : (
-                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
                   )}
                   <span>User ({userPlugins.length})</span>
                 </div>
@@ -377,20 +377,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               isActive
                                 ? isDark
                                   ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                                  : 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                  : 'bg-emerald-500 text-white font-semibold shadow-sm'
                                 : isDark
                                 ? 'hover:bg-slate-900 text-emerald-300 hover:text-white'
-                                : 'hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 font-medium'
+                                : 'hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 font-medium'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
                               <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                isActive ? 'text-white' : isDark ? 'text-emerald-400' : 'text-emerald-600'
+                                isActive ? 'text-white' : isDark ? 'text-emerald-300' : 'text-emerald-500'
                               }`} />
                               <span className="truncate">{p.name}</span>
                             </div>
                             <span className={`text-[10px] font-mono ml-1 ${
-                              isActive ? 'text-white/80' : isDark ? 'text-emerald-400/80' : 'text-emerald-600/80 font-medium'
+                              isActive ? 'text-white/80' : isDark ? 'text-emerald-300/80' : 'text-emerald-500/90 font-medium'
                             }`}>v{p.version}</span>
                           </button>
 
@@ -468,21 +468,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div
                     onClick={() => toggleSection('tablesSystem')}
                     className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
-                      isDark ? 'text-sky-400 hover:text-sky-300' : 'text-blue-600 hover:text-blue-700'
+                      isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
                     }`}
                   >
                     {collapsedSections.tablesSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                     {collapsedSections.tablesSystem ? (
-                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-sky-400' : 'text-blue-600'}`} />
+                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-sky-300' : 'text-sky-500'}`} />
                     ) : (
-                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-sky-400' : 'text-blue-600'}`} />
+                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-sky-300' : 'text-sky-500'}`} />
                     )}
                     <span>System ({systemTables.length})</span>
                   </div>
 
                   {!collapsedSections.tablesSystem && (
                     <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
-                      isDark ? 'border-sky-500/30' : 'border-blue-300'
+                      isDark ? 'border-sky-500/30' : 'border-sky-300'
                     }`}>
                       {systemTables.map((t) => {
                         const isActive = activeView === `table:${t.name}`;
@@ -494,20 +494,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 isActive
                                   ? isDark
                                     ? 'bg-sky-600 text-white font-semibold shadow-sm'
-                                    : 'bg-blue-600 text-white font-semibold shadow-sm'
+                                    : 'bg-sky-500 text-white font-semibold shadow-sm'
                                   : isDark
                                   ? 'hover:bg-slate-900 text-sky-300 hover:text-white'
-                                  : 'hover:bg-blue-50 text-blue-700 hover:text-blue-800 font-medium'
+                                  : 'hover:bg-sky-50 text-sky-600 hover:text-sky-700 font-medium'
                               }`}
                             >
                               <div className="flex items-center gap-2 truncate">
                                 <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                  isActive ? 'text-white' : isDark ? 'text-sky-400' : 'text-blue-600'
+                                  isActive ? 'text-white' : isDark ? 'text-sky-300' : 'text-sky-500'
                                 }`} />
                                 <span className="truncate">{t.name}</span>
                               </div>
                               <span className={`text-[10px] font-mono ml-1 ${
-                                isActive ? 'text-white/80' : isDark ? 'text-sky-400/80' : 'text-blue-600/80 font-medium'
+                                isActive ? 'text-white/80' : isDark ? 'text-sky-300/80' : 'text-sky-500/90 font-medium'
                               }`}>
                                 {t.rowCount} rows
                               </span>
@@ -517,7 +517,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               className="p-1.5 text-slate-600 cursor-not-allowed"
                               title="System table: Protected schema"
                             >
-                              <Lock className={`w-3 h-3 ${isDark ? 'text-sky-400/70' : 'text-blue-600/70'}`} />
+                              <Lock className={`w-3 h-3 ${isDark ? 'text-sky-300/70' : 'text-sky-500/70'}`} />
                             </div>
                           </div>
                         );
@@ -532,14 +532,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div
                   onClick={() => toggleSection('tablesUser')}
                   className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
-                    isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'
+                    isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                   }`}
                 >
                   {collapsedSections.tablesUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   {collapsedSections.tablesUser ? (
-                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
                   ) : (
-                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
                   )}
                   <span>User ({userTables.length})</span>
                 </div>
@@ -562,20 +562,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               isActive
                                 ? isDark
                                   ? 'bg-emerald-600 text-white font-semibold shadow-sm'
-                                  : 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                  : 'bg-emerald-500 text-white font-semibold shadow-sm'
                                 : isDark
                                 ? 'hover:bg-slate-900 text-emerald-300 hover:text-white'
-                                : 'hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 font-medium'
+                                : 'hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 font-medium'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
                               <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${
-                                isActive ? 'text-white' : isDark ? 'text-emerald-400' : 'text-emerald-600'
+                                isActive ? 'text-white' : isDark ? 'text-emerald-300' : 'text-emerald-500'
                               }`} />
                               <span className="truncate">{t.name}</span>
                             </div>
                             <span className={`text-[10px] font-mono ml-1 ${
-                              isActive ? 'text-white/80' : isDark ? 'text-emerald-400/80' : 'text-emerald-600/80 font-medium'
+                              isActive ? 'text-white/80' : isDark ? 'text-emerald-300/80' : 'text-emerald-500/90 font-medium'
                             }`}>
                               {t.rowCount} rows
                             </span>

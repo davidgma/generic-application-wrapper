@@ -41,7 +41,7 @@ import {
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
 import { QueryResult, SavedQuery, TableSchema } from '../../types/sqlite';
-import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../../types/plugin';
+import { PluginRecord, SYSTEM_PLUGIN_IDS, isSystemPlugin } from '../../types/plugin';
 import { SavedReport } from '../../types/report';
 import { safeStorage } from '../../utils/storage';
 import { QueryGrid } from '../QueryGrid';
@@ -82,6 +82,8 @@ interface GAWIDEProps {
   gawContext?: any;
   isVSCodeMode?: boolean;
   onToggleVSCodeMode?: () => void;
+  onExitIDE?: (target?: TargetTabInfo | null) => void;
+  onActiveTabChange?: (target: TargetTabInfo | null) => void;
 }
 
 export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Help';
@@ -97,8 +99,10 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   theme = 'vs-dark',
   onToggleTheme,
   gawContext,
-  isVSCodeMode = false,
+  isVSCodeMode = true,
   onToggleVSCodeMode,
+  onExitIDE,
+  onActiveTabChange,
 }) => {
   const engine = SQLiteEngine.getInstance();
   const editorRef = useRef<any>(null);
@@ -126,7 +130,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   // Explorer Tree Expansion
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
     plugins: true,
+    pluginsUser: true,
+    pluginsSystem: true,
     tables: true,
+    tablesUser: true,
+    tablesSystem: false,
     queries: true,
     reports: true,
   });
@@ -202,6 +210,47 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || 'tab_sql_1');
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
+  const getTargetFromTab = useCallback((tab?: TabItem | null): TargetTabInfo | null => {
+    if (!tab) return null;
+    if (tab.type === 'table') {
+      const name = tab.tableName || tab.title.replace(/\.sql$/i, '');
+      return { type: 'table', name };
+    }
+    if (tab.type === 'query' || tab.type === 'sql') {
+      const qId = tab.queryId;
+      const name = tab.title.replace(/\.sql$/i, '');
+      return { type: 'query', id: qId, name };
+    }
+    if (tab.type === 'plugin') {
+      const pId = tab.pluginId;
+      const name = tab.title.replace(/\.tsx$/i, '');
+      return { type: 'plugin', id: pId, name };
+    }
+    if (tab.type === 'report') {
+      const rId = tab.reportId;
+      const name = tab.title.replace(/\.json$/i, '');
+      return { type: 'report', id: rId, name };
+    }
+    return null;
+  }, []);
+
+  const currentTargetInfo = useMemo(() => getTargetFromTab(activeTab), [activeTab, getTargetFromTab]);
+
+  useEffect(() => {
+    onActiveTabChange?.(currentTargetInfo);
+  }, [currentTargetInfo, onActiveTabChange]);
+
+  const handleExitIDE = useCallback(() => {
+    if (onExitIDE) {
+      onExitIDE(currentTargetInfo);
+    } else if (onToggleVSCodeMode) {
+      onToggleVSCodeMode();
+    }
+  }, [onExitIDE, currentTargetInfo, onToggleVSCodeMode]);
+
+  const handleExitIDERef = useRef(handleExitIDE);
+  handleExitIDERef.current = handleExitIDE;
+
   // Execution outputs for SQL
   const [queryResults, setQueryResults] = useState<QueryResult[]>([]);
   const [activeResultIndex, setActiveResultIndex] = useState<number>(0);
@@ -238,10 +287,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   // Schema state for autocompletion and explorer
   const schema = useMemo(() => engine.getSchema(), [engine]);
   const allPlugins = useMemo(() => engine.getPlugins(), [engine, tabs]);
-  const allTables = useMemo(
+  const userPlugins = useMemo(() => allPlugins.filter((p) => !isSystemPlugin(p)), [allPlugins]);
+  const systemPlugins = useMemo(() => allPlugins.filter((p) => isSystemPlugin(p)), [allPlugins]);
+
+  const userTables = useMemo(
     () => schema.filter((t) => !t.isSystem && !engine.isSystemTable(t.name)),
     [schema, engine]
   );
+  const systemTables = useMemo(
+    () => schema.filter((t) => t.isSystem || engine.isSystemTable(t.name)),
+    [schema, engine]
+  );
+  const allTables = useMemo(() => [...userTables, ...systemTables], [userTables, systemTables]);
   const allQueries = useMemo(() => engine.getSavedQueries(), [engine, tabs]);
   const allReports = useMemo(() => engine.getSavedReports(), [engine, tabs]);
 
@@ -263,8 +320,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       } else if (item.type === 'table' && item.name) {
         tabId = `tab_table_${item.name}`;
         title = `${item.name}.sql`;
-        const ddl = engine.getTableDDL(item.name);
-        content = `-- ===================================================\n-- Table Schema & Alteration: "${item.name}"\n-- Run (Ctrl+Enter or Run) to execute schema modifications.\n-- ===================================================\n\n-- Current Definition:\n${ddl};\n\n-- ---------------------------------------------------\n-- Examples for modifying table "${item.name}":\n-- 1. Add column:\n-- ALTER TABLE "${item.name}" ADD COLUMN "new_column" TEXT DEFAULT '';\n--\n-- 2. Rename column:\n-- ALTER TABLE "${item.name}" RENAME COLUMN "old_name" TO "new_name";\n--\n-- 3. Create index:\n-- CREATE INDEX IF NOT EXISTS "idx_${item.name}_id" ON "${item.name}" ("id");\n-- ---------------------------------------------------\n`;
+        content = engine.getRecreateTableSQL(item.name);
       } else if (item.type === 'query') {
         const queries = engine.getSavedQueries();
         const q = queries.find((x) => x.id === item.id || x.name === item.name);
@@ -487,11 +543,19 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         setIsPrimarySidebarOpen((prev) => !prev);
         return;
       }
+
+      // Ctrl+Shift+F: Exit IDE to corresponding application view
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleExitIDE();
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [showCommandPalette, activeMenu, showAboutModal, handleCloseCommandPalette]);
+  }, [showCommandPalette, activeMenu, showAboutModal, handleCloseCommandPalette, handleExitIDE]);
 
   // Sync external targetTab request (from Sidebar edit options)
   useEffect(() => {
@@ -551,6 +615,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     // Track Cursor Position for VS Code Status Bar
     editor.onDidChangeCursorPosition((e) => {
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
+    });
+
+    // Keybinding: Ctrl+Shift+F to exit IDE to non-IDE view
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
+      handleExitIDERef.current();
     });
 
     // 1. Add TypeScript definitions for GAW Plugin APIs, React, and Lucide React
@@ -1005,16 +1074,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         shortcut: 'Ctrl+B',
         action: () => setIsPrimarySidebarOpen((prev) => !prev),
       },
-      ...(onToggleVSCodeMode
-        ? [
-            {
-              id: 'cmd_toggle_vscode',
-              title: isVSCodeMode ? 'View: Switch to Gawkyy Application Shell' : 'View: Switch to Full Monaco IDE Mode',
-              shortcut: 'Ctrl+Shift+F',
-              action: () => onToggleVSCodeMode(),
-            },
-          ]
-        : []),
+      {
+        id: 'cmd_exit_ide',
+        title: 'View: Exit Monaco IDE to Application View',
+        shortcut: 'Ctrl+Shift+F',
+        action: () => handleExitIDE(),
+      },
       {
         id: 'cmd_new_sql',
         title: 'File: New SQL Query File',
@@ -1123,9 +1188,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         action: () => setShowCommandPalette(true),
       },
       {
-        label: isVSCodeMode ? 'Exit Monaco IDE Mode' : 'Enter Monaco IDE Mode',
+        label: 'Exit Monaco IDE',
         shortcut: 'Ctrl+Shift+F',
-        action: () => onToggleVSCodeMode?.(),
+        action: () => handleExitIDE(),
         divider: true,
       },
     ],
@@ -1336,7 +1401,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       },
       {
         label: 'Search in Files',
-        shortcut: 'Ctrl+Shift+F',
         action: () => {
           setActiveActivity('search');
           setIsPrimarySidebarOpen(true);
@@ -1516,10 +1580,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   return (
     <div className={`flex flex-col h-full ${isDark ? 'bg-[#1e1e1e] text-slate-200' : 'bg-white text-slate-800'} overflow-hidden select-text font-sans`}>
-      {/* 1. VS CODE TITLE BAR & MENUBAR (When in Full VS Code Mode) */}
-      {isVSCodeMode ? (
-        <div
-          ref={menubarRef}
+      {/* 1. VS CODE TITLE BAR & MENUBAR */}
+      <div
+        ref={menubarRef}
           className={`flex items-center justify-between px-3 py-1 text-xs border-b select-text ${
             isDark ? 'bg-[#323233] text-slate-200 border-[#252526]' : 'bg-[#f3f3f3] text-slate-800 border-[#e5e5e5]'
           }`}
@@ -1638,214 +1701,80 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               <Files className="w-3.5 h-3.5" />
             </button>
 
-            {onToggleVSCodeMode && (
-              <button
-                onClick={onToggleVSCodeMode}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] shadow transition active:scale-95 ml-1"
-                title="Exit to standard Gawkyy application view (Ctrl+Shift+F)"
-              >
-                <Minimize2 className="w-3.5 h-3.5" />
-                <span>Exit Monaco IDE Mode</span>
-              </button>
-            )}
+            <button
+              onClick={handleExitIDE}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow transition active:scale-95 ml-1"
+              title="Exit Monaco IDE and return to application view (Ctrl+Shift+F)"
+            >
+              <Minimize2 className="w-3.5 h-3.5" />
+              <span>Exit IDE</span>
+              <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
+                Ctrl+Shift+F
+              </kbd>
+            </button>
           </div>
         </div>
-      ) : (
-        /* STANDARD GAW COMMAND BAR */
-        <div className={`flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-b ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-300'} text-xs`}>
-          <div className="flex items-center gap-1 overflow-x-auto flex-1 max-w-2xl">
-            {tabs.map((tab) => {
-              const isActive = tab.id === activeTabId;
-              return (
-                <div
-                  key={tab.id}
-                  onClick={() => setActiveTabId(tab.id)}
-                  className={`group flex items-center gap-1.5 px-3 py-1 rounded-t text-xs cursor-pointer border-t border-x transition ${
-                    isActive
-                      ? isDark
-                        ? 'bg-slate-900 text-white border-slate-700 shadow-sm font-semibold'
-                        : 'bg-white text-slate-900 border-slate-300 shadow-sm font-semibold'
-                      : isDark
-                      ? 'bg-slate-950 text-slate-400 border-transparent hover:text-slate-200'
-                      : 'bg-slate-100 text-slate-600 border-transparent hover:text-slate-800'
-                  }`}
-                >
-                  {tab.type === 'plugin' ? (
-                    <FileCode className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : tab.type === 'table' ? (
-                    <TableIcon className="w-3.5 h-3.5 text-amber-400" />
-                  ) : tab.type === 'report' ? (
-                    <FileText className="w-3.5 h-3.5 text-purple-400" />
-                  ) : (
-                    <Database className="w-3.5 h-3.5 text-indigo-400" />
-                  )}
-                  <span className="truncate max-w-[130px]">{tab.title}</span>
-                  {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-                  {tabs.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeTab(tab.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition ml-1"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-            <button
-              onClick={addSqlTab}
-              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800"
-              title="New SQL Query Tab"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={runCurrentQuery}
-              disabled={isExecuting}
-              className="flex items-center gap-1.5 px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 font-semibold text-white text-xs shadow-sm transition active:scale-95"
-            >
-              <Play className="w-3.5 h-3.5 fill-white" />
-              <span>Run (Ctrl+Enter)</span>
-            </button>
-
-            {/* OPEN BUTTON */}
-            <div className="relative" ref={openMenuRef}>
-              <button
-                onClick={() => setShowOpenMenu(!showOpenMenu)}
-                className="flex items-center gap-1.5 px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 font-semibold text-xs shadow-sm transition"
-              >
-                <FolderOpen className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Open</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
-              {showOpenMenu && (
-                <div className="absolute right-0 top-full mt-1.5 w-84 bg-slate-950 border border-slate-700 rounded-xl shadow-2xl z-50 flex flex-col text-xs text-slate-200 overflow-hidden backdrop-blur-md">
-                  <div className="p-2 border-b border-slate-800 bg-slate-900/60 space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Search objects to edit in IDE..."
-                      value={openSearch}
-                      onChange={(e) => setOpenSearch(e.target.value)}
-                      autoFocus
-                      className="w-full px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 text-xs"
-                    />
-                  </div>
-                  <div className="max-h-72 overflow-y-auto p-1.5 space-y-1">
-                    {allPlugins.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-900"
-                      >
-                        <FileCode className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="truncate">{p.name}.tsx</span>
-                      </button>
-                    ))}
-                    {allTables.map((t) => (
-                      <button
-                        key={t.name}
-                        onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-900"
-                      >
-                        <TableIcon className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="truncate">{t.name}.sql</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleSaveActiveTab}
-              className="flex items-center gap-1.5 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 font-semibold text-white text-xs shadow-sm transition active:scale-95"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save (Ctrl+S)</span>
-            </button>
-
-            {onToggleVSCodeMode && (
-              <button
-                onClick={onToggleVSCodeMode}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95 ml-1"
-                title="Switch to Full Monaco IDE Interface (Ctrl+Shift+F)"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>Monaco IDE Mode</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 2. HORIZONTAL BODY (Activity Bar + Primary Side Bar + Monaco Canvas) */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* MONACO IDE ACTIVITY BAR (Vertical Strip, 48px) */}
-        {isVSCodeMode && (
-          <div
-            className={`w-12 border-r flex flex-col items-center justify-between py-2 select-text z-10 ${
-              isDark ? 'bg-[#333333] border-[#252526]' : 'bg-[#f8f8f8] border-[#e5e5e5]'
-            }`}
-          >
-            <div className="flex flex-col items-center gap-3 w-full">
-              {[
-                { id: 'explorer', icon: Files, title: 'Explorer (Ctrl+Shift+E)' },
-                { id: 'search', icon: Search, title: 'Search in Files (Ctrl+Shift+F)' },
-                { id: 'extensions', icon: Puzzle, title: 'Extensions: Prettier, Themes, SQLite (Ctrl+Shift+X)' },
-              ].map(({ id, icon: Icon, title }) => (
-                <button
-                  key={id}
-                  onClick={() => {
-                    setActiveActivity(id as ActivityBarTab);
-                    setIsPrimarySidebarOpen(true);
-                  }}
-                  className={`p-2.5 rounded transition ${
-                    activeActivity === id && isPrimarySidebarOpen
-                      ? isDark
-                        ? 'border-l-2 border-white text-white bg-[#252526]'
-                        : 'border-l-2 border-blue-600 text-blue-600 bg-white shadow-xs'
-                      : isDark
-                      ? 'text-slate-400 hover:text-white'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                  title={title}
-                >
-                  <Icon className="w-5 h-5" />
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col items-center gap-2">
+        <div
+          className={`w-12 border-r flex flex-col items-center justify-between py-2 select-text z-10 ${
+            isDark ? 'bg-[#333333] border-[#252526]' : 'bg-[#f8f8f8] border-[#e5e5e5]'
+          }`}
+        >
+          <div className="flex flex-col items-center gap-3 w-full">
+            {[
+              { id: 'explorer', icon: Files, title: 'Explorer (Ctrl+Shift+E)' },
+              { id: 'search', icon: Search, title: 'Search in Files' },
+              { id: 'extensions', icon: Puzzle, title: 'Extensions: Prettier, Themes, SQLite (Ctrl+Shift+X)' },
+            ].map(({ id, icon: Icon, title }) => (
               <button
+                key={id}
                 onClick={() => {
-                  setActiveActivity('settings');
+                  setActiveActivity(id as ActivityBarTab);
                   setIsPrimarySidebarOpen(true);
                 }}
-                className={`p-2 rounded transition ${
-                  activeActivity === 'settings'
+                className={`p-2.5 rounded transition ${
+                  activeActivity === id && isPrimarySidebarOpen
                     ? isDark
-                      ? 'text-white bg-[#252526]'
-                      : 'text-blue-600 bg-white shadow-xs'
+                      ? 'border-l-2 border-white text-white bg-[#252526]'
+                      : 'border-l-2 border-blue-600 text-blue-600 bg-white shadow-xs'
                     : isDark
                     ? 'text-slate-400 hover:text-white'
                     : 'text-slate-500 hover:text-slate-900'
                 }`}
-                title="Settings & Keybindings (Ctrl+,)"
+                title={title}
               >
-                <Settings className="w-5 h-5" />
+                <Icon className="w-5 h-5" />
               </button>
-            </div>
+            ))}
           </div>
-        )}
+
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => {
+                setActiveActivity('settings');
+                setIsPrimarySidebarOpen(true);
+              }}
+              className={`p-2 rounded transition ${
+                activeActivity === 'settings'
+                  ? isDark
+                    ? 'text-white bg-[#252526]'
+                    : 'text-blue-600 bg-white shadow-xs'
+                  : isDark
+                  ? 'text-slate-400 hover:text-white'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="Settings & Keybindings (Ctrl+,)"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
 
         {/* PRIMARY SIDE BAR (Explorer, Search, Extensions, Settings) */}
-        {isVSCodeMode && isPrimarySidebarOpen && (
+        {isPrimarySidebarOpen && (
           <div
             className={`w-64 border-r flex flex-col text-xs select-text overflow-hidden flex-shrink-0 ${
               isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-white border-slate-200 text-slate-900'
@@ -1891,20 +1820,71 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       <Folder className="w-3.5 h-3.5 text-blue-500" />
                       <span>plugins ({allPlugins.length})</span>
                     </div>
+
                     {expandedFolders.plugins && (
-                      <div className="pl-6 space-y-0.5 mt-0.5">
-                        {allPlugins.map((p) => (
+                      <div className="pl-4 space-y-1.5 mt-0.5">
+                        {/* Subfolder: System Plugins */}
+                        <div>
                           <div
-                            key={p.id}
-                            onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
+                            onClick={() => toggleFolder('pluginsSystem')}
+                            className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                              isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
                             }`}
                           >
-                            <FileCode className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                            <span className="truncate">{p.name}.tsx</span>
+                            {expandedFolders.pluginsSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                            <span>System ({systemPlugins.length})</span>
                           </div>
-                        ))}
+                          {expandedFolders.pluginsSystem && (
+                            <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
+                              {systemPlugins.map((p) => (
+                                <div
+                                  key={p.id}
+                                  onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
+                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                                    isDark ? 'text-sky-300 hover:text-white hover:bg-slate-800' : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
+                                  }`}
+                                >
+                                  <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                  <span className="truncate">{p.name}.tsx</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Subfolder: User Plugins */}
+                        <div>
+                          <div
+                            onClick={() => toggleFolder('pluginsUser')}
+                            className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                              isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
+                            }`}
+                          >
+                            {expandedFolders.pluginsUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                            <span>User ({userPlugins.length})</span>
+                          </div>
+                          {expandedFolders.pluginsUser && (
+                            <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-emerald-500/20">
+                              {userPlugins.length === 0 && (
+                                <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user plugins</div>
+                              )}
+                              {userPlugins.map((p) => (
+                                <div
+                                  key={p.id}
+                                  onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
+                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                                    isDark ? 'text-emerald-300 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
+                                  }`}
+                                >
+                                  <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                                  <span className="truncate">{p.name}.tsx</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1921,20 +1901,75 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                       <Folder className="w-3.5 h-3.5 text-amber-500" />
                       <span>tables ({allTables.length})</span>
                     </div>
+
                     {expandedFolders.tables && (
-                      <div className="pl-6 space-y-0.5 mt-0.5">
-                        {allTables.map((t) => (
+                      <div className="pl-4 space-y-1.5 mt-0.5">
+                        {/* Subfolder: User Tables */}
+                        <div>
                           <div
-                            key={t.name}
-                            onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
+                            onClick={() => toggleFolder('tablesUser')}
+                            className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                              isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                             }`}
                           >
-                            <TableIcon className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                            <span className="truncate">{t.name}.sql</span>
+                            {expandedFolders.tablesUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                            <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                            <span>User ({userTables.length})</span>
                           </div>
-                        ))}
+                          {expandedFolders.tablesUser && (
+                            <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-emerald-500/20">
+                              {userTables.length === 0 && (
+                                <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user tables</div>
+                              )}
+                              {userTables.map((t) => (
+                                <div
+                                  key={t.name}
+                                  onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
+                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                                    isDark ? 'text-emerald-300 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
+                                  }`}
+                                  title={`Table: ${t.name} (Click to view DDL recreation code)`}
+                                >
+                                  <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                                  <span className="truncate">{t.name}.sql</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Subfolder: System Tables */}
+                        {systemTables.length > 0 && (
+                          <div>
+                            <div
+                              onClick={() => toggleFolder('tablesSystem')}
+                              className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                                isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
+                              }`}
+                            >
+                              {expandedFolders.tablesSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                              <span>System ({systemTables.length})</span>
+                            </div>
+                            {expandedFolders.tablesSystem && (
+                              <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
+                                {systemTables.map((t) => (
+                                  <div
+                                    key={t.name}
+                                    onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
+                                    className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                                      isDark ? 'text-sky-300 hover:text-white hover:bg-slate-800' : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
+                                    }`}
+                                    title={`System Table: ${t.name} (Click to view DDL recreation code)`}
+                                  >
+                                    <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                    <span className="truncate">{t.name}.sql</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1963,6 +1998,36 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                           >
                             <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
                             <span className="truncate">{q.name}.sql</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Folder: REPORTS */}
+                  <div>
+                    <div
+                      onClick={() => toggleFolder('reports')}
+                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
+                      }`}
+                    >
+                      {expandedFolders.reports ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      <Folder className="w-3.5 h-3.5 text-purple-500" />
+                      <span>reports ({allReports.length})</span>
+                    </div>
+                    {expandedFolders.reports && (
+                      <div className="pl-6 space-y-0.5 mt-0.5">
+                        {allReports.map((r) => (
+                          <div
+                            key={r.id}
+                            onClick={() => openOrActivateItem({ type: 'report', id: r.id, name: r.name })}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
+                            }`}
+                          >
+                            <FileText className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                            <span className="truncate">{r.name}.json</span>
                           </div>
                         ))}
                       </div>
@@ -2190,12 +2255,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         {/* 3. CENTER MONACO EDITOR CANVAS & TABS */}
         <div className={`flex-1 flex flex-col min-w-0 overflow-hidden ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
           {/* VS Code Tab Bar */}
-          {isVSCodeMode && (
-            <div
-              className={`flex items-center border-b overflow-x-auto text-xs select-text ${
-                isDark ? 'bg-[#252526] border-[#1e1e1e]' : 'bg-[#f3f3f3] border-[#e5e5e5]'
-              }`}
-            >
+          <div
+            className={`flex items-center border-b overflow-x-auto text-xs select-text ${
+              isDark ? 'bg-[#252526] border-[#1e1e1e]' : 'bg-[#f3f3f3] border-[#e5e5e5]'
+            }`}
+          >
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTabId;
                 return (
@@ -2249,7 +2313,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
-          )}
 
           {/* Monaco Editor Frame */}
           <div className="flex-1 flex overflow-hidden min-h-0">
@@ -2437,15 +2500,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           <span className="hidden sm:inline">UTF-8</span>
           <span className="capitalize">{editorLanguage}</span>
 
-          {onToggleVSCodeMode && (
-            <button
-              onClick={onToggleVSCodeMode}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-800/80 hover:bg-blue-900 text-white font-bold text-[10px] cursor-pointer"
-              title="Toggle between Monaco IDE and Gawkyy mode (Ctrl+Shift+F)"
-            >
-              <span>{isVSCodeMode ? '⚡ Full Monaco IDE: ON' : '⚡ Full Monaco IDE (Ctrl+Shift+F)'}</span>
-            </button>
-          )}
+          <button
+            onClick={handleExitIDE}
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-700 hover:bg-blue-600 text-white font-medium text-[10px] cursor-pointer"
+            title="Exit Monaco IDE and return to application view (Ctrl+Shift+F)"
+          >
+            <Code2 className="w-3 h-3" />
+            <span>Exit IDE (Ctrl+Shift+F)</span>
+          </button>
         </div>
       </div>
 

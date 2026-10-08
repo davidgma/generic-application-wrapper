@@ -64,7 +64,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           title="Toggle between standard Gawkyy shell and full Monaco IDE layout (Ctrl+Shift+F)"
         >
           <Code2 className="w-3.5 h-3.5 text-cyan-400" />
-          <span>{isVSCodeMode ? 'Monaco IDE: FULL' : 'Monaco IDE'}</span>
+          <span>Open Monaco IDE</span>
           <kbd className="opacity-80 text-[9px] px-1 bg-black/40 rounded border border-white/10 font-mono">
             Ctrl+Shift+F
           </kbd>

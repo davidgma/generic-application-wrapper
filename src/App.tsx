@@ -14,6 +14,7 @@ import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { StatusBar } from './components/StatusBar';
 import { QueryGrid } from './components/QueryGrid';
+import { MultiQueryResultsView } from './components/MultiQueryResultsView';
 import { GAWIDE, TargetTabInfo } from './components/IDE/GAWIDE';
 import { SpreadsheetView } from './components/SpreadsheetView';
 import { ReportViewer } from './components/ReportViewer';
@@ -44,6 +45,7 @@ import {
   Play,
   RotateCcw,
   Cloud,
+  Code2,
 } from 'lucide-react';
 
 interface ToastItem {
@@ -266,8 +268,10 @@ export default function App() {
     [mode, sidebarOpen, activeView, lastAppView, lastDevView, plugins, appSettings.initialPlugin, getInitialAppView, navigateTo]
   );
 
-  // Active query result for table/query views
+  // Active query result for table/query views (supporting multiple queries separated by semicolons)
   const [activeQueryResult, setActiveQueryResult] = useState<QueryResult | null>(null);
+  const [activeQueryResults, setActiveQueryResults] = useState<QueryResult[]>([]);
+  const [activeSavedQuery, setActiveSavedQuery] = useState<SavedQuery | null>(null);
   const [activeQueryTitle, setActiveQueryTitle] = useState<string>('');
 
   // Storage and Sync Metadata
@@ -288,36 +292,14 @@ export default function App() {
 
   // Target tab to open and edit in IDE
   const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
+  const [currentIdeTarget, setCurrentIdeTarget] = useState<TargetTabInfo | null>(null);
 
-  // VS Code Studio full-interface mode toggle (stored in localStorage)
-  const [isVSCodeMode, setIsVSCodeMode] = useState<boolean>(() => {
-    return safeStorage.getItem('gaw_vscode_mode') === 'true';
-  });
+  // VS Code Studio full-interface mode toggle (always true: non-full-screen IDE option removed)
+  const [isVSCodeMode, setIsVSCodeMode] = useState<boolean>(true);
 
   const handleToggleVSCodeMode = useCallback(() => {
-    setIsVSCodeMode((prev) => {
-      const next = !prev;
-      safeStorage.setItem('gaw_vscode_mode', String(next));
-      return next;
-    });
     setActiveView('ide');
   }, []);
-
-  // Keyboard shortcut listener for Ctrl+Shift+F or Ctrl+Shift+M to toggle full VS Code mode
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        e.shiftKey &&
-        (e.key === 'F' || e.key === 'f' || e.key === 'M' || e.key === 'm')
-      ) {
-        e.preventDefault();
-        handleToggleVSCodeMode();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleToggleVSCodeMode]);
 
   // Two-Stage Deletion Confirmation
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -823,19 +805,186 @@ export default function App() {
     const engine = SQLiteEngine.getInstance();
     try {
       const results = engine.exec(q.query);
+      setActiveQueryResults(results);
+      setActiveSavedQuery(q);
+      setActiveQueryTitle(q.name);
       if (results.length > 0) {
         setActiveQueryResult(results[0]);
-        setActiveQueryTitle(q.name);
-        setActiveView(`query:${q.id}`);
-        setActiveRoute('view');
-        if (updateHash) {
-          navigateTo('view', `query:${q.id}`);
-        }
+      } else {
+        setActiveQueryResult(null);
+      }
+      setActiveView(`query:${q.id}`);
+      setActiveRoute('view');
+      setLastDevView(`query:${q.id}`);
+      safeStorage.setItem('gaw_last_dev_view', `query:${q.id}`);
+      if (updateHash) {
+        navigateTo('view', `query:${q.id}`);
       }
     } catch (err: any) {
       toastApi.error('Error running query: ' + err.message);
     }
   }, [navigateTo, toastApi]);
+
+  // Re-run Active Query
+  const handleRerunActiveQuery = useCallback(() => {
+    if (!activeSavedQuery) return;
+    const engine = SQLiteEngine.getInstance();
+    try {
+      const allQ = engine.getSavedQueries();
+      const current = allQ.find((x) => x.id === activeSavedQuery.id) || activeSavedQuery;
+      const results = engine.exec(current.query);
+      setActiveQueryResults(results);
+      if (results.length > 0) {
+        setActiveQueryResult(results[0]);
+      }
+      toastApi.success('Query re-executed');
+    } catch (err: any) {
+      toastApi.error('Error running query: ' + err.message);
+    }
+  }, [activeSavedQuery, toastApi]);
+
+  // Select Plugin
+  const handleSelectPlugin = useCallback((p: PluginRecord, updateHash: boolean = true) => {
+    setActiveView(`plugin:${p.id}`);
+    setActiveRoute('plugins');
+    if (mode === 'app') {
+      setLastAppView(`plugin:${p.id}`);
+      safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+    } else {
+      setLastDevView(`plugin:${p.id}`);
+      safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
+    }
+    if (updateHash) {
+      navigateTo('plugins', `plugin:${p.id}`);
+    }
+  }, [mode, navigateTo]);
+
+  // Select Report
+  const handleSelectReport = useCallback((r: SavedReport, updateHash: boolean = true) => {
+    setActiveView(`report:${r.id}`);
+    setActiveRoute('view');
+    setLastDevView(`report:${r.id}`);
+    safeStorage.setItem('gaw_last_dev_view', `report:${r.id}`);
+    if (updateHash) {
+      navigateTo('view', `report:${r.id}`);
+    }
+  }, [navigateTo]);
+
+  // Correspondence: Exit IDE into non-IDE view of the active item in IDE
+  const handleExitIDE = useCallback(
+    (targetInfo?: TargetTabInfo | null) => {
+      const target = targetInfo !== undefined ? targetInfo : currentIdeTarget;
+      const engine = SQLiteEngine.getInstance();
+
+      if (target) {
+        if (target.type === 'plugin') {
+          const allPlugins = engine.getPlugins();
+          const p = (target.id ? allPlugins.find((x) => x.id === target.id) : null) ||
+            allPlugins.find((x) => x.name === target.name);
+          if (p) {
+            handleSelectPlugin(p);
+            return;
+          }
+          if (target.id) {
+            setActiveView(`plugin:${target.id}`);
+            setActiveRoute('plugins');
+            navigateTo('plugins', `plugin:${target.id}`);
+            return;
+          }
+        } else if (target.type === 'table' && target.name) {
+          handleSelectTable(target.name);
+          return;
+        } else if (target.type === 'query') {
+          const allQueries = engine.getSavedQueries();
+          const q = (target.id ? allQueries.find((x) => x.id === target.id) : null) ||
+            allQueries.find((x) => x.name === target.name);
+          if (q) {
+            handleSelectQuery(q);
+            return;
+          }
+          if (target.code) {
+            try {
+              const results = engine.exec(target.code);
+              setActiveQueryResults(results);
+              if (results.length > 0) setActiveQueryResult(results[0]);
+              setActiveQueryTitle(target.name || 'Ad-hoc Query');
+              setActiveView('query:adhoc');
+              setActiveRoute('view');
+              return;
+            } catch (err: any) {
+              toastApi.error('Error running query: ' + err.message);
+            }
+          }
+        } else if (target.type === 'report') {
+          const allReports = engine.getSavedReports();
+          const r = (target.id ? allReports.find((x) => x.id === target.id) : null) ||
+            allReports.find((x) => x.name === target.name);
+          if (r) {
+            handleSelectReport(r);
+            return;
+          }
+        }
+      }
+
+      // Default fallback if no specific target item
+      const returnView = lastDevView && lastDevView !== 'ide' ? lastDevView : 'view';
+      setActiveView(returnView);
+      setActiveRoute('view');
+      navigateTo('view', returnView);
+    },
+    [currentIdeTarget, lastDevView, handleSelectPlugin, handleSelectTable, handleSelectQuery, handleSelectReport, navigateTo, toastApi]
+  );
+
+  // Correspondence: Enter full-screen IDE displaying the current active non-IDE item
+  const handleEnterIDEFromCurrentView = useCallback(() => {
+    let targetToOpen: TargetTabInfo | undefined = undefined;
+
+    if (activeView.startsWith('plugin:')) {
+      const pId = activeView.replace('plugin:', '');
+      const p = plugins.find((x) => x.id === pId);
+      targetToOpen = { type: 'plugin', id: pId, name: p?.name || pId };
+    } else if (activeView.startsWith('table:')) {
+      const tName = activeView.replace('table:', '');
+      targetToOpen = { type: 'table', name: tName };
+    } else if (activeView.startsWith('query:')) {
+      const qId = activeView.replace('query:', '');
+      const q = queries.find((x) => x.id === qId);
+      targetToOpen = { type: 'query', id: qId, name: q?.name || activeQueryTitle || 'Query' };
+    } else if (activeView.startsWith('report:')) {
+      const rId = activeView.replace('report:', '');
+      const r = reports.find((x) => x.id === rId);
+      targetToOpen = { type: 'report', id: rId, name: r?.name || 'Report' };
+    }
+
+    setLastDevView(activeView);
+    safeStorage.setItem('gaw_last_dev_view', activeView);
+
+    if (targetToOpen) {
+      handleOpenInIDE(targetToOpen);
+    } else {
+      handleOpenInIDE();
+    }
+  }, [activeView, plugins, queries, reports, activeQueryTitle, handleOpenInIDE]);
+
+  // Global Ctrl+Shift+F toggle between Full Screen Monaco IDE and corresponding non-IDE view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key === 'F' || e.key === 'f')
+      ) {
+        e.preventDefault();
+        if (activeView === 'ide') {
+          handleExitIDE(currentIdeTarget);
+        } else {
+          handleEnterIDEFromCurrentView();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeView, currentIdeTarget, handleExitIDE, handleEnterIDEFromCurrentView]);
 
   // Open Spreadsheet with specific data
   const handleOpenSpreadsheet = useCallback((
@@ -1241,7 +1390,7 @@ export default function App() {
       : undefined);
   const currentReport = reports.find((r) => activeView === `report:${r.id}`);
 
-  const isFullVSCode = activeView === 'ide' && isVSCodeMode;
+  const isFullVSCode = activeView === 'ide';
 
   return (
     <div className={`flex flex-col h-screen overflow-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
@@ -1537,47 +1686,57 @@ export default function App() {
             </div>
           )}
 
-          {/* View 2: Table or Query Grid */}
-          {(activeView.startsWith('table:') || activeView.startsWith('query:')) && activeQueryResult && (
-            <div className="flex-1 flex flex-col overflow-hidden select-text">
-              <div className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs">
+          {/* View 2a: Saved Query with Multi-Statement Results */}
+          {activeView.startsWith('query:') && (
+            <MultiQueryResultsView
+              savedQuery={activeSavedQuery}
+              results={activeQueryResults}
+              title={activeQueryTitle || 'Query Results'}
+              theme={theme}
+              onOpenInIDE={handleOpenInIDE}
+              onOpenSpreadsheet={handleOpenSpreadsheet}
+              onBackToView={() => {
+                setActiveView('view');
+                navigateTo('view', 'view');
+              }}
+              onRerunQuery={handleRerunActiveQuery}
+            />
+          )}
+
+          {/* View 2b: Table Grid */}
+          {activeView.startsWith('table:') && activeQueryResult && (
+            <div className={`flex-1 flex flex-col overflow-hidden select-text ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+              <div className={`px-4 py-2 border-b flex items-center justify-between text-xs flex-shrink-0 ${
+                theme === 'vs-dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
+              }`}>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
                       setActiveView('view');
                       navigateTo('view', 'view');
                     }}
-                    className="text-slate-400 hover:text-white transition"
+                    className={`transition ${theme === 'vs-dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'}`}
                     title="Back to View Hub"
                   >
                     ← View
                   </button>
-                  <span className="text-slate-600">/</span>
-                  <span className="font-bold text-white">{activeQueryTitle}</span>
+                  <span className="text-slate-500">/</span>
+                  <span className={`font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>{activeQueryTitle}</span>
                 </div>
-                {activeView.startsWith('query:') && (
-                  <button
-                    onClick={() => {
-                      const qId = activeView.replace('query:', '');
-                      const foundQ = queries.find((q) => q.id === qId);
-                      handleOpenInIDE({ type: 'query', id: qId, name: foundQ?.name || activeQueryTitle });
-                    }}
-                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
-                  >
-                    Edit Query in IDE
-                  </button>
-                )}
-                {activeView.startsWith('table:') && (
-                  <button
-                    onClick={() => {
-                      const tName = activeView.replace('table:', '');
-                      handleOpenInIDE({ type: 'table', name: tName });
-                    }}
-                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
-                  >
-                    Edit Structure in IDE
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    const tName = activeView.replace('table:', '');
+                    handleOpenInIDE({ type: 'table', name: tName });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
+                  title="Edit table DDL in Monaco IDE (Ctrl+Shift+F)"
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span>Edit Structure in IDE</span>
+                  <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
+                    Ctrl+Shift+F
+                  </kbd>
+                </button>
               </div>
               <div className="flex-1 min-h-0">
                 <QueryGrid
@@ -1599,6 +1758,7 @@ export default function App() {
                   setReportToEdit(currentReport);
                   setShowReportBuilder(true);
                 }}
+                onOpenInIDE={handleOpenInIDE}
                 onBack={() => {
                   setActiveView('view');
                   navigateTo('view', 'view');
@@ -1622,7 +1782,7 @@ export default function App() {
             </div>
           )}
 
-          {/* View 5: Internal Monaco Editor IDE */}
+          {/* View 5: Internal Monaco Editor IDE (Full Screen) */}
           {activeView === 'ide' && (
             <div className="flex-1 overflow-hidden select-text">
               <GAWIDE
@@ -1633,8 +1793,8 @@ export default function App() {
                 theme={theme}
                 onToggleTheme={handleToggleTheme}
                 gawContext={gawContext}
-                isVSCodeMode={isVSCodeMode}
-                onToggleVSCodeMode={handleToggleVSCodeMode}
+                onExitIDE={handleExitIDE}
+                onActiveTabChange={(target) => setCurrentIdeTarget(target)}
               />
             </div>
           )}
@@ -1708,16 +1868,18 @@ export default function App() {
       </div>
 
       {/* Bottom Status Bar */}
-      <StatusBar
-        storageMeta={storageMeta}
-        tableCount={tables.length}
-        pluginCount={plugins.length}
-        theme={theme}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        isVSCodeMode={isVSCodeMode}
-        onToggleVSCodeMode={handleToggleVSCodeMode}
-        activeView={activeView}
-      />
+      {!isFullVSCode && (
+        <StatusBar
+          storageMeta={storageMeta}
+          tableCount={tables.length}
+          pluginCount={plugins.length}
+          theme={theme}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          isVSCodeMode={isVSCodeMode}
+          onToggleVSCodeMode={handleToggleVSCodeMode}
+          activeView={activeView}
+        />
+      )}
 
       {/* Modals & Dialogs */}
       {/* 1. Conflict Resolution Dialog */}
