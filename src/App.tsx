@@ -8,6 +8,7 @@ import { PluginRecord, GAWContext, isSystemPlugin, SYSTEM_PLUGIN_IDS } from './t
 import { SavedReport } from './types/report';
 import { ConflictDetails, StorageMetadata } from './types/storage';
 import { RecentFilesManager } from './engine/recentFiles';
+import { safeStorage } from './utils/storage';
 
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
@@ -56,7 +57,7 @@ export default function App() {
   const [initError, setInitError] = useState<string | null>(null);
 
   const [theme, setTheme] = useState<'vs-dark' | 'vs-light'>(() => {
-    const saved = localStorage.getItem('gaw_theme');
+    const saved = safeStorage.getItem('gaw_theme');
     if (saved === 'vs-dark' || saved === 'vs-light') return saved;
     return 'vs-dark';
   });
@@ -78,16 +79,16 @@ export default function App() {
 
   // Dev / App mode state (persisted to localStorage)
   const [mode, setMode] = useState<'dev' | 'app'>(() => {
-    const saved = localStorage.getItem('gaw_mode');
+    const saved = safeStorage.getItem('gaw_mode');
     return saved === 'app' ? 'app' : 'dev';
   });
 
   const [lastDevView, setLastDevView] = useState<string>(() => {
-    return localStorage.getItem('gaw_last_dev_view') || 'view';
+    return safeStorage.getItem('gaw_last_dev_view') || 'view';
   });
 
   const [lastAppView, setLastAppView] = useState<string | null>(() => {
-    return localStorage.getItem('gaw_last_app_view') || null;
+    return safeStorage.getItem('gaw_last_app_view') || null;
   });
 
   const [appSettings, setAppSettings] = useState<{
@@ -105,11 +106,12 @@ export default function App() {
   const [queries, setQueries] = useState<SavedQuery[]>([]);
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const userPlugins = useMemo(() => plugins.filter((p) => !isSystemPlugin(p) && p.enabled === 1), [plugins]);
   const [appTitle, setAppTitle] = useState('New Application');
 
   // Sidebar state loaded from & persisted to localStorage
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
-    const saved = localStorage.getItem('gaw_sidebar_open');
+    const saved = safeStorage.getItem('gaw_sidebar_open');
     if (saved !== null) return saved === 'true';
     return false;
   });
@@ -117,14 +119,14 @@ export default function App() {
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => {
       const next = !prev;
-      localStorage.setItem('gaw_sidebar_open', String(next));
+      safeStorage.setItem('gaw_sidebar_open', String(next));
       return next;
     });
   }, []);
 
   const setSidebarOpenWithStorage = useCallback((open: boolean) => {
     setSidebarOpen(open);
-    localStorage.setItem('gaw_sidebar_open', String(open));
+    safeStorage.setItem('gaw_sidebar_open', String(open));
   }, []);
 
   // Hash Navigation Helper
@@ -147,15 +149,15 @@ export default function App() {
   // Helper to determine initial App mode view according to the 3 rules
   const getInitialAppView = useCallback(
     (pluginsList: PluginRecord[], initialPluginSetting: string): string => {
-      const userPlugins = pluginsList.filter((p) => !isSystemPlugin(p) && p.enabled === 1);
+      const activeUserPlugins = pluginsList.filter((p) => !isSystemPlugin(p) && p.enabled === 1);
       // Rule 1: If there is only one user plugin, it is shown.
-      if (userPlugins.length === 1) {
-        return `plugin:${userPlugins[0].id}`;
+      if (activeUserPlugins.length === 1) {
+        return `plugin:${activeUserPlugins[0].id}`;
       }
       // Rule 2: If there is a plugin with the name in the initial_plugin setting, it is shown.
-      if (userPlugins.length > 1) {
+      if (activeUserPlugins.length > 1) {
         const query = (initialPluginSetting || 'main').trim().toLowerCase();
-        const matching = userPlugins.find(
+        const matching = activeUserPlugins.find(
           (p) =>
             p.id.toLowerCase() === query ||
             p.name.toLowerCase() === query ||
@@ -182,7 +184,7 @@ export default function App() {
       if (newMode === 'app') {
         // Switching to App Mode
         setLastDevView(activeView);
-        localStorage.setItem('gaw_last_dev_view', activeView);
+        safeStorage.setItem('gaw_last_dev_view', activeView);
 
         // When toggling between Dev and App mode, go to the most recent page that was being used
         // or the initial setting if there was no previous page being used.
@@ -192,7 +194,7 @@ export default function App() {
             : getInitialAppView(plugins, appSettings.initialPlugin);
 
         setMode('app');
-        localStorage.setItem('gaw_mode', 'app');
+        safeStorage.setItem('gaw_mode', 'app');
         setActiveView(targetView);
         if (targetView.startsWith('plugin:')) {
           setActiveRoute('plugins');
@@ -207,11 +209,11 @@ export default function App() {
       } else {
         // Switching to Dev Mode
         setLastAppView(activeView);
-        localStorage.setItem('gaw_last_app_view', activeView);
+        safeStorage.setItem('gaw_last_app_view', activeView);
 
         const targetView = lastDevView || 'view';
         setMode('dev');
-        localStorage.setItem('gaw_mode', 'dev');
+        safeStorage.setItem('gaw_mode', 'dev');
         setActiveView(targetView);
         if (targetView.startsWith('plugin:')) {
           setActiveRoute('plugins');
@@ -270,13 +272,13 @@ export default function App() {
 
   // VS Code Studio full-interface mode toggle (stored in localStorage)
   const [isVSCodeMode, setIsVSCodeMode] = useState<boolean>(() => {
-    return localStorage.getItem('gaw_vscode_mode') === 'true';
+    return safeStorage.getItem('gaw_vscode_mode') === 'true';
   });
 
   const handleToggleVSCodeMode = useCallback(() => {
     setIsVSCodeMode((prev) => {
       const next = !prev;
-      localStorage.setItem('gaw_vscode_mode', String(next));
+      safeStorage.setItem('gaw_vscode_mode', String(next));
       return next;
     });
     setActiveView('ide');
@@ -399,7 +401,7 @@ export default function App() {
   const handleToggleTheme = useCallback(() => {
     const next = theme === 'vs-dark' ? 'vs-light' : 'vs-dark';
     setTheme(next);
-    localStorage.setItem('gaw_theme', next);
+    safeStorage.setItem('gaw_theme', next);
     eventBusApi.emit('theme_changed', next);
   }, [theme, eventBusApi]);
 
@@ -483,7 +485,7 @@ export default function App() {
       const initialView = getInitialAppView(plugins, appSettings.initialPlugin);
       setActiveView(initialView);
       setLastAppView(initialView);
-      localStorage.setItem('gaw_last_app_view', initialView);
+      safeStorage.setItem('gaw_last_app_view', initialView);
       if (initialView.startsWith('plugin:')) {
         setActiveRoute('plugins');
         navigateTo('plugins', initialView);
@@ -499,10 +501,10 @@ export default function App() {
     if (!activeView) return;
     if (mode === 'dev') {
       setLastDevView(activeView);
-      localStorage.setItem('gaw_last_dev_view', activeView);
+      safeStorage.setItem('gaw_last_dev_view', activeView);
     } else if (mode === 'app') {
       setLastAppView(activeView);
-      localStorage.setItem('gaw_last_app_view', activeView);
+      safeStorage.setItem('gaw_last_app_view', activeView);
     }
   }, [activeView, mode]);
 
@@ -538,13 +540,13 @@ export default function App() {
           console.error('Failed to postMessage to opener:', e);
         }
       }
-      localStorage.setItem('dropbox_pending_code', code);
+      safeStorage.setItem('dropbox_pending_code', code);
 
       // Exchange code in current window (handles both popup and direct redirect)
       const dropbox = DropboxSyncEngine.getInstance();
       const storedRedirect =
         sessionStorage.getItem('dropbox_redirect_uri') ||
-        localStorage.getItem('dropbox_redirect_uri') ||
+        safeStorage.getItem('dropbox_redirect_uri') ||
         `${window.location.origin}/`;
 
       dropbox
@@ -579,7 +581,7 @@ export default function App() {
         const dropbox = DropboxSyncEngine.getInstance();
         const storedRedirect =
           sessionStorage.getItem('dropbox_redirect_uri') ||
-          localStorage.getItem('dropbox_redirect_uri') ||
+          safeStorage.getItem('dropbox_redirect_uri') ||
           `${window.location.origin}/`;
         try {
           const success = await dropbox.exchangeCode(event.data.code, storedRedirect);
@@ -603,11 +605,11 @@ export default function App() {
       }
       if (e.key === 'dropbox_pending_code' && e.newValue) {
         const pendingCode = e.newValue;
-        localStorage.removeItem('dropbox_pending_code');
+        safeStorage.removeItem('dropbox_pending_code');
         const dropbox = DropboxSyncEngine.getInstance();
         const storedRedirect =
           sessionStorage.getItem('dropbox_redirect_uri') ||
-          localStorage.getItem('dropbox_redirect_uri') ||
+          safeStorage.getItem('dropbox_redirect_uri') ||
           `${window.location.origin}/`;
         try {
           const success = await dropbox.exchangeCode(pendingCode, storedRedirect);
@@ -1220,8 +1222,6 @@ export default function App() {
       : undefined);
   const currentReport = reports.find((r) => activeView === `report:${r.id}`);
 
-  const userPlugins = useMemo(() => plugins.filter((p) => !isSystemPlugin(p) && p.enabled === 1), [plugins]);
-
   const isFullVSCode = activeView === 'ide' && isVSCodeMode;
 
   return (
@@ -1259,17 +1259,17 @@ export default function App() {
               navigateTo('plugins', v);
               if (mode === 'app') {
                 setLastAppView(v);
-                localStorage.setItem('gaw_last_app_view', v);
+                safeStorage.setItem('gaw_last_app_view', v);
               } else {
                 setLastDevView(v);
-                localStorage.setItem('gaw_last_dev_view', v);
+                safeStorage.setItem('gaw_last_dev_view', v);
               }
             } else if (v === 'app_hub') {
               setActiveRoute('plugins');
               navigateTo('plugins', 'app_hub');
               if (mode === 'app') {
                 setLastAppView('app_hub');
-                localStorage.setItem('gaw_last_app_view', 'app_hub');
+                safeStorage.setItem('gaw_last_app_view', 'app_hub');
               }
             } else {
               navigateTo(activeRoute, v);
@@ -1315,10 +1315,10 @@ export default function App() {
                 navigateTo('plugins', `plugin:${p.id}`);
                 if (mode === 'app') {
                   setLastAppView(`plugin:${p.id}`);
-                  localStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+                  safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
                 } else {
                   setLastDevView(`plugin:${p.id}`);
-                  localStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
+                  safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
                 }
               }}
               onOpenSpreadsheet={() => handleOpenSpreadsheet()}
@@ -1497,7 +1497,7 @@ export default function App() {
                 setActiveView(`plugin:${p.id}`);
                 setActiveRoute('plugins');
                 setLastAppView(`plugin:${p.id}`);
-                localStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+                safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
                 navigateTo('plugins', `plugin:${p.id}`);
               }}
               onSwitchToDev={() => handleToggleMode('dev')}
@@ -1654,10 +1654,10 @@ export default function App() {
                 navigateTo('plugins', `plugin:${p.id}`);
                 if (mode === 'app') {
                   setLastAppView(`plugin:${p.id}`);
-                  localStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+                  safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
                 } else {
                   setLastDevView(`plugin:${p.id}`);
-                  localStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
+                  safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
                 }
                 setSidebarOpenWithStorage(false);
               }}
@@ -1742,7 +1742,7 @@ export default function App() {
           theme={theme}
           onThemeChange={(newTheme) => {
             setTheme(newTheme);
-            localStorage.setItem('gaw_theme', newTheme);
+            safeStorage.setItem('gaw_theme', newTheme);
             eventBusApi.emit('theme_changed', newTheme);
           }}
           onSettingsSaved={() => {

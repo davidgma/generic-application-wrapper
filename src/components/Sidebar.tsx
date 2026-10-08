@@ -22,6 +22,7 @@ import {
 import { TableSchema, SavedQuery } from '../types/sqlite';
 import { PluginRecord, isSystemPlugin } from '../types/plugin';
 import { SavedReport } from '../types/report';
+import { safeStorage } from '../utils/storage';
 
 interface SidebarProps {
   tables: TableSchema[];
@@ -99,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Sidebar adjustable width state
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const saved = localStorage.getItem('gaw_sidebar_width');
+    const saved = safeStorage.getItem('gaw_sidebar_width');
     return saved ? Math.max(200, Math.min(600, parseInt(saved, 10))) : 260;
   });
   const [isResizing, setIsResizing] = useState(false);
@@ -114,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const handleMouseUp = () => {
       setIsResizing(false);
-      localStorage.setItem('gaw_sidebar_width', sidebarWidth.toString());
+      safeStorage.setItem('gaw_sidebar_width', sidebarWidth.toString());
     };
 
     window.addEventListener('mousemove', handleMouseMove);

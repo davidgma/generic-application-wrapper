@@ -43,6 +43,7 @@ import { PluginEngine } from '../../engine/pluginEngine';
 import { QueryResult, SavedQuery, TableSchema } from '../../types/sqlite';
 import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../../types/plugin';
 import { SavedReport } from '../../types/report';
+import { safeStorage } from '../../utils/storage';
 import { QueryGrid } from '../QueryGrid';
 import { PluginHost } from '../PluginHost';
 import { CodeFormatter } from '../../engine/formatter';
@@ -114,7 +115,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const menubarRef = useRef<HTMLDivElement>(null);
   const handleSaveActiveTabRef = useRef<() => void>(() => {});
   const [formatOnSave, setFormatOnSave] = useState(() => {
-    return localStorage.getItem('gaw_format_on_save') !== 'false';
+    return safeStorage.getItem('gaw_format_on_save') !== 'false';
   });
   const [editorFontSize, setEditorFontSize] = useState(13);
   const [editorTabSize, setEditorTabSize] = useState(2);
@@ -2061,7 +2062,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                           checked={formatOnSave}
                           onChange={(e) => {
                             setFormatOnSave(e.target.checked);
-                            localStorage.setItem('gaw_format_on_save', String(e.target.checked));
+                            safeStorage.setItem('gaw_format_on_save', String(e.target.checked));
                           }}
                           className="rounded text-indigo-500 focus:ring-0"
                         />
