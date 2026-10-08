@@ -63,7 +63,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
             <Database className="w-5 h-5" />
           </div>
           <div>
-            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-700'}`}>
               Database Engine & SQL Management
             </h2>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -150,7 +150,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
         <div className={`p-4 md:p-5 rounded-2xl border shadow-sm ${
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         }`}>
-          <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+          <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-sky-300/90' : 'text-blue-700'}`}>
             Database Engine Telemetry
           </h3>
 
@@ -179,7 +179,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         }`}>
           <div className="flex items-center justify-between pb-3 border-b border-slate-800/40">
-            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-700'}`}>
               Database Tables ({tables.length})
             </h3>
             <button
@@ -234,7 +234,7 @@ export const DatabasePane: React.FC<DatabasePaneProps> = ({
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         }`}>
           <div className="flex items-center justify-between pb-2 border-b border-slate-800/40">
-            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-700'}`}>
               SQLite Engine Diagnostics
             </h3>
             <span className="text-[10px] font-mono text-emerald-400">PRAGMA Inspector</span>

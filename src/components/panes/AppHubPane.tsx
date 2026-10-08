@@ -111,7 +111,7 @@ export const AppHubPane: React.FC<AppHubPaneProps> = ({
         {/* Section Header & Search */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className={`text-sm md:text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+            <h2 className={`text-sm md:text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-700'}`}>
               Application Panes ({userPlugins.length})
             </h2>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>

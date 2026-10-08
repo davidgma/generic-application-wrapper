@@ -43,7 +43,7 @@ export const PluginsPane: React.FC<PluginsPaneProps> = ({
             <Puzzle className="w-5 h-5" />
           </div>
           <div>
-            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+            <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-700'}`}>
               Dynamic TSX Plugins
             </h2>
             <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -127,7 +127,7 @@ export const PluginsPane: React.FC<PluginsPaneProps> = ({
         <div className={`p-4 md:p-5 rounded-2xl border shadow-sm ${
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         }`}>
-          <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+          <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-sky-300/90' : 'text-blue-700'}`}>
             Installed Plugins ({plugins.length})
           </h3>
 

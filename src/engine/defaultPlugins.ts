@@ -1113,7 +1113,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
               <Database className="w-5 h-5" />
             </div>
             <div>
-              <h2 className={'text-base font-bold ' + (isDark ? 'text-sky-300' : 'text-blue-950')}>
+              <h2 className={'text-base font-bold ' + (isDark ? 'text-sky-300' : 'text-blue-700')}>
                 Database Engine & SQL Management
               </h2>
               <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
@@ -1209,7 +1209,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
         <div className={'p-4 md:p-5 rounded-2xl border shadow-sm ' + (
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
-          <h3 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+          <h3 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
             Database Engine Telemetry
           </h3>
 
@@ -1238,7 +1238,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
           <div className="flex items-center justify-between pb-3 border-b border-slate-800/40">
-            <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+            <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
               Database Tables ({tables.length})
             </h3>
             <button
@@ -1293,7 +1293,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
           <div className="flex items-center justify-between pb-2 border-b border-slate-800/40">
-            <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+            <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
               SQLite Engine Diagnostics
             </h3>
             <span className="text-[10px] font-mono text-emerald-400">PRAGMA Inspector</span>
@@ -2824,7 +2824,7 @@ export default function HelpPlugin({ gaw }) {
                   className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-amber-400/40 flex-shrink-0"
                 />
                 <div className="space-y-1">
-                  <h3 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-sky-300' : 'text-blue-950')}>
+                  <h3 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-sky-300' : 'text-blue-700')}>
                     <span>Gawkyy — Generic Application Wrapper</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono font-normal">
                       v1.2.0
@@ -2850,7 +2850,7 @@ export default function HelpPlugin({ gaw }) {
             )}>
               <div className="flex items-center gap-2 pb-3 border-b border-slate-800/40">
                 <Keyboard className="w-4 h-4 text-indigo-400" />
-                <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-950')}>
+                <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
                   Keyboard Shortcuts Reference
                 </h3>
               </div>

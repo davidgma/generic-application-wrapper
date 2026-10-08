@@ -111,23 +111,33 @@ export default function App() {
 
   // Sidebar state loaded from & persisted to localStorage
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
+    const currentMode = safeStorage.getItem('gaw_mode');
+    if (currentMode === 'app') return false;
+    const prevDev = safeStorage.getItem('gaw_last_dev_sidebar_open');
+    if (prevDev !== null) return prevDev === 'true';
     const saved = safeStorage.getItem('gaw_sidebar_open');
     if (saved !== null) return saved === 'true';
-    return false;
+    return true; // Default in dev mode is restored (open)
   });
 
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => {
       const next = !prev;
       safeStorage.setItem('gaw_sidebar_open', String(next));
+      if (mode === 'dev') {
+        safeStorage.setItem('gaw_last_dev_sidebar_open', String(next));
+      }
       return next;
     });
-  }, []);
+  }, [mode]);
 
   const setSidebarOpenWithStorage = useCallback((open: boolean) => {
     setSidebarOpen(open);
     safeStorage.setItem('gaw_sidebar_open', String(open));
-  }, []);
+    if (mode === 'dev') {
+      safeStorage.setItem('gaw_last_dev_sidebar_open', String(open));
+    }
+  }, [mode]);
 
   // Hash Navigation Helper
   const navigateTo = useCallback((route: string, view?: string) => {
@@ -182,7 +192,11 @@ export default function App() {
       if (newMode === mode) return;
 
       if (newMode === 'app') {
-        // Switching to App Mode
+        // Switching to App Mode: always hide the sidebar and remember previous dev state
+        safeStorage.setItem('gaw_last_dev_sidebar_open', String(sidebarOpen));
+        setSidebarOpen(false);
+        safeStorage.setItem('gaw_sidebar_open', 'false');
+
         setLastDevView(activeView);
         safeStorage.setItem('gaw_last_dev_view', activeView);
 
@@ -207,7 +221,12 @@ export default function App() {
           navigateTo('file', 'file');
         }
       } else {
-        // Switching to Dev Mode
+        // Switching to Dev Mode: restore sidebar or not, depending on how it was before (default: restore)
+        const prevDevSidebar = safeStorage.getItem('gaw_last_dev_sidebar_open');
+        const shouldRestoreDevSidebar = prevDevSidebar !== null ? prevDevSidebar === 'true' : true;
+        setSidebarOpen(shouldRestoreDevSidebar);
+        safeStorage.setItem('gaw_sidebar_open', String(shouldRestoreDevSidebar));
+
         setLastAppView(activeView);
         safeStorage.setItem('gaw_last_app_view', activeView);
 
@@ -244,7 +263,7 @@ export default function App() {
         }
       }
     },
-    [mode, activeView, lastAppView, lastDevView, plugins, appSettings.initialPlugin, getInitialAppView, navigateTo]
+    [mode, sidebarOpen, activeView, lastAppView, lastDevView, plugins, appSettings.initialPlugin, getInitialAppView, navigateTo]
   );
 
   // Active query result for table/query views

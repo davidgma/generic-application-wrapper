@@ -153,7 +153,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {brandTitle ? (
               <span
                 className={`font-black text-sm md:text-base tracking-tight leading-none ${
-                  isDark ? 'text-sky-300' : 'text-blue-950'
+                  isDark ? 'text-sky-300' : 'text-blue-700'
                 }`}
               >
                 {brandTitle}
@@ -162,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {brandSubtitle ? (
               <span
                 className={`text-[10px] md:text-[11px] font-medium tracking-tight mt-0.5 ${
-                  isDark ? 'text-sky-300/80' : 'text-blue-900/80'
+                  isDark ? 'text-sky-300/80' : 'text-blue-600/80'
                 }`}
               >
                 {brandSubtitle}
@@ -186,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 mode === 'dev'
                   ? isDark
                     ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-white text-blue-950 shadow-sm'
+                    : 'bg-white text-blue-700 shadow-sm'
                   : isDark
                   ? 'text-slate-400 hover:text-white'
                   : 'text-slate-600 hover:text-slate-900'
@@ -202,7 +202,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 mode === 'app'
                   ? isDark
                     ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'bg-emerald-800 text-white shadow-sm'
+                    : 'bg-emerald-600 text-white shadow-sm'
                   : isDark
                   ? 'text-slate-400 hover:text-white'
                   : 'text-slate-600 hover:text-slate-900'
@@ -265,8 +265,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ? isDark
                     ? 'bg-indigo-600/30 text-white border border-indigo-500/50 shadow-sm'
                     : mode === 'app'
-                    ? 'bg-emerald-800 text-white border border-emerald-900 shadow-sm'
-                    : 'bg-white text-blue-950 border border-slate-300 shadow-sm'
+                    ? 'bg-emerald-600 text-white border border-emerald-500 shadow-sm'
+                    : 'bg-white text-blue-700 border border-slate-300 shadow-sm'
                   : isDark
                   ? 'hover:bg-slate-900 hover:text-white text-slate-400 border border-transparent'
                   : 'hover:bg-slate-200/80 hover:text-slate-900 text-slate-600 border border-transparent'
@@ -280,14 +280,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                         ? 'text-sky-300'
                         : mode === 'app'
                         ? 'text-white'
-                        : 'text-blue-950'
+                        : 'text-blue-700'
                       : 'opacity-80'
                   }`}
                 />
               </div>
               <span
                 className={`text-[10px] md:text-[11px] font-semibold tracking-tight truncate max-w-[120px] ${
-                  isActive ? (isDark ? 'text-white' : mode === 'app' ? 'text-white font-bold' : 'text-blue-950 font-bold') : ''
+                  isActive ? (isDark ? 'text-white' : mode === 'app' ? 'text-white font-bold' : 'text-blue-700 font-bold') : ''
                 }`}
               >
                 {item.label}

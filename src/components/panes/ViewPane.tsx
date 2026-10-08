@@ -62,7 +62,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
               <LayoutGrid className="w-5 h-5" />
             </div>
             <div>
-              <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-950'}`}>
+              <h2 className={`text-base font-bold ${isDark ? 'text-sky-300' : 'text-blue-700'}`}>
                 View & Workspace Panes
               </h2>
               <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
@@ -175,7 +175,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         }`}>
           <div className="flex items-center justify-between pb-3 border-b border-slate-800/40">
-            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-sky-300/90' : 'text-blue-700'}`}>
               Dynamic TSX Plugins
             </h3>
             <span className={`text-[11px] font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -213,7 +213,7 @@ export const ViewPane: React.FC<ViewPaneProps> = ({
           <div className={`p-4 md:p-5 rounded-2xl border shadow-sm ${
             isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
           }`}>
-            <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-sky-300/90' : 'text-blue-950'}`}>
+            <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${isDark ? 'text-sky-300/90' : 'text-blue-700'}`}>
               Database Tables
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">

@@ -257,7 +257,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
               <div>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isDark ? 'text-sky-300/80' : 'text-blue-950'
+                    isDark ? 'text-sky-300/80' : 'text-blue-700'
                   }`}>
                     Active Database Information
                   </span>
@@ -531,7 +531,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
         {/* 5 Primary Launch Action Cards */}
         <div>
           <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${
-            isDark ? 'text-sky-300/90' : 'text-blue-950'
+            isDark ? 'text-sky-300/90' : 'text-blue-700'
           }`}>
             Launch & Open Databases
           </h3>
@@ -584,7 +584,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
                   <button
                     onClick={() => onOpenPlugin('plugin_dropbox_sync')}
                     className={`inline-flex items-center gap-1 text-[11px] underline font-medium transition ${
-                      isDark ? 'text-sky-300 hover:text-sky-200' : 'text-blue-900 hover:text-blue-950'
+                      isDark ? 'text-sky-300 hover:text-sky-200' : 'text-blue-700 hover:text-blue-800'
                     }`}
                   >
                     <span>Configure Dropbox API & Sync Settings</span>
@@ -711,7 +711,7 @@ export const FilePane: React.FC<FilePaneProps> = ({
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-indigo-400" />
               <h3 className={`text-xs font-bold uppercase tracking-wider ${
-                isDark ? 'text-sky-300/90' : 'text-blue-950'
+                isDark ? 'text-sky-300/90' : 'text-blue-700'
               }`}>
                 Recent Files & Databases
               </h3>
