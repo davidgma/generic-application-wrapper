@@ -4,7 +4,7 @@ import { FileStorageEngine } from './engine/fileStorage';
 import { DropboxSyncEngine } from './engine/dropboxSync';
 import { PluginEngine } from './engine/pluginEngine';
 import { TableSchema, SavedQuery, QueryResult } from './types/sqlite';
-import { PluginRecord, GAWContext } from './types/plugin';
+import { PluginRecord, GAWContext, isSystemPlugin, SYSTEM_PLUGIN_IDS } from './types/plugin';
 import { SavedReport } from './types/report';
 import { ConflictDetails, StorageMetadata } from './types/storage';
 import { RecentFilesManager } from './engine/recentFiles';
@@ -29,6 +29,7 @@ import { ViewPane } from './components/panes/ViewPane';
 import { DatabasePane } from './components/panes/DatabasePane';
 import { PluginsPane } from './components/panes/PluginsPane';
 import { HelpPane } from './components/panes/HelpPane';
+import { AppHubPane } from './components/panes/AppHubPane';
 import { DEFAULT_HELP_PLUGIN_CODE } from './engine/defaultPlugins';
 
 import {
@@ -71,9 +72,40 @@ export default function App() {
 
   // Navigation: Active Route & Active View
   // Routes: 'file' | 'view' | 'database' | 'plugins' | 'help'
-  // Views: 'file', 'view', 'database', 'plugins', 'help', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
+  // Views: 'file', 'view', 'database', 'plugins', 'help', 'app_hub', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
   const [activeRoute, setActiveRoute] = useState<'file' | 'view' | 'database' | 'plugins' | 'help'>('file');
   const [activeView, setActiveView] = useState<string>('file');
+
+  // Dev / App mode state (persisted to localStorage)
+  const [mode, setMode] = useState<'dev' | 'app'>(() => {
+    const saved = localStorage.getItem('gaw_mode');
+    return saved === 'app' ? 'app' : 'dev';
+  });
+
+  const [lastDevView, setLastDevView] = useState<string>(() => {
+    return localStorage.getItem('gaw_last_dev_view') || 'view';
+  });
+
+  const [lastAppView, setLastAppView] = useState<string | null>(() => {
+    return localStorage.getItem('gaw_last_app_view') || null;
+  });
+
+  const [appSettings, setAppSettings] = useState<{
+    appName: string;
+    appDescription: string;
+    initialPlugin: string;
+  }>({
+    appName: 'New App',
+    appDescription: '',
+    initialPlugin: 'main',
+  });
+
+  // Database metadata & collections
+  const [tables, setTables] = useState<TableSchema[]>([]);
+  const [queries, setQueries] = useState<SavedQuery[]>([]);
+  const [reports, setReports] = useState<SavedReport[]>([]);
+  const [plugins, setPlugins] = useState<PluginRecord[]>([]);
+  const [appTitle, setAppTitle] = useState('New Application');
 
   // Sidebar state loaded from & persisted to localStorage
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
@@ -99,7 +131,8 @@ export default function App() {
   const navigateTo = useCallback((route: string, view?: string) => {
     let targetHash = `#${route}`;
     if (view && view !== route) {
-      if (view.startsWith('table:')) targetHash = `#table/${view.replace('table:', '')}`;
+      if (view === 'app_hub') targetHash = '#app_hub';
+      else if (view.startsWith('table:')) targetHash = `#table/${view.replace('table:', '')}`;
       else if (view.startsWith('query:')) targetHash = `#query/${view.replace('query:', '')}`;
       else if (view.startsWith('report:')) targetHash = `#report/${view.replace('report:', '')}`;
       else if (view.startsWith('plugin:')) targetHash = `#plugin/${view.replace('plugin:', '')}`;
@@ -111,12 +144,106 @@ export default function App() {
     }
   }, []);
 
-  // Database metadata & collections
-  const [tables, setTables] = useState<TableSchema[]>([]);
-  const [queries, setQueries] = useState<SavedQuery[]>([]);
-  const [reports, setReports] = useState<SavedReport[]>([]);
-  const [plugins, setPlugins] = useState<PluginRecord[]>([]);
-  const [appTitle, setAppTitle] = useState('New Application');
+  // Helper to determine initial App mode view according to the 3 rules
+  const getInitialAppView = useCallback(
+    (pluginsList: PluginRecord[], initialPluginSetting: string): string => {
+      const userPlugins = pluginsList.filter((p) => !isSystemPlugin(p) && p.enabled === 1);
+      // Rule 1: If there is only one user plugin, it is shown.
+      if (userPlugins.length === 1) {
+        return `plugin:${userPlugins[0].id}`;
+      }
+      // Rule 2: If there is a plugin with the name in the initial_plugin setting, it is shown.
+      if (userPlugins.length > 1) {
+        const query = (initialPluginSetting || 'main').trim().toLowerCase();
+        const matching = userPlugins.find(
+          (p) =>
+            p.id.toLowerCase() === query ||
+            p.name.toLowerCase() === query ||
+            p.route?.toLowerCase() === query ||
+            p.route?.toLowerCase() === `/${query}`
+        );
+        if (matching) {
+          return `plugin:${matching.id}`;
+        }
+        // Rule 3: If there's more than one plugin and none of them tie up with the initial_plugin setting name,
+        // then give the user a list of user plugins so that one can be chosen.
+        return 'app_hub';
+      }
+      return 'app_hub';
+    },
+    []
+  );
+
+  // Toggle between Dev and App mode
+  const handleToggleMode = useCallback(
+    (newMode: 'dev' | 'app') => {
+      if (newMode === mode) return;
+
+      if (newMode === 'app') {
+        // Switching to App Mode
+        setLastDevView(activeView);
+        localStorage.setItem('gaw_last_dev_view', activeView);
+
+        // When toggling between Dev and App mode, go to the most recent page that was being used
+        // or the initial setting if there was no previous page being used.
+        const targetView =
+          lastAppView && (lastAppView === 'app_hub' || lastAppView === 'file' || plugins.some((p) => `plugin:${p.id}` === lastAppView))
+            ? lastAppView
+            : getInitialAppView(plugins, appSettings.initialPlugin);
+
+        setMode('app');
+        localStorage.setItem('gaw_mode', 'app');
+        setActiveView(targetView);
+        if (targetView.startsWith('plugin:')) {
+          setActiveRoute('plugins');
+          navigateTo('plugins', targetView);
+        } else if (targetView === 'app_hub') {
+          setActiveRoute('plugins');
+          navigateTo('plugins', 'app_hub');
+        } else if (targetView === 'file') {
+          setActiveRoute('file');
+          navigateTo('file', 'file');
+        }
+      } else {
+        // Switching to Dev Mode
+        setLastAppView(activeView);
+        localStorage.setItem('gaw_last_app_view', activeView);
+
+        const targetView = lastDevView || 'view';
+        setMode('dev');
+        localStorage.setItem('gaw_mode', 'dev');
+        setActiveView(targetView);
+        if (targetView.startsWith('plugin:')) {
+          setActiveRoute('plugins');
+          navigateTo('plugins', targetView);
+        } else if (
+          targetView.startsWith('table:') ||
+          targetView.startsWith('query:') ||
+          targetView.startsWith('report:') ||
+          targetView === 'view'
+        ) {
+          setActiveRoute('view');
+          navigateTo('view', targetView);
+        } else if (targetView === 'file') {
+          setActiveRoute('file');
+          navigateTo('file', 'file');
+        } else if (targetView === 'database') {
+          setActiveRoute('database');
+          navigateTo('database', 'database');
+        } else if (targetView === 'plugins') {
+          setActiveRoute('plugins');
+          navigateTo('plugins', 'plugins');
+        } else if (targetView === 'ide') {
+          setActiveRoute('view');
+          navigateTo('view', 'ide');
+        } else if (targetView === 'help' || targetView === 'plugin:plugin_help') {
+          setActiveRoute('help');
+          navigateTo('help', 'plugin:plugin_help');
+        }
+      }
+    },
+    [mode, activeView, lastAppView, lastDevView, plugins, appSettings.initialPlugin, getInitialAppView, navigateTo]
+  );
 
   // Active query result for table/query views
   const [activeQueryResult, setActiveQueryResult] = useState<QueryResult | null>(null);
@@ -334,10 +461,50 @@ export default function App() {
 
       const title = engine.getSetting('app_title', 'New Application');
       setAppTitle(title);
+
+      const name = engine.getSetting('app_name', 'New App');
+      const desc = engine.getSetting('app_description') || engine.getSetting('app_descripton', '');
+      const initPlugin = engine.getSetting('initial_plugin', 'main');
+      setAppSettings({ appName: name, appDescription: desc, initialPlugin: initPlugin });
     } catch (e) {
       console.error('Failed to refresh database state:', e);
     }
   }, []);
+
+  // On initial startup/refresh in App mode, determine initial view according to the 3 rules:
+  // 1. If there is only one user plugin, it is shown.
+  // 2. If there is a plugin with the name in the initial_plugin setting, it is shown.
+  // 3. If there's more than one plugin and none of them tie up with the initial_plugin setting name, then give user list (app_hub).
+  const hasAppliedAppModeInitialView = useRef(false);
+  useEffect(() => {
+    if (!isEngineReady || plugins.length === 0 || hasAppliedAppModeInitialView.current) return;
+    if (mode === 'app') {
+      hasAppliedAppModeInitialView.current = true;
+      const initialView = getInitialAppView(plugins, appSettings.initialPlugin);
+      setActiveView(initialView);
+      setLastAppView(initialView);
+      localStorage.setItem('gaw_last_app_view', initialView);
+      if (initialView.startsWith('plugin:')) {
+        setActiveRoute('plugins');
+        navigateTo('plugins', initialView);
+      } else {
+        setActiveRoute('plugins');
+        navigateTo('plugins', initialView);
+      }
+    }
+  }, [isEngineReady, plugins, mode, appSettings.initialPlugin, getInitialAppView, navigateTo]);
+
+  // Keep lastDevView and lastAppView synchronized as user navigates
+  useEffect(() => {
+    if (!activeView) return;
+    if (mode === 'dev') {
+      setLastDevView(activeView);
+      localStorage.setItem('gaw_last_dev_view', activeView);
+    } else if (mode === 'app') {
+      setLastAppView(activeView);
+      localStorage.setItem('gaw_last_app_view', activeView);
+    }
+  }, [activeView, mode]);
 
   // On initial load or refresh, mark internal state as unchanged until a change is made
   useEffect(() => {
@@ -678,12 +845,15 @@ export default function App() {
       } else if (hash === 'view') {
         setActiveRoute('view');
         setActiveView('view');
-      } else if (hash === 'database') {
-        setActiveRoute('database');
-        setActiveView('database');
-      } else if (hash === 'plugins') {
+      } else if (hash === 'app_hub') {
         setActiveRoute('plugins');
-        setActiveView('plugins');
+        setActiveView('app_hub');
+      } else if (hash === 'database' || hash === 'plugin/plugin_database_management') {
+        setActiveRoute('database');
+        setActiveView('plugin:plugin_database_management');
+      } else if (hash === 'plugins' || hash === 'plugin/plugin_manager') {
+        setActiveRoute('plugins');
+        setActiveView('plugin:plugin_manager');
       } else if (hash === 'help' || hash === 'plugin/plugin_help') {
         setActiveRoute('help');
         setActiveView('plugin:plugin_help');
@@ -1050,6 +1220,8 @@ export default function App() {
       : undefined);
   const currentReport = reports.find((r) => activeView === `report:${r.id}`);
 
+  const userPlugins = useMemo(() => plugins.filter((p) => !isSystemPlugin(p) && p.enabled === 1), [plugins]);
+
   const isFullVSCode = activeView === 'ide' && isVSCodeMode;
 
   return (
@@ -1058,22 +1230,57 @@ export default function App() {
       {!isFullVSCode && (
         <Navbar
           theme={theme}
+          mode={mode}
           activeRoute={activeRoute}
+          activeView={activeView}
           onSelectRoute={(route) => {
             if (route === 'help') {
               setActiveRoute('help');
               setActiveView('plugin:plugin_help');
               navigateTo('help', 'plugin:plugin_help');
+            } else if (route === 'database') {
+              setActiveRoute('database');
+              setActiveView('plugin:plugin_database_management');
+              navigateTo('database', 'plugin:plugin_database_management');
+            } else if (route === 'plugins') {
+              setActiveRoute('plugins');
+              setActiveView('plugin:plugin_manager');
+              navigateTo('plugins', 'plugin:plugin_manager');
             } else {
               setActiveRoute(route as any);
               setActiveView(route);
               navigateTo(route, route);
             }
           }}
+          onSelectView={(v) => {
+            setActiveView(v);
+            if (v.startsWith('plugin:')) {
+              setActiveRoute('plugins');
+              navigateTo('plugins', v);
+              if (mode === 'app') {
+                setLastAppView(v);
+                localStorage.setItem('gaw_last_app_view', v);
+              } else {
+                setLastDevView(v);
+                localStorage.setItem('gaw_last_dev_view', v);
+              }
+            } else if (v === 'app_hub') {
+              setActiveRoute('plugins');
+              navigateTo('plugins', 'app_hub');
+              if (mode === 'app') {
+                setLastAppView('app_hub');
+                localStorage.setItem('gaw_last_app_view', 'app_hub');
+              }
+            } else {
+              navigateTo(activeRoute, v);
+            }
+          }}
           onThemeToggle={handleToggleTheme}
-          onToggleSidebar={handleToggleSidebar}
-          isSidebarOpen={sidebarOpen}
+          onModeToggle={handleToggleMode}
           onOpenSettings={() => setShowSettingsModal(true)}
+          appName={appSettings.appName}
+          appDescription={appSettings.appDescription}
+          userPlugins={userPlugins}
         />
       )}
 
@@ -1090,6 +1297,7 @@ export default function App() {
               reports={reports}
               plugins={plugins}
               activeView={activeView}
+              mode={mode}
               onSelectTable={(tableName) => {
                 handleSelectTable(tableName);
               }}
@@ -1105,6 +1313,13 @@ export default function App() {
                 setActiveView(`plugin:${p.id}`);
                 setActiveRoute('plugins');
                 navigateTo('plugins', `plugin:${p.id}`);
+                if (mode === 'app') {
+                  setLastAppView(`plugin:${p.id}`);
+                  localStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+                } else {
+                  setLastDevView(`plugin:${p.id}`);
+                  localStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
+                }
               }}
               onOpenSpreadsheet={() => handleOpenSpreadsheet()}
               onOpenIDE={handleOpenInIDE}
@@ -1271,6 +1486,24 @@ export default function App() {
             </div>
           )}
 
+          {/* View 0: App Hub (List of User Plugins in App Mode) */}
+          {activeView === 'app_hub' && (
+            <AppHubPane
+              theme={theme}
+              plugins={plugins}
+              appName={appSettings.appName}
+              appDescription={appSettings.appDescription}
+              onSelectPlugin={(p) => {
+                setActiveView(`plugin:${p.id}`);
+                setActiveRoute('plugins');
+                setLastAppView(`plugin:${p.id}`);
+                localStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+                navigateTo('plugins', `plugin:${p.id}`);
+              }}
+              onSwitchToDev={() => handleToggleMode('dev')}
+            />
+          )}
+
           {/* View 1: Active Dynamic TSX Plugin */}
           {activeView.startsWith('plugin:') && currentPlugin && (
             <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
@@ -1400,6 +1633,7 @@ export default function App() {
               reports={reports}
               plugins={plugins}
               activeView={activeView}
+              mode={mode}
               onSelectTable={(tableName) => {
                 handleSelectTable(tableName);
                 setSidebarOpenWithStorage(false);
@@ -1418,6 +1652,13 @@ export default function App() {
                 setActiveView(`plugin:${p.id}`);
                 setActiveRoute('plugins');
                 navigateTo('plugins', `plugin:${p.id}`);
+                if (mode === 'app') {
+                  setLastAppView(`plugin:${p.id}`);
+                  localStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+                } else {
+                  setLastDevView(`plugin:${p.id}`);
+                  localStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
+                }
                 setSidebarOpenWithStorage(false);
               }}
               onOpenSpreadsheet={() => {
@@ -1503,6 +1744,10 @@ export default function App() {
             setTheme(newTheme);
             localStorage.setItem('gaw_theme', newTheme);
             eventBusApi.emit('theme_changed', newTheme);
+          }}
+          onSettingsSaved={() => {
+            refreshDatabaseState();
+            toastApi.success('Updated application settings.');
           }}
         />
       )}

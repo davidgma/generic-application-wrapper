@@ -43,6 +43,7 @@ interface SidebarProps {
   theme?: 'vs-dark' | 'vs-light';
   isOpen: boolean;
   onToggle: () => void;
+  mode?: 'dev' | 'app';
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -65,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   theme = 'vs-dark',
   isOpen,
   onToggle,
+  mode = 'dev',
 }) => {
   const [search, setSearch] = useState('');
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -137,14 +139,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (p.enabled === 0) return;
       if (query && !p.name.toLowerCase().includes(query) && !p.description?.toLowerCase().includes(query)) return;
       if (isSystemPlugin(p)) {
-        sys.push(p);
+        if (mode === 'app') {
+          // In App mode, only Dropbox, Local storage, and File & workspace manager are visible
+          if (p.id === 'plugin_dropbox_sync' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager') {
+            sys.push(p);
+          }
+        } else {
+          sys.push(p);
+        }
       } else {
         usr.push(p);
       }
     });
 
     return { systemPlugins: sys, userPlugins: usr };
-  }, [plugins, search]);
+  }, [plugins, search, mode]);
 
   const { systemTables, userTables } = useMemo(() => {
     const sys: TableSchema[] = [];
@@ -154,14 +163,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     tables.forEach((t) => {
       if (query && !t.name.toLowerCase().includes(query)) return;
       if (t.isSystem) {
-        sys.push(t);
+        if (mode !== 'app') {
+          sys.push(t);
+        }
       } else {
         usr.push(t);
       }
     });
 
     return { systemTables: sys, userTables: usr };
-  }, [tables, search]);
+  }, [tables, search, mode]);
 
   const filteredQueries = useMemo(() => {
     return queries.filter((q) => q.name.toLowerCase().includes(search.toLowerCase()));
@@ -211,26 +222,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div
             onClick={() => toggleSection('plugins')}
-            className="flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-indigo-400 hover:text-indigo-300 cursor-pointer"
+            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
+              isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-slate-700 hover:text-slate-900'
+            }`}
           >
             <div className="flex items-center gap-1.5">
               {collapsedSections.plugins ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               <span>Dynamic Plugins ({systemPlugins.length + userPlugins.length})</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onAddPlugin) {
-                  onAddPlugin();
-                } else {
-                  onOpenIDE({ type: 'plugin' });
-                }
-              }}
-              title="Add Dynamic TSX Plugin (Local File, Dropbox, or IDE)"
-              className="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            {mode !== 'app' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onAddPlugin) {
+                    onAddPlugin();
+                  } else {
+                    onOpenIDE({ type: 'plugin' });
+                  }
+                }}
+                title="Add Dynamic TSX Plugin (Local File, Dropbox, or IDE)"
+                className="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {!collapsedSections.plugins && (
@@ -239,15 +254,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div>
                 <div
                   onClick={() => toggleSection('pluginsSystem')}
-                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-purple-400 hover:text-purple-300 cursor-pointer select-none"
+                  className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none ${
+                    isDark ? 'text-purple-400 hover:text-purple-300' : 'text-blue-950 hover:text-blue-900'
+                  }`}
                 >
                   {collapsedSections.pluginsSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {collapsedSections.pluginsSystem ? <Folder className="w-3.5 h-3.5 text-purple-400" /> : <FolderOpen className="w-3.5 h-3.5 text-purple-400" />}
+                  {collapsedSections.pluginsSystem ? (
+                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-purple-400' : 'text-blue-950'}`} />
+                  ) : (
+                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-purple-400' : 'text-blue-950'}`} />
+                  )}
                   <span>System ({systemPlugins.length})</span>
                 </div>
 
                 {!collapsedSections.pluginsSystem && (
-                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-purple-900/40 ml-3">
+                  <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+                    isDark ? 'border-purple-900/40' : 'border-blue-950/30'
+                  }`}>
                     {systemPlugins.map((p) => {
                       const isActive = activeView === `plugin:${p.id}`;
                       const isMenuOpen = activeMenu?.type === 'plugin' && activeMenu.id === p.id;
@@ -255,35 +278,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <div key={p.id} className="relative group flex items-center">
                           <button
                             onClick={() => onSelectPlugin(p)}
-                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
                               isActive
-                                ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                                ? isDark
+                                  ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                                  : 'bg-blue-950 text-white font-bold shadow-sm'
                                 : isDark
                                 ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                                : 'hover:bg-blue-100/70 text-blue-950 hover:text-blue-900 font-semibold'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
-                              <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-purple-400'}`} />
-                              <span className="truncate">{p.name}</span>
+                              <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                isActive ? 'text-white' : isDark ? 'text-purple-400' : 'text-blue-950'
+                              }`} />
+                              <span className={`truncate ${!isActive && !isDark ? 'text-blue-950 font-semibold' : ''}`}>{p.name}</span>
                             </div>
-                            <span className="text-[10px] font-mono opacity-60 ml-1">v{p.version}</span>
+                            <span className={`text-[10px] font-mono ml-1 ${
+                              isActive ? 'text-white/80' : isDark ? 'text-slate-400 opacity-60' : 'text-blue-900/80 font-semibold'
+                            }`}>v{p.version}</span>
                           </button>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
-                            }}
-                            className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                              isActive ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-                            }`}
-                            title="Plugin options"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </button>
+                          {mode !== 'app' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
+                              }}
+                              className={`p-1.5 rounded-r transition ${
+                                isActive
+                                  ? isDark ? 'bg-purple-600 text-white' : 'bg-blue-950 text-white'
+                                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-blue-950 hover:text-blue-900 hover:bg-blue-100/70'
+                              }`}
+                              title="Plugin options"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                          {isMenuOpen && (
+                          {mode !== 'app' && isMenuOpen && (
                             <div className="absolute right-0 top-full mt-0.5 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
                               <button
                                 onClick={() => {
@@ -312,15 +345,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div>
                 <div
                   onClick={() => toggleSection('pluginsUser')}
-                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer select-none"
+                  className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none ${
+                    isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-950 hover:text-emerald-900'
+                  }`}
                 >
                   {collapsedSections.pluginsUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {collapsedSections.pluginsUser ? <Folder className="w-3.5 h-3.5 text-emerald-400" /> : <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />}
+                  {collapsedSections.pluginsUser ? (
+                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-900'}`} />
+                  ) : (
+                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-900'}`} />
+                  )}
                   <span>User ({userPlugins.length})</span>
                 </div>
 
                 {!collapsedSections.pluginsUser && (
-                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-emerald-900/40 ml-3">
+                  <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+                    isDark ? 'border-emerald-900/40' : 'border-emerald-900/30'
+                  }`}>
                     {userPlugins.length === 0 && (
                       <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user plugins</div>
                     )}
@@ -331,35 +372,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <div key={p.id} className="relative group flex items-center">
                           <button
                             onClick={() => onSelectPlugin(p)}
-                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
                               isActive
-                                ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                ? isDark
+                                  ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                  : 'bg-emerald-900 text-white font-bold shadow-sm'
                                 : isDark
                                 ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                                : 'hover:bg-emerald-100/70 text-emerald-950 hover:text-emerald-900 font-semibold'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
-                              <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`} />
-                              <span className="truncate">{p.name}</span>
+                              <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                isActive ? 'text-white' : isDark ? 'text-emerald-400' : 'text-emerald-900'
+                              }`} />
+                              <span className={`truncate ${!isActive && !isDark ? 'text-emerald-950 font-semibold' : ''}`}>{p.name}</span>
                             </div>
-                            <span className="text-[10px] font-mono opacity-60 ml-1">v{p.version}</span>
+                            <span className={`text-[10px] font-mono ml-1 ${
+                              isActive ? 'text-white/80' : isDark ? 'text-slate-400 opacity-60' : 'text-emerald-900/80 font-semibold'
+                            }`}>v{p.version}</span>
                           </button>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
-                            }}
-                            className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                              isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
-                            }`}
-                            title="Plugin options"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </button>
+                          {mode !== 'app' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(isMenuOpen ? null : { type: 'plugin', id: p.id });
+                              }}
+                              className={`p-1.5 rounded-r transition ${
+                                isActive
+                                  ? isDark ? 'bg-emerald-600 text-white' : 'bg-emerald-900 text-white'
+                                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-emerald-950 hover:text-emerald-900 hover:bg-emerald-100/70'
+                              }`}
+                              title="Plugin options"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                          {isMenuOpen && (
+                          {mode !== 'app' && isMenuOpen && (
                             <div className="absolute right-0 top-full mt-0.5 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
                               <button
                                 onClick={() => {
@@ -398,7 +449,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div
             onClick={() => toggleSection('tables')}
-            className="flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-300 hover:text-white cursor-pointer"
+            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
+              isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'
+            }`}
           >
             <div className="flex items-center gap-1.5">
               {collapsedSections.tables ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -409,67 +462,91 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!collapsedSections.tables && (
             <div className="mt-1 space-y-2">
               {/* Folder: System Tables */}
-              <div>
-                <div
-                  onClick={() => toggleSection('tablesSystem')}
-                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-purple-400 hover:text-purple-300 cursor-pointer select-none"
-                >
-                  {collapsedSections.tablesSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {collapsedSections.tablesSystem ? <Folder className="w-3.5 h-3.5 text-purple-400" /> : <FolderOpen className="w-3.5 h-3.5 text-purple-400" />}
-                  <span>System ({systemTables.length})</span>
-                </div>
-
-                {!collapsedSections.tablesSystem && (
-                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-purple-900/40 ml-3">
-                    {systemTables.map((t) => {
-                      const isActive = activeView === `table:${t.name}`;
-                      return (
-                        <div key={t.name} className="relative group flex items-center">
-                          <button
-                            onClick={() => onSelectTable(t.name)}
-                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
-                              isActive
-                                ? 'bg-purple-600 text-white font-semibold shadow-sm'
-                                : isDark
-                                ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 truncate">
-                              <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-purple-400'}`} />
-                              <span className="truncate">{t.name}</span>
-                            </div>
-                            <span className="text-[10px] font-mono opacity-60 ml-1">
-                              {t.rowCount} rows
-                            </span>
-                          </button>
-
-                          <div
-                            className="p-1.5 text-slate-600 cursor-not-allowed"
-                            title="System table: Protected schema"
-                          >
-                            <Lock className="w-3 h-3 text-purple-400/60" />
-                          </div>
-                        </div>
-                      );
-                    })}
+              {systemTables.length > 0 && (
+                <div>
+                  <div
+                    onClick={() => toggleSection('tablesSystem')}
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none ${
+                      isDark ? 'text-purple-400 hover:text-purple-300' : 'text-blue-950 hover:text-blue-900'
+                    }`}
+                  >
+                    {collapsedSections.tablesSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {collapsedSections.tablesSystem ? (
+                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-purple-400' : 'text-blue-950'}`} />
+                    ) : (
+                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-purple-400' : 'text-blue-950'}`} />
+                    )}
+                    <span>System ({systemTables.length})</span>
                   </div>
-                )}
-              </div>
+
+                  {!collapsedSections.tablesSystem && (
+                    <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+                      isDark ? 'border-purple-900/40' : 'border-blue-950/30'
+                    }`}>
+                      {systemTables.map((t) => {
+                        const isActive = activeView === `table:${t.name}`;
+                        return (
+                          <div key={t.name} className="relative group flex items-center">
+                            <button
+                              onClick={() => onSelectTable(t.name)}
+                              className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
+                                isActive
+                                  ? isDark
+                                    ? 'bg-purple-600 text-white font-semibold shadow-sm'
+                                    : 'bg-blue-950 text-white font-bold shadow-sm'
+                                  : isDark
+                                  ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
+                                  : 'hover:bg-blue-100/70 text-blue-950 hover:text-blue-900 font-semibold'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                  isActive ? 'text-white' : isDark ? 'text-purple-400' : 'text-blue-950'
+                                }`} />
+                                <span className={`truncate ${!isActive && !isDark ? 'text-blue-950 font-semibold' : ''}`}>{t.name}</span>
+                              </div>
+                              <span className={`text-[10px] font-mono ml-1 ${
+                                isActive ? 'text-white/80' : isDark ? 'text-slate-400 opacity-60' : 'text-blue-900/80 font-semibold'
+                              }`}>
+                                {t.rowCount} rows
+                              </span>
+                            </button>
+
+                            <div
+                              className="p-1.5 text-slate-600 cursor-not-allowed"
+                              title="System table: Protected schema"
+                            >
+                              <Lock className={`w-3 h-3 ${isDark ? 'text-purple-400/60' : 'text-blue-950/60'}`} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Folder: User Tables */}
               <div>
                 <div
                   onClick={() => toggleSection('tablesUser')}
-                  className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 cursor-pointer select-none"
+                  className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none ${
+                    isDark ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-950 hover:text-emerald-900'
+                  }`}
                 >
                   {collapsedSections.tablesUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {collapsedSections.tablesUser ? <Folder className="w-3.5 h-3.5 text-emerald-400" /> : <FolderOpen className="w-3.5 h-3.5 text-emerald-400" />}
+                  {collapsedSections.tablesUser ? (
+                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-900'}`} />
+                  ) : (
+                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-900'}`} />
+                  )}
                   <span>User ({userTables.length})</span>
                 </div>
 
                 {!collapsedSections.tablesUser && (
-                  <div className="pl-2 mt-0.5 space-y-0.5 border-l border-emerald-900/40 ml-3">
+                  <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+                    isDark ? 'border-emerald-900/40' : 'border-emerald-900/30'
+                  }`}>
                     {userTables.length === 0 && (
                       <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user tables</div>
                     )}
@@ -480,37 +557,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <div key={t.name} className="relative group flex items-center">
                           <button
                             onClick={() => onSelectTable(t.name)}
-                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded-l text-left transition ${
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
                               isActive
-                                ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                ? isDark
+                                  ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                  : 'bg-emerald-900 text-white font-bold shadow-sm'
                                 : isDark
                                 ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                                : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                                : 'hover:bg-emerald-100/70 text-emerald-950 hover:text-emerald-900 font-semibold'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
-                              <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-emerald-400'}`} />
-                              <span className="truncate">{t.name}</span>
+                              <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                isActive ? 'text-white' : isDark ? 'text-emerald-400' : 'text-emerald-900'
+                              }`} />
+                              <span className={`truncate ${!isActive && !isDark ? 'text-emerald-950 font-semibold' : ''}`}>{t.name}</span>
                             </div>
-                            <span className="text-[10px] font-mono opacity-60 ml-1">
+                            <span className={`text-[10px] font-mono ml-1 ${
+                              isActive ? 'text-white/80' : isDark ? 'text-slate-400 opacity-60' : 'text-emerald-900/80 font-semibold'
+                            }`}>
                               {t.rowCount} rows
                             </span>
                           </button>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenu(isMenuOpen ? null : { type: 'table', id: t.name });
-                            }}
-                            className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                              isActive ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
-                            }`}
-                            title="Table options"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </button>
+                          {mode !== 'app' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(isMenuOpen ? null : { type: 'table', id: t.name });
+                              }}
+                              className={`p-1.5 rounded-r transition ${
+                                isActive
+                                  ? isDark ? 'bg-emerald-600 text-white' : 'bg-emerald-900 text-white'
+                                  : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-emerald-950 hover:text-emerald-900 hover:bg-emerald-100/70'
+                              }`}
+                              title="Table options"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                          {isMenuOpen && (
+                          {mode !== 'app' && isMenuOpen && (
                             <div className="absolute right-0 top-full mt-0.5 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
                               <button
                                 onClick={() => {
@@ -555,16 +642,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {collapsedSections.queries ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               <span>Saved Queries ({filteredQueries.length})</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenIDE({ type: 'sql' });
-              }}
-              title="Add New SQL Query"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            {mode !== 'app' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenIDE({ type: 'sql' });
+                }}
+                title="Add New SQL Query"
+                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {!collapsedSections.queries && (
@@ -590,18 +679,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                     </button>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenu(isMenuOpen ? null : { type: 'query', id: q.id });
-                      }}
-                      className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                        isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                      }`}
-                      title="Query options"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
+                    {mode !== 'app' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenu(isMenuOpen ? null : { type: 'query', id: q.id });
+                        }}
+                        className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
+                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="Query options"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     {isMenuOpen && (
                       <div className="absolute right-0 top-full mt-0.5 w-44 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
@@ -645,16 +736,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {collapsedSections.reports ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               <span>Reports ({filteredReports.length})</span>
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onNewReport();
-              }}
-              title="Add New Report"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            {mode !== 'app' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNewReport();
+                }}
+                title="Add New Report"
+                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {!collapsedSections.reports && (
@@ -680,18 +773,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                     </button>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenu(isMenuOpen ? null : { type: 'report', id: r.id });
-                      }}
-                      className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                        isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-                      }`}
-                      title="Report options"
-                    >
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
+                    {mode !== 'app' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenu(isMenuOpen ? null : { type: 'report', id: r.id });
+                        }}
+                        className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
+                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        }`}
+                        title="Report options"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </button>
+                    )}
 
                     {isMenuOpen && (
                       <div className="absolute right-0 top-full mt-0.5 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">

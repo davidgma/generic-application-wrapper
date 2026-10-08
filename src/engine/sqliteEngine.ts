@@ -317,6 +317,10 @@ export class SQLiteEngine {
     // 2. Insert Settings
     const now = new Date().toISOString();
     const settings = [
+      ['app_name', 'New App', now],
+      ['app_description', '', now],
+      ['app_descripton', '', now],
+      ['initial_plugin', 'main', now],
       ['app_title', appTitle, now],
       ['auto_sync_interval', '0', now],
       ['version', '1.0.0', now],
@@ -400,6 +404,10 @@ export class SQLiteEngine {
     // 2. Insert Settings
     const now = new Date().toISOString();
     const settings = [
+      ['app_name', 'Northwind Modern Commerce', now],
+      ['app_description', 'Modern Sales & Inventory Suite', now],
+      ['app_descripton', 'Modern Sales & Inventory Suite', now],
+      ['initial_plugin', 'plugin_crm', now],
       ['app_title', 'Northwind Modern Commerce', now],
       ['auto_sync_interval', '0', now],
       ['version', '1.0.0', now],
@@ -1148,7 +1156,12 @@ export class SQLiteEngine {
         "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help');"
       );
 
-      // Ensure the starter user-generated plugin (Hello World) exists
+      // Ensure default settings exist
+      const now = new Date().toISOString();
+      this.db.run(
+        "INSERT OR IGNORE INTO t_settings (key, value, updated_at) VALUES ('app_name', 'New App', ?), ('app_description', '', ?), ('app_descripton', '', ?), ('initial_plugin', 'main', ?);",
+        [now, now, now, now]
+      );
       const checkStarter = this.db.exec("SELECT id FROM t_plugins WHERE id = 'plugin_hello_world';");
       if (!checkStarter || checkStarter.length === 0 || !checkStarter[0].values || checkStarter[0].values.length === 0) {
         const now = new Date().toISOString();
