@@ -752,7 +752,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       <div className="flex items-center gap-2 truncate">
                         <Database className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-cyan-400'}`} />
-                        <span className="truncate">{q.name}</span>
+                        <span className="truncate">{q.name.replace(/\.sql$/i, '')}</span>
                       </div>
                     </button>
 

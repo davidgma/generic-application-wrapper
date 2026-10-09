@@ -54,7 +54,7 @@ export const MultiQueryResultsView: React.FC<MultiQueryResultsViewProps> = ({
             <span>View</span>
           </button>
           <span className="text-slate-500">/</span>
-          <span className="font-bold truncate text-sm">{title}</span>
+          <span className="font-bold truncate text-sm">{title.replace(/\.sql$/i, '')}</span>
           <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
             results.length > 1
               ? isDark ? 'bg-indigo-900/60 text-indigo-300 border border-indigo-700/50' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'

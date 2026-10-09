@@ -870,9 +870,15 @@ export default function App() {
       [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
     );
     engine.notifyChange(true);
-    handleSelectQuery(newQuery);
-    toastApi.success(`Added new query "${queryName}" with pro-forma CREATE TABLE statement.`);
-  }, [handleSelectQuery, toastApi]);
+    // Do not run query immediately! Automatically switch to IDE and display the SQL creation code
+    handleOpenInIDE({
+      type: 'query',
+      id: newId,
+      name: queryName,
+      code: proFormaSql,
+    });
+    toastApi.info(`Opened table creation query "${queryName}" in IDE. Review and click Run or press Ctrl+Shift+F to execute.`);
+  }, [handleOpenInIDE, toastApi]);
 
   // Add New Query in non-IDE view
   const handleNewQuery = useCallback(() => {
@@ -900,9 +906,43 @@ export default function App() {
       [newId, baseName, newQuery.description, querySql, '{}', '{}', newQuery.created_at]
     );
     engine.notifyChange(true);
-    handleSelectQuery(newQuery);
-    toastApi.success(`Created new query "${baseName}".`);
-  }, [handleSelectQuery, toastApi]);
+    // Switch to IDE without running immediately
+    handleOpenInIDE({
+      type: 'query',
+      id: newId,
+      name: baseName,
+      code: querySql,
+    });
+    toastApi.info(`Created query "${baseName}". Edit and click Run or press Ctrl+Shift+F to execute.`);
+  }, [handleOpenInIDE, toastApi]);
+
+  // Correspondence: Run query from IDE, execute in SQLite, dynamically update side pane, and show in non-IDE view
+  const handleRunAndExitToNonIDE = useCallback(
+    (info: { id: string; name: string; query: string; results: QueryResult[] }) => {
+      refreshDatabaseState();
+      setActiveQueryResults(info.results);
+      if (info.results.length > 0) {
+        setActiveQueryResult(info.results[0]);
+      } else {
+        setActiveQueryResult(null);
+      }
+      const sq: SavedQuery = {
+        id: info.id,
+        name: info.name,
+        description: `Query ${info.name}`,
+        query: info.query,
+        created_at: new Date().toISOString(),
+      };
+      setActiveSavedQuery(sq);
+      setActiveQueryTitle(info.name);
+      setActiveView(`query:${info.id}`);
+      setActiveRoute('view');
+      setLastDevView(`query:${info.id}`);
+      safeStorage.setItem('gaw_last_dev_view', `query:${info.id}`);
+      navigateTo('view', `query:${info.id}`);
+    },
+    [refreshDatabaseState, navigateTo]
+  );
 
   // Select Plugin
   const handleSelectPlugin = useCallback((p: PluginRecord, updateHash: boolean = true) => {
@@ -1858,6 +1898,8 @@ export default function App() {
                 gawContext={gawContext}
                 onExitIDE={handleExitIDE}
                 onActiveTabChange={(target) => setCurrentIdeTarget(target)}
+                onRunAndExitToNonIDE={handleRunAndExitToNonIDE}
+                onDeleteObject={handleDeleteObject}
               />
             </div>
           )}

@@ -38,6 +38,7 @@ import {
   Info,
   HelpCircle,
   Key,
+  Trash2,
 } from 'lucide-react';
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
@@ -85,6 +86,13 @@ interface GAWIDEProps {
   onToggleVSCodeMode?: () => void;
   onExitIDE?: (target?: TargetTabInfo | null) => void;
   onActiveTabChange?: (target: TargetTabInfo | null) => void;
+  onRunAndExitToNonIDE?: (info: {
+    id: string;
+    name: string;
+    query: string;
+    results: QueryResult[];
+  }) => void;
+  onDeleteObject?: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
 }
 
 export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Help';
@@ -104,6 +112,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   onToggleVSCodeMode,
   onExitIDE,
   onActiveTabChange,
+  onRunAndExitToNonIDE,
+  onDeleteObject,
 }) => {
   const engine = SQLiteEngine.getInstance();
   const editorRef = useRef<any>(null);
@@ -119,6 +129,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [showAboutModal, setShowAboutModal] = useState(false);
   const menubarRef = useRef<HTMLDivElement>(null);
   const handleSaveActiveTabRef = useRef<() => void>(() => {});
+  const handleRunAndShowInNonIDERef = useRef<() => void>(() => {});
+  const handleDeleteActiveItemRef = useRef<() => void>(() => {});
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return safeStorage.getItem('gaw_format_on_save') !== 'false';
   });
@@ -223,14 +235,27 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [tabs, setTabs] = useState<TabItem[]>(() => {
     let initialList: TabItem[] = [];
     if (initialTab?.type === 'sql') {
+      const cleanName = initialTab.name ? initialTab.name.replace(/\.sql$/i, '') : 'Query';
       initialList = [
         {
           id: 'tab_sql_1',
-          title: initialTab.name ? `${initialTab.name}.sql` : 'Query.sql',
+          title: cleanName,
           type: 'sql',
           content:
             initialTab.code ||
             'SELECT ship_country, COUNT(id) AS total_orders, ROUND(SUM(total_amount), 2) AS total_revenue\nFROM orders\nGROUP BY ship_country\nORDER BY total_revenue DESC;',
+        },
+      ];
+    } else if (initialTab?.type === 'query') {
+      const q = engine.getSavedQueries().find((x) => x.id === initialTab.id || x.name === initialTab.name);
+      const cleanName = (initialTab.name || (q ? q.name : 'Query')).replace(/\.sql$/i, '');
+      initialList = [
+        {
+          id: `tab_query_${initialTab.id || (q ? q.id : Date.now())}`,
+          title: cleanName,
+          type: 'query',
+          content: initialTab.code || (q ? q.query : 'SELECT 1;'),
+          queryId: initialTab.id || (q ? q.id : undefined),
         },
       ];
     } else if (initialTab?.type === 'table' && initialTab.name) {
@@ -285,6 +310,21 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || '');
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+
+  // Close tab
+  const closeTab = useCallback((idToClose: string) => {
+    setTabs((prev) => {
+      if (prev.length <= 1) return prev;
+      const nextTabs = prev.filter((t) => t.id !== idToClose);
+      setActiveTabId((currentActive) => {
+        if (currentActive === idToClose) {
+          return nextTabs[0]?.id || '';
+        }
+        return currentActive;
+      });
+      return nextTabs;
+    });
+  }, []);
 
   const getTargetFromTab = useCallback((tab?: TabItem | null): TargetTabInfo | null => {
     if (!tab) return null;
@@ -433,11 +473,10 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       } else if (item.type === 'query') {
         const queries = engine.getSavedQueries();
         const q = queries.find((x) => x.id === item.id || x.name === item.name);
-        if (q) {
-          tabId = `tab_query_${q.id}`;
-          title = `${q.name}.sql`;
-          content = q.query;
-        }
+        const cleanName = (item.name || (q ? q.name : 'Query')).replace(/\.sql$/i, '');
+        tabId = item.id ? `tab_query_${item.id}` : (q ? `tab_query_${q.id}` : `tab_query_${Date.now()}`);
+        title = cleanName;
+        content = item.code || (q ? q.query : 'SELECT 1;');
       } else if (item.type === 'report') {
         const reports = engine.getSavedReports();
         const r = reports.find((x) => x.id === item.id || x.name === item.name);
@@ -499,11 +538,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             return;
           }
           tabId = `tab_sql_${Date.now()}`;
-          title = 'Query.sql';
+          title = 'Query';
           content = '-- SQL Query\nSELECT 1;\n';
         } else {
           tabId = item.id || (item.name ? `tab_sql_${item.name}` : `tab_sql_${Date.now()}`);
-          title = item.name ? `${item.name}.sql` : 'Query.sql';
+          title = item.name ? item.name.replace(/\.sql$/i, '') : 'Query';
           content = item.code || 'SELECT * FROM customers LIMIT 25;';
         }
       }
@@ -512,6 +551,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
       setTabs((prev) => {
         const cleanTableName = item.type === 'table' && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
+        const cleanQueryName = (item.type === 'query' || item.type === 'sql') && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
         const existing = prev.find(
           (t) =>
             t.id === tabId ||
@@ -520,15 +560,23 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               cleanTableName &&
               (t.tableName === cleanTableName || t.title.replace(/\.sql$/i, '') === cleanTableName)) ||
             (item.type === 'query' && item.id && t.queryId === item.id) ||
+            (item.type === 'query' && cleanQueryName && t.title.replace(/\.sql$/i, '') === cleanQueryName) ||
             (item.type === 'report' && item.id && t.reportId === item.id)
         );
         if (existing) {
           setActiveTabId(existing.id);
           return prev;
         }
+        const cleanDisplayTitle =
+          item.type === 'table'
+            ? cleanTableName || title.replace(/\.sql$/i, '')
+            : item.type === 'query' || item.type === 'sql'
+            ? title.replace(/\.sql$/i, '')
+            : title;
+
         const newTab: TabItem = {
           id: tabId,
-          title: item.type === 'table' ? (cleanTableName || title.replace(/\.sql$/i, '')) : title,
+          title: cleanDisplayTitle,
           type: item.type as any,
           content,
           savedContent: content,
@@ -655,11 +703,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         return;
       }
 
-      // Ctrl+Shift+F: Exit IDE to corresponding application view
+      // Ctrl+Shift+F: Save, run query automatically and show results in non-IDE
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
         e.stopPropagation();
-        handleExitIDE();
+        handleRunAndShowInNonIDERef.current?.();
         return;
       }
     };
@@ -728,9 +776,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
 
-    // Keybinding: Ctrl+Shift+F to exit IDE to non-IDE view
+    // Keybinding: Ctrl+Shift+F to automatically save changes, run query, and show results in non-IDE view
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
-      handleExitIDERef.current();
+      handleRunAndShowInNonIDERef.current?.();
     });
 
     // 1. Add TypeScript definitions for GAW Plugin APIs, React, and Lucide React
@@ -995,24 +1043,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
       }
     } else if (currentTab.type === 'table') {
-      try {
-        const results = engine.exec(contentToSave);
-        setQueryResults(results);
-        setActiveResultIndex(0);
-        setTabs((prev) =>
-          prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
-        );
-        engine.notifyChange(true);
-        gawContext?.toast?.success?.(`Saved and executed table structure for ${currentTab.title}`);
-      } catch (err: any) {
-        setQueryResults([
-          {
-            columns: ['error'],
-            values: [[err.message || String(err)]],
-            error: err.message || String(err),
-          },
-        ]);
-      }
+      const cleanTitle = (currentTab.tableName || currentTab.title).replace(/\.sql$/i, '');
+      setTabs((prev) =>
+        prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+      );
+      gawContext?.toast?.success?.(`Saved table definition for "${cleanTitle}". Click Run or press Ctrl+Shift+F to execute.`);
     } else if (currentTab.type === 'report' && currentTab.reportId) {
       try {
         const parsed = JSON.parse(contentToSave);
@@ -1038,20 +1073,22 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       const existing = existingQueries.find((q) => q.name === queryName || q.id === currentTab.queryId);
 
       const now = new Date().toISOString();
+      let queryId = currentTab.queryId;
       if (existing) {
+        queryId = existing.id;
         engine.run('UPDATE t_sql_queries SET query = ? WHERE id = ?', [contentToSave, existing.id]);
       } else {
-        const newId = currentTab.queryId || `q_${Date.now()}`;
+        queryId = queryId || `q_${Date.now()}`;
         engine.run(
           'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [newId, queryName, 'Custom Query saved from IDE', contentToSave, '{}', '{}', now]
+          [queryId, queryName, 'Custom Query saved from IDE', contentToSave, '{}', '{}', now]
         );
       }
       engine.notifyChange(true);
       setTabs((prev) =>
-        prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
+        prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false, queryId } : t))
       );
-      gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
+      gawContext?.toast?.success?.(`Saved query "${queryName}"`);
     } else {
       setTabs((prev) =>
         prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
@@ -1060,7 +1097,155 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   };
 
+  // Run active query or table SQL, auto-save any changes, execute, and switch to non-IDE results view
+  const handleRunAndShowInNonIDE = useCallback(async () => {
+    const currentTab = tabs.find((t) => t.id === activeTabId) || activeTab;
+    if (!currentTab) return;
+
+    const currentEditorVal = editorRef.current ? editorRef.current.getValue() : currentTab.content;
+    const cleanTitle = (currentTab.type === 'table' ? (currentTab.tableName || currentTab.title) : currentTab.title).replace(/\.sql$/i, '');
+
+    if (currentTab.type === 'sql' || currentTab.type === 'query' || currentTab.type === 'table') {
+      let queryId = currentTab.queryId;
+      const now = new Date().toISOString();
+
+      if (currentTab.type === 'sql' || currentTab.type === 'query') {
+        const existingQueries = engine.getSavedQueries();
+        const existing = existingQueries.find((q) => q.id === queryId || q.name === cleanTitle);
+        if (existing) {
+          queryId = existing.id;
+          engine.run('UPDATE t_sql_queries SET query = ? WHERE id = ?;', [currentEditorVal, existing.id]);
+        } else {
+          queryId = queryId || `q_${Date.now()}`;
+          engine.run(
+            'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+            [queryId, cleanTitle, `Query ${cleanTitle}`, currentEditorVal, '{}', '{}', now]
+          );
+        }
+      }
+
+      // Mark tab as saved / not dirty
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === currentTab.id
+            ? { ...t, content: currentEditorVal, savedContent: currentEditorVal, isDirty: false, queryId }
+            : t
+        )
+      );
+
+      // Execute query in SQLite
+      try {
+        const results = engine.exec(currentEditorVal);
+        setQueryResults(results);
+        setActiveResultIndex(0);
+
+        // Dynamically notify engine of changes (e.g. if CREATE TABLE or DROP TABLE executed)
+        engine.notifyChange(true);
+        setDbVersion((v) => v + 1);
+
+        // Switch to non-IDE and show results
+        if (onRunAndExitToNonIDE) {
+          onRunAndExitToNonIDE({
+            id: queryId || currentTab.id,
+            name: cleanTitle,
+            query: currentEditorVal,
+            results,
+          });
+        } else if (onExitIDE) {
+          onExitIDE({
+            type: currentTab.type === 'table' ? 'table' : 'query',
+            id: queryId,
+            name: cleanTitle,
+            code: currentEditorVal,
+          });
+        }
+        gawContext?.toast?.success?.(`Executed "${cleanTitle}"`);
+      } catch (err: any) {
+        gawContext?.toast?.error?.(`Query execution error: ${err.message}`);
+        setQueryResults([
+          {
+            columns: ['error'],
+            values: [[err.message || String(err)]],
+            error: err.message || String(err),
+          },
+        ]);
+      }
+    } else if (currentTab.type === 'plugin') {
+      await handleSaveActiveTab();
+      if (onExitIDE) {
+        onExitIDE({ type: 'plugin', id: currentTab.pluginId, name: cleanTitle });
+      } else {
+        handleExitIDE();
+      }
+    } else if (currentTab.type === 'report') {
+      await handleSaveActiveTab();
+      if (onExitIDE) {
+        onExitIDE({ type: 'report', id: currentTab.reportId, name: cleanTitle });
+      } else {
+        handleExitIDE();
+      }
+    }
+  }, [tabs, activeTabId, activeTab, engine, gawContext, onRunAndExitToNonIDE, onExitIDE, handleExitIDE]);
+
+  // Delete active item (query, table, plugin, report)
+  const handleDeleteActiveItem = useCallback(() => {
+    const currentTab = tabs.find((t) => t.id === activeTabId) || activeTab;
+    if (!currentTab) return;
+
+    const cleanTitle = (currentTab.type === 'table' ? (currentTab.tableName || currentTab.title) : currentTab.title).replace(/\.sql$/i, '');
+
+    if (currentTab.type === 'query' || currentTab.type === 'sql') {
+      const existingQueries = engine.getSavedQueries();
+      const existing = existingQueries.find((q) => q.id === currentTab.queryId || q.name === cleanTitle);
+      if (existing) {
+        if (onDeleteObject) {
+          onDeleteObject('query', existing.id, existing.name);
+        } else {
+          engine.deleteQuery(existing.id);
+          closeTab(currentTab.id);
+          setDbVersion((v) => v + 1);
+          gawContext?.toast?.success?.(`Deleted query "${existing.name}"`);
+        }
+      } else {
+        closeTab(currentTab.id);
+        gawContext?.toast?.info?.(`Closed unsaved query tab "${cleanTitle}"`);
+      }
+    } else if (currentTab.type === 'table') {
+      const tableName = currentTab.tableName || cleanTitle;
+      if (engine.isSystemTable(tableName)) {
+        gawContext?.toast?.error?.(`Table "${tableName}" is a system table and cannot be deleted.`);
+        return;
+      }
+      if (onDeleteObject) {
+        onDeleteObject('table', tableName, tableName);
+      } else {
+        engine.deleteTable(tableName);
+        closeTab(currentTab.id);
+        setDbVersion((v) => v + 1);
+        gawContext?.toast?.success?.(`Deleted table "${tableName}"`);
+      }
+    } else if (currentTab.type === 'plugin' && currentTab.pluginId) {
+      if (onDeleteObject) {
+        onDeleteObject('plugin', currentTab.pluginId, cleanTitle);
+      } else {
+        engine.deletePlugin(currentTab.pluginId);
+        closeTab(currentTab.id);
+        setDbVersion((v) => v + 1);
+      }
+    } else if (currentTab.type === 'report' && currentTab.reportId) {
+      if (onDeleteObject) {
+        onDeleteObject('report', currentTab.reportId, cleanTitle);
+      } else {
+        engine.deleteReport(currentTab.reportId);
+        closeTab(currentTab.id);
+        setDbVersion((v) => v + 1);
+      }
+    }
+  }, [tabs, activeTabId, activeTab, engine, onDeleteObject, closeTab, gawContext]);
+
   handleSaveActiveTabRef.current = handleSaveActiveTab;
+  handleRunAndShowInNonIDERef.current = handleRunAndShowInNonIDE;
+  handleDeleteActiveItemRef.current = handleDeleteActiveItem;
 
   // Handler: Add New Dynamic TSX Plugin
   const handleAddNewPlugin = useCallback(() => {
@@ -1186,10 +1371,10 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       return next;
     });
     openOrActivateItem({ type: 'query', id: newId, name: queryName, code: proFormaSql });
-    gawContext?.toast?.success?.(`Added query "${queryName}.sql" with pro-forma CREATE TABLE statement.`);
+    gawContext?.toast?.info?.(`Opened table creation query "${queryName}". Review and click Run or press Ctrl+Shift+F to execute.`);
   }, [engine, gawContext, openOrActivateItem]);
 
-  // Handler: Add New Query (.sql)
+  // Handler: Add New Query
   const handleAddNewQuery = useCallback(() => {
     const existingQueries = engine.getSavedQueries().map((q) => q.name);
     let baseName = 'New_Query';
@@ -1214,7 +1399,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       return next;
     });
     openOrActivateItem({ type: 'query', id: newId, name: baseName, code: querySql });
-    gawContext?.toast?.success?.(`Created new query "${baseName}.sql"`);
+    gawContext?.toast?.success?.(`Created new query "${baseName}"`);
   }, [engine, gawContext, openOrActivateItem]);
 
   // Handler: Add New Report (.json)
@@ -1262,7 +1447,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const content = 'SELECT * FROM customers LIMIT 25;';
     const newTab: TabItem = {
       id,
-      title: `Query_${tabs.length + 1}.sql`,
+      title: `Query_${tabs.length + 1}`,
       type: 'sql',
       content,
       savedContent: content,
@@ -1272,15 +1457,6 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     setActiveTabId(id);
   };
 
-  // Close tab
-  const closeTab = (idToClose: string) => {
-    if (tabs.length === 1) return;
-    const nextTabs = tabs.filter((t) => t.id !== idToClose);
-    setTabs(nextTabs);
-    if (activeTabId === idToClose) {
-      setActiveTabId(nextTabs[0]?.id || '');
-    }
-  };
 
   // Search in Files Results
   const searchResults = useMemo(() => {
@@ -1316,7 +1492,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         const cmp = searchMatchCase ? lineText : lineText.toLowerCase();
         if (cmp.includes(q)) {
           results.push({
-            file: `${query.name}.sql`,
+            file: query.name.replace(/\.sql$/i, ''),
             tabItem: { type: 'query', id: query.id, name: query.name },
             line: idx + 1,
             text: lineText.trim(),
@@ -2523,7 +2699,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         className={`p-0.5 rounded transition ${
                           isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
                         }`}
-                        title="Add New Query (.sql)"
+                        title="Add New Query"
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -2539,7 +2715,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                             }`}
                           >
                             <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
-                            <span className="truncate">{q.name}.sql</span>
+                            <span className="truncate">{q.name.replace(/\.sql$/i, '')}</span>
                           </div>
                         ))}
                       </div>
@@ -2832,8 +3008,45 @@ export default function ${componentName}({ gawContext }: PluginProps) {
               isDark ? 'bg-[#252526] border-[#1e1e1e]' : 'bg-[#f3f3f3] border-[#e5e5e5]'
             }`}
           >
+              {/* Quick Action Toolbar to the left of the first tab: Save, Run, Delete */}
+              <div className={`flex items-center gap-0.5 px-2 py-1 flex-shrink-0 border-r ${
+                isDark ? 'border-[#333333]' : 'border-[#d0d0d0]'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => handleSaveActiveTabRef.current?.()}
+                  title="Save (Ctrl+S)"
+                  className={`p-1.5 rounded transition flex items-center justify-center ${
+                    isDark
+                      ? 'hover:bg-slate-700 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-200 text-slate-700 hover:text-black'
+                  }`}
+                >
+                  <Save className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRunAndShowInNonIDERef.current?.()}
+                  title="Run Query & Show Results in Non-IDE (Ctrl+Shift+F)"
+                  className="p-1.5 rounded transition flex items-center justify-center text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/40"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteActiveItemRef.current?.()}
+                  title="Delete query or table"
+                  className="p-1.5 rounded transition flex items-center justify-center text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTabId;
+                const displayTitle = (tab.type === 'table' || tab.type === 'query' || tab.type === 'sql')
+                  ? tab.title.replace(/\.sql$/i, '')
+                  : tab.title;
                 return (
                   <div
                     key={tab.id}
@@ -2860,7 +3073,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                       <Database className="w-3.5 h-3.5 text-indigo-400" />
                     )}
                     <span className="truncate max-w-[140px]">
-                      {tab.type === 'table' ? tab.title.replace(/\.sql$/i, '') : tab.title}
+                      {displayTitle}
                     </span>
                     {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
                     {tabs.length > 1 && (
@@ -3021,41 +3234,46 @@ export default function ${componentName}({ gawContext }: PluginProps) {
           </span>
 
           {/* Full name of currently-active item being edited */}
-          {activeTab && (
-            <div
-              className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-900/60 border border-blue-400/40 text-white font-mono text-[11px] min-w-0"
-              title={`Active item: ${activeTab.type === 'table' ? activeTab.title.replace(/\.sql$/i, '') : activeTab.title}`}
-            >
-              {activeTab.type === 'plugin' ? (
-                <FileCode className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
-              ) : activeTab.type === 'table' ? (
-                <TableIcon className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
-              ) : activeTab.type === 'report' ? (
-                <FileText className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
-              ) : (
-                <Database className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0" />
-              )}
-              {/* Full name without truncation */}
-              <span
-                className="font-bold whitespace-nowrap overflow-x-auto max-w-[260px] sm:max-w-[420px] md:max-w-[550px] scrollbar-none"
-                title={activeTab.type === 'table' ? activeTab.title.replace(/\.sql$/i, '') : activeTab.title}
+          {activeTab && (() => {
+            const displayTitle = (activeTab.type === 'table' || activeTab.type === 'query' || activeTab.type === 'sql')
+              ? activeTab.title.replace(/\.sql$/i, '')
+              : activeTab.title;
+            return (
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-900/60 border border-blue-400/40 text-white font-mono text-[11px] min-w-0"
+                title={`Active item: ${displayTitle}`}
               >
-                {activeTab.type === 'table' ? activeTab.title.replace(/\.sql$/i, '') : activeTab.title}
-              </span>
-              {/* Saved / Unsaved Status */}
-              {activeTab.isDirty ? (
-                <span className="inline-flex items-center gap-1 ml-1 text-amber-300 font-bold text-[10px] flex-shrink-0" title="Unsaved changes in active tab">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
-                  Unsaved
+                {activeTab.type === 'plugin' ? (
+                  <FileCode className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
+                ) : activeTab.type === 'table' ? (
+                  <TableIcon className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
+                ) : activeTab.type === 'report' ? (
+                  <FileText className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
+                ) : (
+                  <Database className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0" />
+                )}
+                {/* Full name without truncation */}
+                <span
+                  className="font-bold whitespace-nowrap overflow-x-auto max-w-[260px] sm:max-w-[420px] md:max-w-[550px] scrollbar-none"
+                  title={displayTitle}
+                >
+                  {displayTitle}
                 </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 ml-1 text-emerald-200 text-[10px] flex-shrink-0" title="File is saved">
-                  <Check className="w-3 h-3 text-emerald-300" />
-                  Saved
-                </span>
-              )}
-            </div>
-          )}
+                {/* Saved / Unsaved Status */}
+                {activeTab.isDirty ? (
+                  <span className="inline-flex items-center gap-1 ml-1 text-amber-300 font-bold text-[10px] flex-shrink-0" title="Unsaved changes in active tab">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+                    Unsaved
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 ml-1 text-emerald-200 text-[10px] flex-shrink-0" title="File is saved">
+                    <Check className="w-3 h-3 text-emerald-300" />
+                    Saved
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           <span className="opacity-80 hidden md:inline flex-shrink-0">0 errors, 0 warnings</span>
         </div>
