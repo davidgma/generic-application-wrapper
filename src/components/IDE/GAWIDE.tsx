@@ -177,6 +177,44 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     safeStorage.setItem('gaw_ide_sidebar_scroll', String(e.currentTarget.scrollTop));
   }, []);
 
+  // Primary Sidebar adjustable width state with persistence
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const saved = safeStorage.getItem('gaw_ide_sidebar_width');
+    return saved ? Math.max(180, Math.min(650, parseInt(saved, 10))) : 260;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const sidebarContainerRef = useRef<HTMLDivElement>(null);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  sidebarWidthRef.current = sidebarWidth;
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const containerLeft = sidebarContainerRef.current?.getBoundingClientRect().left ?? 48;
+      const newWidth = Math.max(180, Math.min(650, e.clientX - containerLeft));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+      safeStorage.setItem('gaw_ide_sidebar_width', sidebarWidthRef.current.toString());
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingSidebar]);
+
   // Full-Text Search in Files State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMatchCase, setSearchMatchCase] = useState(false);
@@ -236,13 +274,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               },
             ]
           : []),
-        {
-          id: 'tab_sql_1',
-          title: 'Executive_Query.sql',
-          type: 'sql',
-          content:
-            '-- Multi-part analytical query (separated by semicolons)\nSELECT COUNT(*) AS total_customers, (SELECT COUNT(*) FROM orders) AS total_orders, (SELECT ROUND(SUM(total_amount), 2) FROM orders) AS gross_revenue FROM customers;\n\nSELECT status, COUNT(*) AS order_count, ROUND(SUM(total_amount), 2) AS status_revenue FROM orders GROUP BY status;\n\nSELECT c.name AS category_name, COUNT(p.id) AS product_count, SUM(p.units_in_stock) AS total_inventory FROM categories c LEFT JOIN products p ON c.id = p.category_id GROUP BY c.id;',
-        },
       ];
     }
     return initialList.map((t) => ({
@@ -252,7 +283,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }));
   });
 
-  const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || 'tab_sql_1');
+  const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || '');
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
   const getTargetFromTab = useCallback((tab?: TabItem | null): TargetTabInfo | null => {
@@ -339,7 +370,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   // Schema state for autocompletion and explorer
   const schema = useMemo(() => engine.getSchema(), [engine, dbVersion]);
-  const allPlugins = useMemo(() => engine.getPlugins(), [engine, tabs]);
+  const allPlugins = useMemo(() => engine.getPlugins(), [engine, tabs, dbVersion]);
   const userPlugins = useMemo(() => allPlugins.filter((p) => !isSystemPlugin(p)), [allPlugins]);
   const systemPlugins = useMemo(() => allPlugins.filter((p) => isSystemPlugin(p)), [allPlugins]);
 
@@ -376,8 +407,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     [schema, engine]
   );
   const allTables = useMemo(() => [...userTables, ...systemTables], [userTables, systemTables]);
-  const allQueries = useMemo(() => engine.getSavedQueries(), [engine, tabs]);
-  const allReports = useMemo(() => engine.getSavedReports(), [engine, tabs]);
+  const allQueries = useMemo(() => engine.getSavedQueries(), [engine, tabs, dbVersion]);
+  const allReports = useMemo(() => engine.getSavedReports(), [engine, tabs, dbVersion]);
 
   // Open or Activate an item in a tab
   const openOrActivateItem = useCallback(
@@ -467,10 +498,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             if (onClearTargetTab) onClearTargetTab();
             return;
           }
-          tabId = 'tab_sql_1';
-          title = 'Executive_Query.sql';
-          content =
-            '-- Analytical Query\nSELECT COUNT(*) AS total_customers, (SELECT COUNT(*) FROM orders) AS total_orders FROM customers;\n\nSELECT * FROM customers LIMIT 25;';
+          tabId = `tab_sql_${Date.now()}`;
+          title = 'Query.sql';
+          content = '-- SQL Query\nSELECT 1;\n';
         } else {
           tabId = item.id || (item.name ? `tab_sql_${item.name}` : `tab_sql_${Date.now()}`);
           title = item.name ? `${item.name}.sql` : 'Query.sql';
@@ -1031,6 +1061,200 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   };
 
   handleSaveActiveTabRef.current = handleSaveActiveTab;
+
+  // Handler: Add New Dynamic TSX Plugin
+  const handleAddNewPlugin = useCallback(() => {
+    const existingPlugins = engine.getPlugins();
+    let baseName = 'Custom_Plugin';
+    let counter = 1;
+    while (existingPlugins.some((p) => p.name === baseName || p.id === `plugin_${baseName.toLowerCase()}`)) {
+      counter++;
+      baseName = `Custom_Plugin_${counter}`;
+    }
+    const pluginId = `plugin_${baseName.toLowerCase()}_${Date.now()}`;
+    const componentName = baseName.replace(/[^a-zA-Z0-9]/g, '') || 'CustomPlugin';
+    const starterCode = `import React, { useState, useEffect } from 'react';
+import { GAWContext } from 'gaw';
+import { Sparkles, RefreshCw, Database } from 'lucide-react';
+
+interface PluginProps {
+  gawContext: GAWContext;
+}
+
+export default function ${componentName}({ gawContext }: PluginProps) {
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const loadData = () => {
+    setLoading(true);
+    try {
+      // Query local SQLite database
+      const result = gawContext.sqlite.query('SELECT * FROM customers LIMIT 10;');
+      setData(result.values);
+      gawContext.ui.toast.info('Loaded customer preview');
+    } catch (err: any) {
+      gawContext.ui.toast.error('Query failed: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center justify-between border-b border-slate-700/50 pb-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-indigo-400" />
+            <span>${baseName}</span>
+          </h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Dynamic MS Access-style TSX Plugin running in SQLite.
+          </p>
+        </div>
+        <button
+          onClick={loadData}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Refresh Data</span>
+        </button>
+      </div>
+
+      <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-xs">
+        <h3 className="font-semibold text-slate-200 mb-2">Query Preview (Customers):</h3>
+        <p className="text-slate-400">Total rows loaded: {data.length}</p>
+      </div>
+    </div>
+  );
+}
+`;
+    const now = new Date().toISOString();
+    engine.run(
+      'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        pluginId,
+        baseName,
+        '1.0.0',
+        1,
+        'Boxes',
+        'Custom',
+        `/${baseName.toLowerCase()}`,
+        `Custom dynamic TSX plugin ${baseName}`,
+        starterCode,
+        now,
+        now,
+      ]
+    );
+    engine.notifyChange(true);
+    setExpandedFolders((prev) => {
+      const next = { ...prev, plugins: true, pluginsUser: true };
+      safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+      return next;
+    });
+    openOrActivateItem({ type: 'plugin', id: pluginId, name: baseName });
+    gawContext?.toast?.success?.(`Created new plugin "${baseName}.tsx"`);
+  }, [engine, gawContext, openOrActivateItem]);
+
+  // Handler: Add New Table via pro-forma SQL query
+  const handleAddNewTable = useCallback(() => {
+    const existingTables = engine.getSchema().map((s) => s.name);
+    let baseName = 'new_table';
+    let counter = 1;
+    while (existingTables.includes(baseName)) {
+      counter++;
+      baseName = `new_table_${counter}`;
+    }
+    const proFormaSql = `-- Pro-forma statement to create a new table\nDROP TABLE IF EXISTS "${baseName}";\n\nCREATE TABLE "${baseName}" (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  description TEXT,\n  created_at DATETIME DEFAULT CURRENT_TIMESTAMP\n);\n`;
+
+    const newId = `q_create_${baseName}_${Date.now()}`;
+    const queryName = `Create ${baseName} Table`;
+    const now = new Date().toISOString();
+
+    engine.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [newId, queryName, `Pro-forma query to create table "${baseName}"`, proFormaSql, '{}', '{}', now]
+    );
+    engine.notifyChange(true);
+    setExpandedFolders((prev) => {
+      const next = { ...prev, queries: true };
+      safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+      return next;
+    });
+    openOrActivateItem({ type: 'query', id: newId, name: queryName, code: proFormaSql });
+    gawContext?.toast?.success?.(`Added query "${queryName}.sql" with pro-forma CREATE TABLE statement.`);
+  }, [engine, gawContext, openOrActivateItem]);
+
+  // Handler: Add New Query (.sql)
+  const handleAddNewQuery = useCallback(() => {
+    const existingQueries = engine.getSavedQueries().map((q) => q.name);
+    let baseName = 'New_Query';
+    let counter = 1;
+    while (existingQueries.includes(baseName)) {
+      counter++;
+      baseName = `New_Query_${counter}`;
+    }
+    const newId = `q_${baseName.toLowerCase()}_${Date.now()}`;
+    const firstTable = engine.getSchema().find((t) => !t.isSystem && !engine.isSystemTable(t.name))?.name || 'customers';
+    const querySql = `-- SQL Query\nSELECT * FROM "${firstTable}" LIMIT 25;\n`;
+    const now = new Date().toISOString();
+
+    engine.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [newId, baseName, `Custom query ${baseName}`, querySql, '{}', '{}', now]
+    );
+    engine.notifyChange(true);
+    setExpandedFolders((prev) => {
+      const next = { ...prev, queries: true };
+      safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+      return next;
+    });
+    openOrActivateItem({ type: 'query', id: newId, name: baseName, code: querySql });
+    gawContext?.toast?.success?.(`Created new query "${baseName}.sql"`);
+  }, [engine, gawContext, openOrActivateItem]);
+
+  // Handler: Add New Report (.json)
+  const handleAddNewReport = useCallback(() => {
+    const existingReports = engine.getSavedReports().map((r) => r.name);
+    let baseName = 'New_Report';
+    let counter = 1;
+    while (existingReports.includes(baseName)) {
+      counter++;
+      baseName = `New_Report_${counter}`;
+    }
+    const newId = `r_${baseName.toLowerCase()}_${Date.now()}`;
+    const firstQuery = engine.getSavedQueries()[0];
+    const initialConfig = {
+      title: baseName.replace(/_/g, ' '),
+      subtitle: 'Executive Summary Briefing',
+      columns: ['id', 'company_name', 'contact_name', 'city', 'country'],
+      showKpi: true,
+      showChart: false,
+    };
+    const now = new Date().toISOString();
+
+    engine.saveReport({
+      id: newId,
+      name: baseName,
+      description: `Executive publication brief ${baseName}`,
+      query_id: firstQuery?.id || '',
+      custom_sql: 'SELECT * FROM customers LIMIT 25;',
+      config: JSON.stringify(initialConfig),
+      created_at: now,
+    });
+    engine.notifyChange(true);
+    setExpandedFolders((prev) => {
+      const next = { ...prev, reports: true };
+      safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+      return next;
+    });
+    openOrActivateItem({ type: 'report', id: newId, name: baseName });
+    gawContext?.toast?.success?.(`Created new report "${baseName}.json"`);
+  }, [engine, gawContext, openOrActivateItem]);
 
   // Add new SQL tab
   const addSqlTab = () => {
@@ -1857,7 +2081,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         {/* PRIMARY SIDE BAR (Explorer, Search, Extensions, Settings) */}
         {isPrimarySidebarOpen && (
           <div
-            className={`w-64 border-r flex flex-col text-xs select-text overflow-hidden flex-shrink-0 ${
+            ref={sidebarContainerRef}
+            style={{ width: `${sidebarWidth}px` }}
+            className={`relative border-r flex flex-col text-xs select-text overflow-hidden flex-shrink-0 ${
               isDark ? 'bg-[#252526] border-[#1e1e1e] text-slate-300' : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
@@ -1897,13 +2123,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('plugins')}
-                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                      className={`flex items-center justify-between px-2 py-1 font-bold cursor-pointer rounded transition group ${
                         isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
-                      {expandedFolders.plugins ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-blue-500" />
-                      <span>plugins ({allPlugins.length})</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {expandedFolders.plugins ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        <Folder className="w-3.5 h-3.5 text-blue-500" />
+                        <span>plugins ({allPlugins.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddNewPlugin();
+                        }}
+                        className={`p-0.5 rounded transition ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                        }`}
+                        title="Add New Dynamic Plugin (.tsx)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     {expandedFolders.plugins && (
@@ -1942,13 +2183,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                         <div>
                           <div
                             onClick={() => toggleFolder('pluginsUser')}
-                            className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                            className={`flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
                               isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                             }`}
                           >
-                            {expandedFolders.pluginsUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
-                            <span>User ({userPlugins.length})</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {expandedFolders.pluginsUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                              <span>User ({userPlugins.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddNewPlugin();
+                              }}
+                              className={`p-0.5 rounded transition ${
+                                isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
+                              }`}
+                              title="Add New User Plugin (.tsx)"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
                           </div>
                           {expandedFolders.pluginsUser && (
                             <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-emerald-500/20">
@@ -1978,13 +2234,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('tables')}
-                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                      className={`flex items-center justify-between px-2 py-1 font-bold cursor-pointer rounded transition group ${
                         isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
-                      {expandedFolders.tables ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-amber-500" />
-                      <span>tables ({allTables.length})</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {expandedFolders.tables ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        <Folder className="w-3.5 h-3.5 text-amber-500" />
+                        <span>tables ({allTables.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddNewTable();
+                        }}
+                        className={`p-0.5 rounded transition ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                        }`}
+                        title="Add New Table (Creates pro-forma CREATE TABLE query)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     {expandedFolders.tables && (
@@ -1993,13 +2264,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                         <div>
                           <div
                             onClick={() => toggleFolder('tablesUser')}
-                            className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                            className={`flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
                               isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                             }`}
                           >
-                            {expandedFolders.tablesUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
-                            <span>User ({userTables.length})</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {expandedFolders.tablesUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                              <span>User ({userTables.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddNewTable();
+                              }}
+                              className={`p-0.5 rounded transition ${
+                                isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
+                              }`}
+                              title="Add New Table (Creates pro-forma CREATE TABLE query)"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
                           </div>
                           {expandedFolders.tablesUser && (
                             <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-emerald-500/20">
@@ -2219,13 +2505,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('queries')}
-                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                      className={`flex items-center justify-between px-2 py-1 font-bold cursor-pointer rounded transition group ${
                         isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
-                      {expandedFolders.queries ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-cyan-500" />
-                      <span>queries ({allQueries.length})</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {expandedFolders.queries ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        <Folder className="w-3.5 h-3.5 text-cyan-500" />
+                        <span>queries ({allQueries.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddNewQuery();
+                        }}
+                        className={`p-0.5 rounded transition ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                        }`}
+                        title="Add New Query (.sql)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     {expandedFolders.queries && (
                       <div className="pl-6 space-y-0.5 mt-0.5">
@@ -2249,13 +2550,28 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                   <div>
                     <div
                       onClick={() => toggleFolder('reports')}
-                      className={`flex items-center gap-1.5 px-2 py-1 font-bold cursor-pointer rounded transition ${
+                      className={`flex items-center justify-between px-2 py-1 font-bold cursor-pointer rounded transition group ${
                         isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
                       }`}
                     >
-                      {expandedFolders.reports ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      <Folder className="w-3.5 h-3.5 text-purple-500" />
-                      <span>reports ({allReports.length})</span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {expandedFolders.reports ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        <Folder className="w-3.5 h-3.5 text-purple-500" />
+                        <span>reports ({allReports.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddNewReport();
+                        }}
+                        className={`p-0.5 rounded transition ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                        }`}
+                        title="Add New Report (.json)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     {expandedFolders.reports && (
                       <div className="pl-6 space-y-0.5 mt-0.5">
@@ -2490,7 +2806,22 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Resize Handle on Right Edge */}
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizingSidebar(true);
+              }}
+              className={`hidden md:block absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-blue-500/80 transition-colors z-30 ${
+                isResizingSidebar ? 'bg-blue-500 w-2 shadow-lg shadow-blue-500/50' : 'bg-transparent'
+              }`}
+              title="Drag left or right to adjust sidebar width"
+            />
           </div>
+        )}
+        {isResizingSidebar && (
+          <div className="fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto" />
         )}
 
         {/* 3. CENTER MONACO EDITOR CANVAS & TABS */}

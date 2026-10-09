@@ -843,6 +843,67 @@ export default function App() {
     }
   }, [activeSavedQuery, toastApi]);
 
+  // Add New Table via pro-forma CREATE TABLE query
+  const handleNewTable = useCallback(() => {
+    const engine = SQLiteEngine.getInstance();
+    const existingTables = engine.getSchema().map((s) => s.name);
+    let baseName = 'new_table';
+    let counter = 1;
+    while (existingTables.includes(baseName)) {
+      counter++;
+      baseName = `new_table_${counter}`;
+    }
+    const proFormaSql = `-- Pro-forma statement to create a new table\nDROP TABLE IF EXISTS "${baseName}";\n\nCREATE TABLE "${baseName}" (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  name TEXT NOT NULL,\n  description TEXT,\n  created_at DATETIME DEFAULT CURRENT_TIMESTAMP\n);\n`;
+
+    const newId = `q_create_${baseName}_${Date.now()}`;
+    const queryName = `Create ${baseName} Table`;
+    const newQuery: SavedQuery = {
+      id: newId,
+      name: queryName,
+      description: `Pro-forma query to create table "${baseName}"`,
+      query: proFormaSql,
+      created_at: new Date().toISOString(),
+    };
+
+    engine.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
+    );
+    engine.notifyChange(true);
+    handleSelectQuery(newQuery);
+    toastApi.success(`Added new query "${queryName}" with pro-forma CREATE TABLE statement.`);
+  }, [handleSelectQuery, toastApi]);
+
+  // Add New Query in non-IDE view
+  const handleNewQuery = useCallback(() => {
+    const engine = SQLiteEngine.getInstance();
+    const existingQueries = engine.getSavedQueries().map((q) => q.name);
+    let baseName = 'New_Query';
+    let counter = 1;
+    while (existingQueries.includes(baseName)) {
+      counter++;
+      baseName = `New_Query_${counter}`;
+    }
+    const newId = `q_${baseName.toLowerCase()}_${Date.now()}`;
+    const firstTable = engine.getSchema().find((t) => !t.isSystem)?.name || 'customers';
+    const querySql = `-- SQL Query\nSELECT * FROM "${firstTable}" LIMIT 25;\n`;
+    const newQuery: SavedQuery = {
+      id: newId,
+      name: baseName,
+      description: `Custom query ${baseName}`,
+      query: querySql,
+      created_at: new Date().toISOString(),
+    };
+
+    engine.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [newId, baseName, newQuery.description, querySql, '{}', '{}', newQuery.created_at]
+    );
+    engine.notifyChange(true);
+    handleSelectQuery(newQuery);
+    toastApi.success(`Created new query "${baseName}".`);
+  }, [handleSelectQuery, toastApi]);
+
   // Select Plugin
   const handleSelectPlugin = useCallback((p: PluginRecord, updateHash: boolean = true) => {
     setActiveView(`plugin:${p.id}`);
@@ -1495,6 +1556,8 @@ export default function App() {
                 setReportToEdit(null);
                 setShowReportBuilder(true);
               }}
+              onNewTable={handleNewTable}
+              onNewQuery={handleNewQuery}
               onEditReportVisual={(r) => {
                 setReportToEdit(r);
                 setShowReportBuilder(true);
@@ -1851,6 +1914,14 @@ export default function App() {
               onNewReport={() => {
                 setReportToEdit(null);
                 setShowReportBuilder(true);
+                setSidebarOpenWithStorage(false);
+              }}
+              onNewTable={() => {
+                handleNewTable();
+                setSidebarOpenWithStorage(false);
+              }}
+              onNewQuery={() => {
+                handleNewQuery();
                 setSidebarOpenWithStorage(false);
               }}
               onEditReportVisual={(r) => {

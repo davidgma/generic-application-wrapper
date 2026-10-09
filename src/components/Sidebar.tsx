@@ -35,8 +35,10 @@ interface SidebarProps {
   onSelectReport: (report: SavedReport) => void;
   onSelectPlugin: (plugin: PluginRecord) => void;
   onOpenSpreadsheet: () => void;
-  onOpenIDE: (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string }) => void;
+  onOpenIDE: (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string; code?: string }) => void;
   onNewReport: () => void;
+  onNewTable?: () => void;
+  onNewQuery?: () => void;
   onEditReportVisual?: (report: SavedReport) => void;
   onDeleteObject: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
   onAddPlugin?: () => void;
@@ -60,6 +62,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSpreadsheet,
   onOpenIDE,
   onNewReport,
+  onNewTable,
+  onNewQuery,
   onEditReportVisual,
   onDeleteObject,
   onAddPlugin,
@@ -104,9 +108,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return saved ? Math.max(200, Math.min(600, parseInt(saved, 10))) : 260;
   });
   const [isResizing, setIsResizing] = useState(false);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  sidebarWidthRef.current = sidebarWidth;
 
   useEffect(() => {
     if (!isResizing) return;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
 
     const handleMouseMove = (e: MouseEvent) => {
       const newWidth = Math.max(200, Math.min(600, e.clientX));
@@ -115,16 +123,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const handleMouseUp = () => {
       setIsResizing(false);
-      safeStorage.setItem('gaw_sidebar_width', sidebarWidth.toString());
+      safeStorage.setItem('gaw_sidebar_width', sidebarWidthRef.current.toString());
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, sidebarWidth]);
+  }, [isResizing]);
 
   const toggleSection = (section: string) => {
     setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -242,7 +254,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }
                 }}
                 title="Add Dynamic TSX Plugin (Local File, Dropbox, or IDE)"
-                className="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition"
+                className={`p-1 rounded transition ${
+                  isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -346,17 +360,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div>
                 <div
                   onClick={() => toggleSection('pluginsUser')}
-                  className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
+                  className={`flex items-center justify-between px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
                     isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                   }`}
                 >
-                  {collapsedSections.pluginsUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {collapsedSections.pluginsUser ? (
-                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
-                  ) : (
-                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                  <div className="flex items-center gap-1.5">
+                    {collapsedSections.pluginsUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {collapsedSections.pluginsUser ? (
+                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    ) : (
+                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    )}
+                    <span>User ({userPlugins.length})</span>
+                  </div>
+                  {mode !== 'app' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onAddPlugin) {
+                          onAddPlugin();
+                        } else {
+                          onOpenIDE({ type: 'plugin' });
+                        }
+                      }}
+                      title="Add Dynamic TSX Plugin"
+                      className={`p-0.5 rounded transition ${
+                        isDark ? 'hover:bg-slate-800 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-emerald-950'
+                      }`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
                   )}
-                  <span>User ({userPlugins.length})</span>
                 </div>
 
                 {!collapsedSections.pluginsUser && (
@@ -458,6 +492,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {collapsedSections.tables ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               <span>Tables ({systemTables.length + userTables.length})</span>
             </div>
+            {mode !== 'app' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onNewTable) {
+                    onNewTable();
+                  }
+                }}
+                title="Add New Table (Creates a pro-forma CREATE TABLE query)"
+                className={`p-1 rounded transition ${
+                  isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {!collapsedSections.tables && (
@@ -531,17 +581,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div>
                 <div
                   onClick={() => toggleSection('tablesUser')}
-                  className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
+                  className={`flex items-center justify-between px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
                     isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
                   }`}
                 >
-                  {collapsedSections.tablesUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {collapsedSections.tablesUser ? (
-                    <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
-                  ) : (
-                    <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                  <div className="flex items-center gap-1.5">
+                    {collapsedSections.tablesUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {collapsedSections.tablesUser ? (
+                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    ) : (
+                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    )}
+                    <span>User ({userTables.length})</span>
+                  </div>
+                  {mode !== 'app' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onNewTable) {
+                          onNewTable();
+                        }
+                      }}
+                      title="Add New Table (Creates a pro-forma CREATE TABLE query)"
+                      className={`p-0.5 rounded transition ${
+                        isDark ? 'hover:bg-slate-800 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-emerald-950'
+                      }`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
                   )}
-                  <span>User ({userTables.length})</span>
                 </div>
 
                 {!collapsedSections.tablesUser && (
@@ -637,7 +705,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div
             onClick={() => toggleSection('queries')}
-            className="flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-300 hover:text-white cursor-pointer"
+            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
+              isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'
+            }`}
           >
             <div className="flex items-center gap-1.5">
               {collapsedSections.queries ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -647,10 +717,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOpenIDE({ type: 'sql' });
+                  if (onNewQuery) {
+                    onNewQuery();
+                  } else {
+                    onOpenIDE({ type: 'sql' });
+                  }
                 }}
                 title="Add New SQL Query"
-                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                className={`p-1 rounded transition ${
+                  isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -731,7 +807,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div
             onClick={() => toggleSection('reports')}
-            className="flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-300 hover:text-white cursor-pointer"
+            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
+              isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'
+            }`}
           >
             <div className="flex items-center gap-1.5">
               {collapsedSections.reports ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -744,7 +822,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onNewReport();
                 }}
                 title="Add New Report"
-                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white"
+                className={`p-1 rounded transition ${
+                  isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -900,6 +980,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
         title="Drag left or right to adjust sidebar width"
       />
+      {isResizing && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto" />
+      )}
     </aside>
   );
 };
