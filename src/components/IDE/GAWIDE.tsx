@@ -37,6 +37,7 @@ import {
   Redo,
   Info,
   HelpCircle,
+  Key,
 } from 'lucide-react';
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
@@ -127,21 +128,54 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [isFormatting, setIsFormatting] = useState(false);
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
 
-  // Explorer Tree Expansion
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
-    plugins: true,
-    pluginsUser: true,
-    pluginsSystem: true,
-    tables: true,
-    tablesUser: true,
-    tablesSystem: false,
-    queries: true,
-    reports: true,
+  // Explorer Tree Expansion with persistence across leaving/returning to IDE
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(() => {
+    const defaults: Record<string, boolean> = {
+      plugins: true,
+      pluginsUser: true,
+      pluginsSystem: true,
+      tables: true,
+      tablesUser: true,
+      tablesSystem: false,
+      queries: true,
+      reports: true,
+    };
+    try {
+      const saved = safeStorage.getItem('gaw_ide_expanded_folders');
+      if (saved) {
+        return { ...defaults, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('Error reading gaw_ide_expanded_folders:', e);
+    }
+    return defaults;
   });
 
-  const toggleFolder = (folder: string) => {
-    setExpandedFolders((prev) => ({ ...prev, [folder]: !prev[folder] }));
-  };
+  const toggleFolder = useCallback((folder: string) => {
+    setExpandedFolders((prev) => {
+      const next = { ...prev, [folder]: !prev[folder] };
+      try {
+        safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+      } catch (e) {
+        console.warn('Error saving gaw_ide_expanded_folders:', e);
+      }
+      return next;
+    });
+  }, []);
+
+  // Primary Sidebar Scroll Position Persistence across leaving/returning to IDE
+  const sidebarContentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const savedScroll = safeStorage.getItem('gaw_ide_sidebar_scroll');
+    if (savedScroll && sidebarContentRef.current) {
+      sidebarContentRef.current.scrollTop = Number(savedScroll) || 0;
+    }
+  }, []);
+
+  const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    safeStorage.setItem('gaw_ide_sidebar_scroll', String(e.currentTarget.scrollTop));
+  }, []);
 
   // Full-Text Search in Files State
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,6 +193,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           content:
             initialTab.code ||
             'SELECT ship_country, COUNT(id) AS total_orders, ROUND(SUM(total_amount), 2) AS total_revenue\nFROM orders\nGROUP BY ship_country\nORDER BY total_revenue DESC;',
+        },
+      ];
+    } else if (initialTab?.type === 'table' && initialTab.name) {
+      const cleanName = initialTab.name.replace(/\.sql$/i, '');
+      initialList = [
+        {
+          id: `tab_table_${cleanName}`,
+          title: cleanName,
+          type: 'table',
+          content: engine.getRecreateTableSQL(cleanName),
+          tableName: cleanName,
         },
       ];
     } else if (initialTab?.type === 'plugin' && initialTab.id) {
@@ -284,11 +329,43 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showOpenMenu]);
 
+  // Database reactive version
+  const [dbVersion, setDbVersion] = useState(0);
+  useEffect(() => {
+    return engine.subscribe(() => {
+      setDbVersion((v) => v + 1);
+    });
+  }, [engine]);
+
   // Schema state for autocompletion and explorer
-  const schema = useMemo(() => engine.getSchema(), [engine]);
+  const schema = useMemo(() => engine.getSchema(), [engine, dbVersion]);
   const allPlugins = useMemo(() => engine.getPlugins(), [engine, tabs]);
   const userPlugins = useMemo(() => allPlugins.filter((p) => !isSystemPlugin(p)), [allPlugins]);
   const systemPlugins = useMemo(() => allPlugins.filter((p) => isSystemPlugin(p)), [allPlugins]);
+
+  // Helper to retrieve columns for a table schema
+  const getTableColumns = useCallback(
+    (table: TableSchema) => {
+      if (table.columns && table.columns.length > 0) return table.columns;
+      try {
+        const res = engine.query(`PRAGMA table_info("${table.name}");`);
+        if (res && res.values) {
+          return res.values.map((c: any) => ({
+            cid: Number(c[0]),
+            name: String(c[1]),
+            type: String(c[2] || 'TEXT'),
+            notnull: Number(c[3]),
+            dflt_value: c[4],
+            pk: Number(c[5]),
+          }));
+        }
+      } catch {
+        // ignore
+      }
+      return [];
+    },
+    [engine]
+  );
 
   const userTables = useMemo(
     () => schema.filter((t) => !t.isSystem && !engine.isSystemTable(t.name)),
@@ -318,9 +395,10 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           content = p.code;
         }
       } else if (item.type === 'table' && item.name) {
-        tabId = `tab_table_${item.name}`;
-        title = `${item.name}.sql`;
-        content = engine.getRecreateTableSQL(item.name);
+        const cleanName = item.name.replace(/\.sql$/i, '');
+        tabId = `tab_table_${cleanName}`;
+        title = cleanName;
+        content = engine.getRecreateTableSQL(cleanName);
       } else if (item.type === 'query') {
         const queries = engine.getSavedQueries();
         const q = queries.find((x) => x.id === item.id || x.name === item.name);
@@ -403,11 +481,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       if (!tabId) return;
 
       setTabs((prev) => {
+        const cleanTableName = item.type === 'table' && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
         const existing = prev.find(
           (t) =>
             t.id === tabId ||
             (item.type === 'plugin' && item.id && t.pluginId === item.id) ||
-            (item.type === 'table' && item.name && t.tableName === item.name) ||
+            (item.type === 'table' &&
+              cleanTableName &&
+              (t.tableName === cleanTableName || t.title.replace(/\.sql$/i, '') === cleanTableName)) ||
             (item.type === 'query' && item.id && t.queryId === item.id) ||
             (item.type === 'report' && item.id && t.reportId === item.id)
         );
@@ -417,13 +498,13 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         }
         const newTab: TabItem = {
           id: tabId,
-          title,
+          title: item.type === 'table' ? (cleanTableName || title.replace(/\.sql$/i, '')) : title,
           type: item.type as any,
           content,
           savedContent: content,
           isDirty: false,
           pluginId: item.type === 'plugin' ? item.id : undefined,
-          tableName: item.type === 'table' ? item.name : undefined,
+          tableName: cleanTableName,
           queryId: item.type === 'query' ? item.id : undefined,
           reportId: item.type === 'report' ? item.id : undefined,
         };
@@ -1133,7 +1214,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     allTables.forEach((t) => {
       list.push({
         id: `file_table_${t.name}`,
-        title: `Go to File: ${t.name}.sql (Schema DDL)`,
+        title: `Go to File: ${t.name} (Schema DDL)`,
         shortcut: 'Table',
         action: () => openOrActivateItem({ type: 'table', name: t.name }),
       });
@@ -1804,7 +1885,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             </div>
 
             {/* Content for Activity */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-3">
+            <div
+              ref={sidebarContentRef}
+              onScroll={handleSidebarScroll}
+              className="flex-1 overflow-y-auto p-2 space-y-3"
+            >
               {/* TAB A: EXPLORER */}
               {activeActivity === 'explorer' && (
                 <div className="space-y-2 text-xs">
@@ -1921,19 +2006,97 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                               {userTables.length === 0 && (
                                 <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user tables</div>
                               )}
-                              {userTables.map((t) => (
-                                <div
-                                  key={t.name}
-                                  onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
-                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                                    isDark ? 'text-emerald-300 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
-                                  }`}
-                                  title={`Table: ${t.name} (Click to view DDL recreation code)`}
-                                >
-                                  <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
-                                  <span className="truncate">{t.name}.sql</span>
-                                </div>
-                              ))}
+                              {userTables.map((t) => {
+                                const isExpanded = !!expandedFolders[`table_${t.name}`];
+                                const cols = getTableColumns(t);
+                                return (
+                                  <div key={t.name} className="space-y-0.5">
+                                    <div
+                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
+                                        isDark
+                                          ? 'text-emerald-300 hover:text-white hover:bg-slate-800'
+                                          : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
+                                      }`}
+                                      title={`Table: ${t.name} (Click name to view DDL, click arrow to view columns)`}
+                                    >
+                                      <div
+                                        className="flex items-center gap-1 min-w-0 flex-1 truncate"
+                                        onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleFolder(`table_${t.name}`);
+                                          }}
+                                          className={`p-0.5 -ml-0.5 rounded transition hover:bg-black/20 flex-shrink-0 ${
+                                            isDark ? 'text-emerald-400 hover:text-white' : 'text-emerald-600 hover:text-black'
+                                          }`}
+                                          title={isExpanded ? `Collapse ${t.name} columns` : `Expand ${t.name} columns`}
+                                        >
+                                          {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                        </button>
+                                        <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                                        <span className="truncate">{t.name}</span>
+                                      </div>
+                                      <span
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleFolder(`table_${t.name}`);
+                                        }}
+                                        className={`text-[10px] font-mono px-1 rounded opacity-75 hover:opacity-100 flex-shrink-0 ${
+                                          isDark ? 'text-emerald-400/80 hover:bg-slate-700/50' : 'text-emerald-700/80 hover:bg-emerald-100'
+                                        }`}
+                                        title={`${cols.length} columns (Click to toggle)`}
+                                      >
+                                        {cols.length} cols
+                                      </span>
+                                    </div>
+
+                                    {/* Expanded Field Names and Types */}
+                                    {isExpanded && (
+                                      <div className="pl-3.5 space-y-0.5 mt-0.5 border-l ml-3 border-emerald-500/20">
+                                        {cols.length === 0 ? (
+                                          <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No columns found</div>
+                                        ) : (
+                                          cols.map((col) => (
+                                            <div
+                                              key={col.name}
+                                              className={`flex items-center justify-between gap-1.5 px-2 py-0.5 rounded text-[11px] select-text transition ${
+                                                isDark
+                                                  ? 'hover:bg-slate-800/60 text-slate-300'
+                                                  : 'hover:bg-emerald-50/70 text-slate-700'
+                                              }`}
+                                              title={`Field: ${col.name}\nType: ${col.type || 'TEXT'}${col.pk ? ' (Primary Key)' : ''}${col.notnull ? ' (NOT NULL)' : ''}`}
+                                            >
+                                              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                {col.pk ? (
+                                                  <span
+                                                    className="text-[9px] font-bold font-mono px-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 flex-shrink-0"
+                                                    title="Primary Key"
+                                                  >
+                                                    PK
+                                                  </span>
+                                                ) : (
+                                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} />
+                                                )}
+                                                <span className={`truncate font-mono text-[11px] font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                  {col.name}
+                                                </span>
+                                              </div>
+                                              <span className={`text-[10px] font-mono flex-shrink-0 uppercase ${
+                                                isDark ? 'text-slate-400' : 'text-slate-500'
+                                              }`}>
+                                                {col.type || 'TEXT'}
+                                              </span>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -1953,19 +2116,97 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                             </div>
                             {expandedFolders.tablesSystem && (
                               <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
-                                {systemTables.map((t) => (
-                                  <div
-                                    key={t.name}
-                                    onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
-                                    className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                                      isDark ? 'text-sky-300 hover:text-white hover:bg-slate-800' : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
-                                    }`}
-                                    title={`System Table: ${t.name} (Click to view DDL recreation code)`}
-                                  >
-                                    <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
-                                    <span className="truncate">{t.name}.sql</span>
-                                  </div>
-                                ))}
+                                {systemTables.map((t) => {
+                                  const isExpanded = !!expandedFolders[`table_${t.name}`];
+                                  const cols = getTableColumns(t);
+                                  return (
+                                    <div key={t.name} className="space-y-0.5">
+                                      <div
+                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
+                                          isDark
+                                            ? 'text-sky-300 hover:text-white hover:bg-slate-800'
+                                            : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
+                                        }`}
+                                        title={`System Table: ${t.name} (Click name to view DDL, click arrow to view columns)`}
+                                      >
+                                        <div
+                                          className="flex items-center gap-1 min-w-0 flex-1 truncate"
+                                          onClick={() => openOrActivateItem({ type: 'table', name: t.name })}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleFolder(`table_${t.name}`);
+                                            }}
+                                            className={`p-0.5 -ml-0.5 rounded transition hover:bg-black/20 flex-shrink-0 ${
+                                              isDark ? 'text-sky-400 hover:text-white' : 'text-sky-600 hover:text-black'
+                                            }`}
+                                            title={isExpanded ? `Collapse ${t.name} columns` : `Expand ${t.name} columns`}
+                                          >
+                                            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                          </button>
+                                          <TableIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                          <span className="truncate">{t.name}</span>
+                                        </div>
+                                        <span
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleFolder(`table_${t.name}`);
+                                          }}
+                                          className={`text-[10px] font-mono px-1 rounded opacity-75 hover:opacity-100 flex-shrink-0 ${
+                                            isDark ? 'text-sky-400/80 hover:bg-slate-700/50' : 'text-sky-700/80 hover:bg-sky-100'
+                                          }`}
+                                          title={`${cols.length} columns (Click to toggle)`}
+                                        >
+                                          {cols.length} cols
+                                        </span>
+                                      </div>
+
+                                      {/* Expanded Field Names and Types */}
+                                      {isExpanded && (
+                                        <div className="pl-3.5 space-y-0.5 mt-0.5 border-l ml-3 border-sky-500/20">
+                                          {cols.length === 0 ? (
+                                            <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No columns found</div>
+                                          ) : (
+                                            cols.map((col) => (
+                                              <div
+                                                key={col.name}
+                                                className={`flex items-center justify-between gap-1.5 px-2 py-0.5 rounded text-[11px] select-text transition ${
+                                                  isDark
+                                                    ? 'hover:bg-slate-800/60 text-slate-300'
+                                                    : 'hover:bg-sky-50/70 text-slate-700'
+                                                }`}
+                                                title={`Field: ${col.name}\nType: ${col.type || 'TEXT'}${col.pk ? ' (Primary Key)' : ''}${col.notnull ? ' (NOT NULL)' : ''}`}
+                                              >
+                                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                  {col.pk ? (
+                                                    <span
+                                                      className="text-[9px] font-bold font-mono px-1 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 flex-shrink-0"
+                                                      title="Primary Key"
+                                                    >
+                                                      PK
+                                                    </span>
+                                                  ) : (
+                                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} />
+                                                  )}
+                                                  <span className={`truncate font-mono text-[11px] font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                    {col.name}
+                                                  </span>
+                                                </div>
+                                                <span className={`text-[10px] font-mono flex-shrink-0 uppercase ${
+                                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                                }`}>
+                                                  {col.type || 'TEXT'}
+                                                </span>
+                                              </div>
+                                            ))
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -2287,7 +2528,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                     ) : (
                       <Database className="w-3.5 h-3.5 text-indigo-400" />
                     )}
-                    <span className="truncate max-w-[140px]">{tab.title}</span>
+                    <span className="truncate max-w-[140px]">
+                      {tab.type === 'table' ? tab.title.replace(/\.sql$/i, '') : tab.title}
+                    </span>
                     {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
                     {tabs.length > 1 && (
                       <button
@@ -2450,7 +2693,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           {activeTab && (
             <div
               className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-900/60 border border-blue-400/40 text-white font-mono text-[11px] min-w-0"
-              title={`Active item: ${activeTab.title}`}
+              title={`Active item: ${activeTab.type === 'table' ? activeTab.title.replace(/\.sql$/i, '') : activeTab.title}`}
             >
               {activeTab.type === 'plugin' ? (
                 <FileCode className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
@@ -2462,8 +2705,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
                 <Database className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0" />
               )}
               {/* Full name without truncation */}
-              <span className="font-bold whitespace-nowrap overflow-x-auto max-w-[260px] sm:max-w-[420px] md:max-w-[550px] scrollbar-none" title={activeTab.title}>
-                {activeTab.title}
+              <span
+                className="font-bold whitespace-nowrap overflow-x-auto max-w-[260px] sm:max-w-[420px] md:max-w-[550px] scrollbar-none"
+                title={activeTab.type === 'table' ? activeTab.title.replace(/\.sql$/i, '') : activeTab.title}
+              >
+                {activeTab.type === 'table' ? activeTab.title.replace(/\.sql$/i, '') : activeTab.title}
               </span>
               {/* Saved / Unsaved Status */}
               {activeTab.isDirty ? (
