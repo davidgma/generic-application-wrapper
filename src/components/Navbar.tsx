@@ -134,7 +134,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header
-      className={`border-b select-text transition-colors ${
+      className={`w-full h-full flex flex-col justify-between border-b overflow-hidden select-text transition-colors ${
         isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
       }`}
     >

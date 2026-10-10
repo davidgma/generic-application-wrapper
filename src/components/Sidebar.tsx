@@ -102,42 +102,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [activeMenu]);
 
-  // Sidebar adjustable width state
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const saved = safeStorage.getItem('gaw_sidebar_width');
-    return saved ? Math.max(200, Math.min(600, parseInt(saved, 10))) : 260;
-  });
-  const [isResizing, setIsResizing] = useState(false);
-  const sidebarWidthRef = useRef(sidebarWidth);
-  sidebarWidthRef.current = sidebarWidth;
-
-  useEffect(() => {
-    if (!isResizing) return;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(200, Math.min(600, e.clientX));
-      setSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      safeStorage.setItem('gaw_sidebar_width', sidebarWidthRef.current.toString());
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
-
   const toggleSection = (section: string) => {
     setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
@@ -201,8 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
-      style={typeof window !== 'undefined' && window.innerWidth >= 768 ? { width: `${sidebarWidth}px` } : undefined}
-      className={`relative flex-shrink-0 flex flex-col select-text transition-colors w-full md:w-auto h-full border-t md:border-t-0 md:border-r ${
+      className={`relative flex-1 w-full h-full flex flex-col overflow-hidden select-text transition-colors border-t md:border-t-0 md:border-r ${
         isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
       }`}
     >
@@ -981,21 +944,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </button>
       </div>
-
-      {/* Resize Handle on Right Edge */}
-      <div
-        onMouseDown={(e) => {
-          e.preventDefault();
-          setIsResizing(true);
-        }}
-        className={`hidden md:block absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/80 transition-colors z-30 ${
-          isResizing ? 'bg-indigo-500 w-2 shadow-lg shadow-indigo-500/50' : 'bg-transparent'
-        }`}
-        title="Drag left or right to adjust sidebar width"
-      />
-      {isResizing && (
-        <div className="fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto" />
-      )}
     </aside>
   );
 };

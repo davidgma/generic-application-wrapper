@@ -29,7 +29,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const isDark = theme === 'vs-dark';
 
   return (
-    <footer className={`flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono select-text ${
+    <footer className={`w-full h-full flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono select-text overflow-hidden ${
       isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-600'
     }`}>
       {/* Left Diagnostics */}

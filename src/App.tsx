@@ -32,6 +32,7 @@ import { PluginsPane } from './components/panes/PluginsPane';
 import { HelpPane } from './components/panes/HelpPane';
 import { AppHubPane } from './components/panes/AppHubPane';
 import { DEFAULT_HELP_PLUGIN_CODE } from './engine/defaultPlugins';
+import { FiveRegionLayout } from './components/FiveRegionLayout';
 
 import {
   AlertCircle,
@@ -1494,450 +1495,387 @@ export default function App() {
 
   const isFullVSCode = activeView === 'ide';
 
-  return (
-    <div className={`flex flex-col h-screen overflow-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      {/* Top Application Header & Menus (Hidden in full VS Code mode) */}
-      {!isFullVSCode && (
-        <Navbar
+  // 1. Top Area Content: Top header & navbar (Gawkyy name, icon, dev/app mode toggle, settings cog, and navbar)
+  const topContent = !isFullVSCode ? (
+    <Navbar
+      theme={theme}
+      mode={mode}
+      activeRoute={activeRoute}
+      activeView={activeView}
+      onSelectRoute={(route) => {
+        if (route === 'file') {
+          setActiveRoute('file');
+          setActiveView('plugin:plugin_file_manager');
+          navigateTo('file', 'plugin:plugin_file_manager');
+        } else if (route === 'help') {
+          setActiveRoute('help');
+          setActiveView('plugin:plugin_help');
+          navigateTo('help', 'plugin:plugin_help');
+        } else if (route === 'database') {
+          setActiveRoute('database');
+          setActiveView('plugin:plugin_database_management');
+          navigateTo('database', 'plugin:plugin_database_management');
+        } else if (route === 'plugins') {
+          setActiveRoute('plugins');
+          setActiveView('plugin:plugin_manager');
+          navigateTo('plugins', 'plugin:plugin_manager');
+        } else {
+          setActiveRoute(route as any);
+          setActiveView(route);
+          navigateTo(route, route);
+        }
+      }}
+      onSelectView={(v) => {
+        setActiveView(v);
+        if (v.startsWith('plugin:')) {
+          setActiveRoute('plugins');
+          navigateTo('plugins', v);
+          if (mode === 'app') {
+            setLastAppView(v);
+            safeStorage.setItem('gaw_last_app_view', v);
+          } else {
+            setLastDevView(v);
+            safeStorage.setItem('gaw_last_dev_view', v);
+          }
+        } else if (v === 'app_hub') {
+          setActiveRoute('plugins');
+          navigateTo('plugins', 'app_hub');
+          if (mode === 'app') {
+            setLastAppView('app_hub');
+            safeStorage.setItem('gaw_last_app_view', 'app_hub');
+          }
+        } else {
+          navigateTo(activeRoute, v);
+        }
+      }}
+      onThemeToggle={handleToggleTheme}
+      onModeToggle={handleToggleMode}
+      onOpenSettings={() => setShowSettingsModal(true)}
+      appName={appSettings.appName}
+      appDescription={appSettings.appDescription}
+      userPlugins={userPlugins}
+    />
+  ) : null;
+
+  // 2. Left Area Content: Navigation sidebar panel (when opened)
+  const leftContent = !isFullVSCode && sidebarOpen ? (
+    <Sidebar
+      isOpen={sidebarOpen}
+      onToggle={handleToggleSidebar}
+      tables={tables}
+      queries={queries}
+      reports={reports}
+      plugins={plugins}
+      activeView={activeView}
+      mode={mode}
+      onSelectTable={(tableName) => {
+        handleSelectTable(tableName);
+      }}
+      onSelectQuery={(q) => {
+        handleSelectQuery(q);
+      }}
+      onSelectReport={(r) => {
+        setActiveView(`report:${r.id}`);
+        setActiveRoute('view');
+        navigateTo('view', `report:${r.id}`);
+      }}
+      onSelectPlugin={(p) => {
+        setActiveView(`plugin:${p.id}`);
+        setActiveRoute('plugins');
+        navigateTo('plugins', `plugin:${p.id}`);
+        if (mode === 'app') {
+          setLastAppView(`plugin:${p.id}`);
+          safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+        } else {
+          setLastDevView(`plugin:${p.id}`);
+          safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
+        }
+      }}
+      onOpenSpreadsheet={() => handleOpenSpreadsheet()}
+      onOpenIDE={handleOpenInIDE}
+      onNewReport={() => {
+        setReportToEdit(null);
+        setShowReportBuilder(true);
+      }}
+      onNewTable={handleNewTable}
+      onNewQuery={handleNewQuery}
+      onEditReportVisual={(r) => {
+        setReportToEdit(r);
+        setShowReportBuilder(true);
+      }}
+      onDeleteObject={handleDeleteObject}
+      onAddPlugin={() => setShowAddPluginModal(true)}
+      onOpenAI={() => setShowAIModal(true)}
+      theme={theme}
+    />
+  ) : null;
+
+  // 3. Right Area Content: Initially blank (so middle area expands to fill it)
+  const rightContent = null;
+
+  // 4. Middle Area Content: Active view / workspace output
+  const middleContent = (
+    <main
+      className={`flex-1 flex flex-col overflow-hidden min-w-0 h-full w-full select-text ${
+        theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'
+      }`}
+    >
+      {/* Pane 2: View Hub */}
+      {activeRoute === 'view' && activeView === 'view' && (
+        <ViewPane
           theme={theme}
-          mode={mode}
-          activeRoute={activeRoute}
-          activeView={activeView}
-          onSelectRoute={(route) => {
-            if (route === 'file') {
-              setActiveRoute('file');
-              setActiveView('plugin:plugin_file_manager');
-              navigateTo('file', 'plugin:plugin_file_manager');
-            } else if (route === 'help') {
-              setActiveRoute('help');
-              setActiveView('plugin:plugin_help');
-              navigateTo('help', 'plugin:plugin_help');
-            } else if (route === 'database') {
-              setActiveRoute('database');
-              setActiveView('plugin:plugin_database_management');
-              navigateTo('database', 'plugin:plugin_database_management');
-            } else if (route === 'plugins') {
-              setActiveRoute('plugins');
-              setActiveView('plugin:plugin_manager');
-              navigateTo('plugins', 'plugin:plugin_manager');
-            } else {
-              setActiveRoute(route as any);
-              setActiveView(route);
-              navigateTo(route, route);
-            }
+          tables={tables}
+          queries={queries}
+          reports={reports}
+          plugins={plugins}
+          isVSCodeMode={isVSCodeMode}
+          isSidebarOpen={sidebarOpen}
+          onToggleSidebar={handleToggleSidebar}
+          onOpenSpreadsheet={() => handleOpenSpreadsheet()}
+          onOpenIDE={handleOpenInIDE}
+          onToggleVSCodeMode={handleToggleVSCodeMode}
+          onSelectView={(v) => {
+            setActiveView(v);
+            navigateTo('view', v);
+          }}
+        />
+      )}
+
+      {/* Pane 3: Database Hub */}
+      {activeRoute === 'database' && activeView === 'database' && (
+        <DatabasePane
+          theme={theme}
+          tables={tables}
+          onOpenIDE={handleOpenInIDE}
+          onOpenSettings={() => setShowSettingsModal(true)}
+          onResetDefault={() => {
+            SQLiteEngine.getInstance().createNorthwindDemoDatabase();
+            toastApi.success('Loaded Northwind Modern Commerce template.');
+            setSidebarOpenWithStorage(true);
+            refreshDatabaseState();
+            setActiveView('plugin:plugin_crm');
+            setActiveRoute('plugins');
+            navigateTo('plugins', 'plugin:plugin_crm');
           }}
           onSelectView={(v) => {
             setActiveView(v);
-            if (v.startsWith('plugin:')) {
-              setActiveRoute('plugins');
-              navigateTo('plugins', v);
-              if (mode === 'app') {
-                setLastAppView(v);
-                safeStorage.setItem('gaw_last_app_view', v);
-              } else {
-                setLastDevView(v);
-                safeStorage.setItem('gaw_last_dev_view', v);
-              }
-            } else if (v === 'app_hub') {
-              setActiveRoute('plugins');
-              navigateTo('plugins', 'app_hub');
-              if (mode === 'app') {
-                setLastAppView('app_hub');
-                safeStorage.setItem('gaw_last_app_view', 'app_hub');
-              }
-            } else {
-              navigateTo(activeRoute, v);
-            }
+            navigateTo('view', v);
           }}
-          onThemeToggle={handleToggleTheme}
-          onModeToggle={handleToggleMode}
-          onOpenSettings={() => setShowSettingsModal(true)}
+          onToast={addToast}
+        />
+      )}
+
+      {/* Pane 4: Plugins Marketplace / Hub */}
+      {activeRoute === 'plugins' && activeView === 'plugins' && (
+        <PluginsPane
+          theme={theme}
+          plugins={plugins}
+          onOpenIDE={handleOpenInIDE}
+          onAddPlugin={() => setShowAddPluginModal(true)}
+          onSelectView={(v) => {
+            setActiveView(v);
+            navigateTo('plugins', v);
+          }}
+          onTogglePlugin={(plugin) => {
+            const newEnabled = plugin.enabled === 1 ? false : true;
+            SQLiteEngine.getInstance().setPluginEnabled(plugin.id, newEnabled);
+            refreshDatabaseState();
+            toastApi.info(`${plugin.name} is now ${newEnabled ? 'enabled' : 'disabled'}.`);
+          }}
+        />
+      )}
+
+      {/* Pane 5: Help Route (Dynamic Help & System Guide Plugin) */}
+      {activeRoute === 'help' && activeView === 'help' && (
+        <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
+          <PluginHost
+            code={currentPlugin?.code || DEFAULT_HELP_PLUGIN_CODE}
+            pluginName="Help & System Guide"
+            pluginId="plugin_help"
+            theme={theme}
+            gawContext={gawContext}
+            onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' })}
+          />
+        </div>
+      )}
+
+      {/* View 0: App Hub (List of User Plugins in App Mode) */}
+      {activeView === 'app_hub' && (
+        <AppHubPane
+          theme={theme}
+          plugins={plugins}
           appName={appSettings.appName}
           appDescription={appSettings.appDescription}
-          userPlugins={userPlugins}
+          onSelectPlugin={(p) => {
+            setActiveView(`plugin:${p.id}`);
+            setActiveRoute('plugins');
+            setLastAppView(`plugin:${p.id}`);
+            safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
+            navigateTo('plugins', `plugin:${p.id}`);
+          }}
+          onSwitchToDev={() => handleToggleMode('dev')}
         />
       )}
 
-      {/* Main Workspace Area (Sidebar + Active View) */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0 relative">
-        {/* Desktop Sidebar: rendered before main on desktop */}
-        {!isFullVSCode && (
-          <div className="hidden md:flex h-full">
-            <Sidebar
-              isOpen={sidebarOpen}
-              onToggle={handleToggleSidebar}
-              tables={tables}
-              queries={queries}
-              reports={reports}
-              plugins={plugins}
-              activeView={activeView}
-              mode={mode}
-              onSelectTable={(tableName) => {
-                handleSelectTable(tableName);
-              }}
-              onSelectQuery={(q) => {
-                handleSelectQuery(q);
-              }}
-              onSelectReport={(r) => {
-                setActiveView(`report:${r.id}`);
-                setActiveRoute('view');
-                navigateTo('view', `report:${r.id}`);
-              }}
-              onSelectPlugin={(p) => {
-                setActiveView(`plugin:${p.id}`);
-                setActiveRoute('plugins');
-                navigateTo('plugins', `plugin:${p.id}`);
-                if (mode === 'app') {
-                  setLastAppView(`plugin:${p.id}`);
-                  safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
-                } else {
-                  setLastDevView(`plugin:${p.id}`);
-                  safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
-                }
-              }}
-              onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-              onOpenIDE={handleOpenInIDE}
-              onNewReport={() => {
-                setReportToEdit(null);
-                setShowReportBuilder(true);
-              }}
-              onNewTable={handleNewTable}
-              onNewQuery={handleNewQuery}
-              onEditReportVisual={(r) => {
-                setReportToEdit(r);
-                setShowReportBuilder(true);
-              }}
-              onDeleteObject={handleDeleteObject}
-              onAddPlugin={() => setShowAddPluginModal(true)}
-              onOpenAI={() => setShowAIModal(true)}
-              theme={theme}
-            />
-          </div>
-        )}
+      {/* View 1: Active Dynamic TSX Plugin */}
+      {activeView.startsWith('plugin:') && currentPlugin && (
+        <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
+          <PluginHost
+            code={currentPlugin.code}
+            pluginName={currentPlugin.name}
+            pluginId={currentPlugin.id}
+            theme={theme}
+            gawContext={gawContext}
+            onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: currentPlugin.id, name: currentPlugin.name })}
+          />
+        </div>
+      )}
 
-        {/* Center Canvas */}
-        <main
-          className={`flex-1 flex flex-col overflow-hidden min-w-0 select-text ${
-            sidebarOpen ? 'max-md:portrait:hidden' : ''
-          } ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}
-        >
-
-
-          {/* Pane 2: View Hub */}
-          {activeRoute === 'view' && activeView === 'view' && (
-            <ViewPane
-              theme={theme}
-              tables={tables}
-              queries={queries}
-              reports={reports}
-              plugins={plugins}
-              isVSCodeMode={isVSCodeMode}
-              isSidebarOpen={sidebarOpen}
-              onToggleSidebar={handleToggleSidebar}
-              onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-              onOpenIDE={handleOpenInIDE}
-              onToggleVSCodeMode={handleToggleVSCodeMode}
-              onSelectView={(v) => {
-                setActiveView(v);
-                navigateTo('view', v);
-              }}
-            />
-          )}
-
-          {/* Pane 3: Database Hub */}
-          {activeRoute === 'database' && activeView === 'database' && (
-            <DatabasePane
-              theme={theme}
-              tables={tables}
-              onOpenIDE={handleOpenInIDE}
-              onOpenSettings={() => setShowSettingsModal(true)}
-              onResetDefault={() => {
-                SQLiteEngine.getInstance().createNorthwindDemoDatabase();
-                toastApi.success('Loaded Northwind Modern Commerce template.');
-                setSidebarOpenWithStorage(true);
-                refreshDatabaseState();
-                setActiveView('plugin:plugin_crm');
-                setActiveRoute('plugins');
-                navigateTo('plugins', 'plugin:plugin_crm');
-              }}
-              onSelectView={(v) => {
-                setActiveView(v);
-                navigateTo('view', v);
-              }}
-              onToast={addToast}
-            />
-          )}
-
-          {/* Pane 4: Plugins Marketplace / Hub */}
-          {activeRoute === 'plugins' && activeView === 'plugins' && (
-            <PluginsPane
-              theme={theme}
-              plugins={plugins}
-              onOpenIDE={handleOpenInIDE}
-              onAddPlugin={() => setShowAddPluginModal(true)}
-              onSelectView={(v) => {
-                setActiveView(v);
-                navigateTo('plugins', v);
-              }}
-              onTogglePlugin={(plugin) => {
-                const newEnabled = plugin.enabled === 1 ? false : true;
-                SQLiteEngine.getInstance().setPluginEnabled(plugin.id, newEnabled);
-                refreshDatabaseState();
-                toastApi.info(`${plugin.name} is now ${newEnabled ? 'enabled' : 'disabled'}.`);
-              }}
-            />
-          )}
-
-          {/* Pane 5: Help Route (Dynamic Help & System Guide Plugin) */}
-          {activeRoute === 'help' && activeView === 'help' && (
-            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
-              <PluginHost
-                code={currentPlugin?.code || DEFAULT_HELP_PLUGIN_CODE}
-                pluginName="Help & System Guide"
-                pluginId="plugin_help"
-                theme={theme}
-                gawContext={gawContext}
-                onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' })}
-              />
-            </div>
-          )}
-
-          {/* View 0: App Hub (List of User Plugins in App Mode) */}
-          {activeView === 'app_hub' && (
-            <AppHubPane
-              theme={theme}
-              plugins={plugins}
-              appName={appSettings.appName}
-              appDescription={appSettings.appDescription}
-              onSelectPlugin={(p) => {
-                setActiveView(`plugin:${p.id}`);
-                setActiveRoute('plugins');
-                setLastAppView(`plugin:${p.id}`);
-                safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
-                navigateTo('plugins', `plugin:${p.id}`);
-              }}
-              onSwitchToDev={() => handleToggleMode('dev')}
-            />
-          )}
-
-          {/* View 1: Active Dynamic TSX Plugin */}
-          {activeView.startsWith('plugin:') && currentPlugin && (
-            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
-              <PluginHost
-                code={currentPlugin.code}
-                pluginName={currentPlugin.name}
-                pluginId={currentPlugin.id}
-                theme={theme}
-                gawContext={gawContext}
-                onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: currentPlugin.id, name: currentPlugin.name })}
-              />
-            </div>
-          )}
-
-          {/* View 2a: Saved Query with Multi-Statement Results */}
-          {activeView.startsWith('query:') && (
-            <MultiQueryResultsView
-              savedQuery={activeSavedQuery}
-              results={activeQueryResults}
-              title={activeQueryTitle || 'Query Results'}
-              theme={theme}
-              onOpenInIDE={handleOpenInIDE}
-              onOpenSpreadsheet={handleOpenSpreadsheet}
-              onBackToView={() => {
-                setActiveView('view');
-                navigateTo('view', 'view');
-              }}
-              onRerunQuery={handleRerunActiveQuery}
-            />
-          )}
-
-          {/* View 2b: Table Grid */}
-          {activeView.startsWith('table:') && activeQueryResult && (
-            <div className={`flex-1 flex flex-col overflow-hidden select-text ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
-              <div className={`px-4 py-2 border-b flex items-center justify-between text-xs flex-shrink-0 ${
-                theme === 'vs-dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
-              }`}>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setActiveView('view');
-                      navigateTo('view', 'view');
-                    }}
-                    className={`transition ${theme === 'vs-dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'}`}
-                    title="Back to View Hub"
-                  >
-                    ← View
-                  </button>
-                  <span className="text-slate-500">/</span>
-                  <span className={`font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>{activeQueryTitle}</span>
-                </div>
-                <button
-                  onClick={() => {
-                    const tName = activeView.replace('table:', '');
-                    handleOpenInIDE({ type: 'table', name: tName });
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
-                  title="Edit table DDL in Monaco IDE (Ctrl+Shift+F)"
-                >
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span>Edit Structure in IDE</span>
-                  <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
-                    Ctrl+Shift+F
-                  </kbd>
-                </button>
-              </div>
-              <div className="flex-1 min-h-0">
-                <QueryGrid
-                  result={activeQueryResult}
-                  onOpenInSpreadsheet={handleOpenSpreadsheet}
-                  title={activeQueryTitle}
-                  theme={theme}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* View 3: Publication Report Viewer */}
-          {activeView.startsWith('report:') && currentReport && (
-            <div className="flex-1 overflow-hidden select-text">
-              <ReportViewer
-                report={currentReport}
-                onEdit={() => {
-                  setReportToEdit(currentReport);
-                  setShowReportBuilder(true);
-                }}
-                onOpenInIDE={handleOpenInIDE}
-                onBack={() => {
-                  setActiveView('view');
-                  navigateTo('view', 'view');
-                }}
-                theme={theme}
-              />
-            </div>
-          )}
-
-          {/* View 4: Embedded Spreadsheet Studio */}
-          {activeView === 'spreadsheet' && (
-            <div className="flex-1 overflow-hidden select-text">
-              <SpreadsheetView
-                initialSheets={spreadsheetInitialSheets}
-                onClose={() => {
-                  setActiveView('view');
-                  navigateTo('view', 'view');
-                }}
-                theme={theme}
-              />
-            </div>
-          )}
-
-          {/* View 5: Internal Monaco Editor IDE (Full Screen) */}
-          {activeView === 'ide' && (
-            <div className="flex-1 overflow-hidden select-text">
-              <GAWIDE
-                targetTab={ideTargetTab}
-                onClearTargetTab={() => setIdeTargetTab(null)}
-                onOpenSpreadsheet={handleOpenSpreadsheet}
-                onOpenAI={() => setShowAIModal(true)}
-                theme={theme}
-                onToggleTheme={handleToggleTheme}
-                gawContext={gawContext}
-                onExitIDE={handleExitIDE}
-                onActiveTabChange={(target) => setCurrentIdeTarget(target)}
-                onRunAndExitToNonIDE={handleRunAndExitToNonIDE}
-                onDeleteObject={handleDeleteObject}
-              />
-            </div>
-          )}
-        </main>
-
-        {/* Mobile Side Panel: rendered at the end AFTER plugin/pane output, but BEFORE bottom status bar! */}
-        {/* If mobile is in portrait mode, it takes up the whole screen height! */}
-        {!isFullVSCode && sidebarOpen && (
-          <div className="flex md:hidden w-full max-md:portrait:h-full max-md:portrait:flex-1 max-md:landscape:h-72 border-t border-slate-800 overflow-hidden">
-            <Sidebar
-              isOpen={sidebarOpen}
-              onToggle={handleToggleSidebar}
-              tables={tables}
-              queries={queries}
-              reports={reports}
-              plugins={plugins}
-              activeView={activeView}
-              mode={mode}
-              onSelectTable={(tableName) => {
-                handleSelectTable(tableName);
-                setSidebarOpenWithStorage(false);
-              }}
-              onSelectQuery={(q) => {
-                handleSelectQuery(q);
-                setSidebarOpenWithStorage(false);
-              }}
-              onSelectReport={(r) => {
-                setActiveView(`report:${r.id}`);
-                setActiveRoute('view');
-                navigateTo('view', `report:${r.id}`);
-                setSidebarOpenWithStorage(false);
-              }}
-              onSelectPlugin={(p) => {
-                setActiveView(`plugin:${p.id}`);
-                setActiveRoute('plugins');
-                navigateTo('plugins', `plugin:${p.id}`);
-                if (mode === 'app') {
-                  setLastAppView(`plugin:${p.id}`);
-                  safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
-                } else {
-                  setLastDevView(`plugin:${p.id}`);
-                  safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
-                }
-                setSidebarOpenWithStorage(false);
-              }}
-              onOpenSpreadsheet={() => {
-                handleOpenSpreadsheet();
-                setSidebarOpenWithStorage(false);
-              }}
-              onOpenIDE={(tab) => {
-                handleOpenInIDE(tab);
-                setSidebarOpenWithStorage(false);
-              }}
-              onNewReport={() => {
-                setReportToEdit(null);
-                setShowReportBuilder(true);
-                setSidebarOpenWithStorage(false);
-              }}
-              onNewTable={() => {
-                handleNewTable();
-                setSidebarOpenWithStorage(false);
-              }}
-              onNewQuery={() => {
-                handleNewQuery();
-                setSidebarOpenWithStorage(false);
-              }}
-              onEditReportVisual={(r) => {
-                setReportToEdit(r);
-                setShowReportBuilder(true);
-                setSidebarOpenWithStorage(false);
-              }}
-              onDeleteObject={handleDeleteObject}
-              onAddPlugin={() => setShowAddPluginModal(true)}
-              onOpenAI={() => setShowAIModal(true)}
-              theme={theme}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Status Bar */}
-      {!isFullVSCode && (
-        <StatusBar
-          storageMeta={storageMeta}
-          tableCount={tables.length}
-          pluginCount={plugins.length}
+      {/* View 2a: Saved Query with Multi-Statement Results */}
+      {activeView.startsWith('query:') && (
+        <MultiQueryResultsView
+          savedQuery={activeSavedQuery}
+          results={activeQueryResults}
+          title={activeQueryTitle || 'Query Results'}
           theme={theme}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          isVSCodeMode={isVSCodeMode}
-          onToggleVSCodeMode={handleToggleVSCodeMode}
-          activeView={activeView}
+          onOpenInIDE={handleOpenInIDE}
+          onOpenSpreadsheet={handleOpenSpreadsheet}
+          onBackToView={() => {
+            setActiveView('view');
+            navigateTo('view', 'view');
+          }}
+          onRerunQuery={handleRerunActiveQuery}
         />
       )}
+
+      {/* View 2b: Table Grid */}
+      {activeView.startsWith('table:') && activeQueryResult && (
+        <div className={`flex-1 flex flex-col overflow-hidden select-text ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+          <div className={`px-4 py-2 border-b flex items-center justify-between text-xs flex-shrink-0 ${
+            theme === 'vs-dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setActiveView('view');
+                  navigateTo('view', 'view');
+                }}
+                className={`transition ${theme === 'vs-dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'}`}
+                title="Back to View Hub"
+              >
+                ← View
+              </button>
+              <span className="text-slate-500">/</span>
+              <span className={`font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>{activeQueryTitle}</span>
+            </div>
+            <button
+              onClick={() => {
+                const tName = activeView.replace('table:', '');
+                handleOpenInIDE({ type: 'table', name: tName });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
+              title="Edit table DDL in Monaco IDE (Ctrl+Shift+F)"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>Edit Structure in IDE</span>
+              <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
+                Ctrl+Shift+F
+              </kbd>
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <QueryGrid
+              result={activeQueryResult}
+              onOpenInSpreadsheet={handleOpenSpreadsheet}
+              title={activeQueryTitle}
+              theme={theme}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* View 3: Publication Report Viewer */}
+      {activeView.startsWith('report:') && currentReport && (
+        <div className="flex-1 overflow-hidden select-text">
+          <ReportViewer
+            report={currentReport}
+            onEdit={() => {
+              setReportToEdit(currentReport);
+              setShowReportBuilder(true);
+            }}
+            onOpenInIDE={handleOpenInIDE}
+            onBack={() => {
+              setActiveView('view');
+              navigateTo('view', 'view');
+            }}
+            theme={theme}
+          />
+        </div>
+      )}
+
+      {/* View 4: Embedded Spreadsheet Studio */}
+      {activeView === 'spreadsheet' && (
+        <div className="flex-1 overflow-hidden select-text">
+          <SpreadsheetView
+            initialSheets={spreadsheetInitialSheets}
+            onClose={() => {
+              setActiveView('view');
+              navigateTo('view', 'view');
+            }}
+            theme={theme}
+          />
+        </div>
+      )}
+
+      {/* View 5: Internal Monaco Editor IDE (Full Screen) */}
+      {activeView === 'ide' && (
+        <div className="flex-1 overflow-hidden select-text">
+          <GAWIDE
+            targetTab={ideTargetTab}
+            onClearTargetTab={() => setIdeTargetTab(null)}
+            onOpenSpreadsheet={handleOpenSpreadsheet}
+            onOpenAI={() => setShowAIModal(true)}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+            gawContext={gawContext}
+            onExitIDE={handleExitIDE}
+            onActiveTabChange={(target) => setCurrentIdeTarget(target)}
+            onRunAndExitToNonIDE={handleRunAndExitToNonIDE}
+            onDeleteObject={handleDeleteObject}
+          />
+        </div>
+      )}
+    </main>
+  );
+
+  // 5. Bottom Area Content: Footer status bar
+  const bottomContent = !isFullVSCode ? (
+    <StatusBar
+      storageMeta={storageMeta}
+      tableCount={tables.length}
+      pluginCount={plugins.length}
+      theme={theme}
+      onOpenSettings={() => setShowSettingsModal(true)}
+      isVSCodeMode={isVSCodeMode}
+      onToggleVSCodeMode={handleToggleVSCodeMode}
+      activeView={activeView}
+    />
+  ) : null;
+
+  return (
+    <div className={`flex flex-col h-screen overflow-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      <FiveRegionLayout
+        theme={theme}
+        topContent={topContent}
+        leftContent={leftContent}
+        rightContent={rightContent}
+        middleContent={middleContent}
+        bottomContent={bottomContent}
+        initialTopHeight={96}
+        initialBottomHeight={28}
+        initialLeftWidth={280}
+        initialRightWidth={300}
+      />
 
       {/* Modals & Dialogs */}
       {/* 1. Conflict Resolution Dialog */}
