@@ -1385,6 +1385,104 @@ export class SQLiteEngine {
     }
   }
 
+  public getTableIDEScript(tableName: string): string {
+    const isSystem = this.isSystemTable(tableName);
+    let createSql = '';
+    try {
+      const res = this.query("SELECT sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      if (res.values.length > 0 && res.values[0][0]) {
+        createSql = String(res.values[0][0]).trim();
+      } else {
+        const colRes = this.query(`PRAGMA table_info("${tableName}");`);
+        if (colRes.values.length > 0) {
+          const colDefs = colRes.values.map((col: any[]) => {
+            const name = col[1];
+            const type = col[2] || 'TEXT';
+            const notNull = col[3] ? ' NOT NULL' : '';
+            const dflt = col[4] !== null && col[4] !== undefined ? ` DEFAULT ${col[4]}` : '';
+            const pk = col[5] ? ' PRIMARY KEY' : '';
+            return `  "${name}" ${type}${pk}${notNull}${dflt}`;
+          });
+          createSql = `CREATE TABLE "${tableName}" (\n${colDefs.join(',\n')}\n);`;
+        } else {
+          createSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);`;
+        }
+      }
+    } catch (e) {
+      createSql = `CREATE TABLE "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);`;
+    }
+    if (!createSql.endsWith(';')) {
+      createSql += ';';
+    }
+
+    const commentLines = (text: string): string => {
+      return text
+        .split('\n')
+        .map((line) => (line.trim().length > 0 ? `-- ${line}` : '--'))
+        .join('\n');
+    };
+
+    const header = [
+      '-- ==============================================================================',
+      `-- TABLE SCHEMA DEFINITION: "${tableName}"`,
+      '-- ==============================================================================',
+      '-- All SQL statements below are commented out by default with "-- " to prevent',
+      '-- unintended modifications or execution.',
+      '--',
+      '-- How to use this editor:',
+      '-- • Press Ctrl+/ to toggle comments ON or OFF for any selected lines.',
+      '-- • Press Ctrl+Shift+F to switch to the table data view without running any SQL.',
+      '-- • Click the Save icon to save this SQL as a new user query in Queries.',
+      '-- • Note: The Run icon is disabled in Table view to protect your database.',
+    ];
+
+    if (isSystem) {
+      header.push(
+        '--',
+        `-- ⚠️ WARNING: "${tableName}" is an internal system table!`,
+        '-- Changing, dropping, or altering this table could cause the program to stop',
+        '-- working or behave erratically!'
+      );
+    }
+    header.push('-- ==============================================================================');
+
+    const dropStatement = `-- DROP TABLE IF EXISTS "${tableName}";`;
+    const createStatement = commentLines(createSql);
+    const alterStatement = [
+      `-- ALTER TABLE "${tableName}" ADD COLUMN "new_column" TEXT;`,
+      '--',
+      `-- ALTER TABLE "${tableName}" RENAME TO "${tableName}_backup";`,
+    ].join('\n');
+
+    return `${header.join('\n')}\n\n${dropStatement}\n\n${createStatement}\n\n${alterStatement}\n`;
+  }
+
+  public getTableDropScript(tableName: string): string {
+    const isSystem = this.isSystemTable(tableName);
+    const header = [
+      '-- ==============================================================================',
+      `-- TABLE DELETION TEMPLATE: "${tableName}"`,
+      '-- ==============================================================================',
+      '-- To permanently delete/drop this table from the database:',
+      '-- 1. Highlight all text below (or press Ctrl+A to select all).',
+      '-- 2. Press Ctrl+/ to uncomment the DROP statement.',
+      '-- 3. Click the Save icon to save this as a new query and move to it in Queries.',
+      '-- 4. Click the Run icon or press Ctrl+Shift+F in the query to execute the drop.',
+    ];
+
+    if (isSystem) {
+      header.push(
+        '--',
+        `-- ⚠️ WARNING: "${tableName}" is a protected system table!`,
+        '-- Dropping this table could cause the program to stop working or behave erratically!'
+      );
+    }
+    header.push('-- ==============================================================================');
+
+    const dropStatement = `-- DROP TABLE IF EXISTS "${tableName}";`;
+    return `${header.join('\n')}\n\n${dropStatement}\n`;
+  }
+
   public deleteTable(tableName: string): void {
     if (this.isSystemTable(tableName)) {
       throw new Error(`Cannot delete system table: ${tableName}`);

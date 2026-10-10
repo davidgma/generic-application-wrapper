@@ -128,9 +128,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const menubarRef = useRef<HTMLDivElement>(null);
+  const monacoRef = useRef<any>(null);
   const handleSaveActiveTabRef = useRef<() => void>(() => {});
   const handleRunAndShowInNonIDERef = useRef<() => void>(() => {});
   const handleDeleteActiveItemRef = useRef<() => void>(() => {});
+  const handleToggleCommentsRef = useRef<() => void>(() => {});
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return safeStorage.getItem('gaw_format_on_save') !== 'false';
   });
@@ -265,7 +267,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           id: `tab_table_${cleanName}`,
           title: cleanName,
           type: 'table',
-          content: engine.getRecreateTableSQL(cleanName),
+          content: engine.getTableIDEScript(cleanName),
           tableName: cleanName,
         },
       ];
@@ -469,7 +471,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         const cleanName = item.name.replace(/\.sql$/i, '');
         tabId = `tab_table_${cleanName}`;
         title = cleanName;
-        content = engine.getRecreateTableSQL(cleanName);
+        content = engine.getTableIDEScript(cleanName);
       } else if (item.type === 'query') {
         const queries = engine.getSavedQueries();
         const q = queries.find((x) => x.id === item.id || x.name === item.name);
@@ -710,6 +712,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         handleRunAndShowInNonIDERef.current?.();
         return;
       }
+
+      // Ctrl+/: Toggle line comments
+      if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.code === 'Slash')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleToggleCommentsRef.current?.();
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
@@ -767,9 +777,86 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   };
 
+  // Toggle line comments (-- in SQLite) for any partially or fully selected lines
+  const handleToggleComments = useCallback(() => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current;
+    const model = editor.getModel();
+    if (!model) return;
+
+    const selection = editor.getSelection();
+    if (!selection) return;
+
+    const startLine = selection.startLineNumber;
+    const endLine = selection.endLineNumber;
+
+    // Check whether all non-empty lines in the selection range are already commented
+    let allCommented = true;
+    let hasNonEmpty = false;
+
+    for (let i = startLine; i <= endLine; i++) {
+      const content = model.getLineContent(i);
+      const trimmed = content.trim();
+      if (trimmed.length > 0) {
+        hasNonEmpty = true;
+        if (!trimmed.startsWith('--')) {
+          allCommented = false;
+        }
+      }
+    }
+
+    if (!hasNonEmpty) return;
+
+    const edits: any[] = [];
+    const monacoInstance = monacoRef.current;
+
+    for (let i = startLine; i <= endLine; i++) {
+      const content = model.getLineContent(i);
+      if (allCommented) {
+        // Uncomment: remove leading '-- ' or '--'
+        const match = content.match(/^(\s*)--\s?(.*)$/);
+        if (match) {
+          const newText = match[1] + match[2];
+          const range = monacoInstance
+            ? new monacoInstance.Range(i, 1, i, content.length + 1)
+            : { startLineNumber: i, startColumn: 1, endLineNumber: i, endColumn: content.length + 1 };
+          edits.push({ range, text: newText });
+        }
+      } else {
+        // Comment: prepend '-- '
+        const match = content.match(/^(\s*)(.*)$/);
+        if (match) {
+          const newText = `${match[1]}-- ${match[2]}`;
+          const range = monacoInstance
+            ? new monacoInstance.Range(i, 1, i, content.length + 1)
+            : { startLineNumber: i, startColumn: 1, endLineNumber: i, endColumn: content.length + 1 };
+          edits.push({ range, text: newText });
+        }
+      }
+    }
+
+    if (edits.length > 0) {
+      editor.executeEdits('toggle-comment', edits);
+    }
+  }, []);
+
+  handleToggleCommentsRef.current = handleToggleComments;
+
   // Setup Monaco completion providers and cursor tracking on mount
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Configure SQL line comments in Monaco language registry
+    try {
+      monaco.languages.setLanguageConfiguration('sql', {
+        comments: {
+          lineComment: '--',
+        },
+      });
+    } catch {
+      // ignore
+    }
 
     // Track Cursor Position for VS Code Status Bar
     editor.onDidChangeCursorPosition((e) => {
@@ -779,6 +866,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     // Keybinding: Ctrl+Shift+F to automatically save changes, run query, and show results in non-IDE view
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
       handleRunAndShowInNonIDERef.current?.();
+    });
+
+    // Keybinding: Ctrl+/ to toggle comments
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Slash, () => {
+      handleToggleCommentsRef.current?.();
     });
 
     // 1. Add TypeScript definitions for GAW Plugin APIs, React, and Lucide React
@@ -1044,10 +1136,44 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       }
     } else if (currentTab.type === 'table') {
       const cleanTitle = (currentTab.tableName || currentTab.title).replace(/\.sql$/i, '');
+      const existingQueries = engine.getSavedQueries().map((q) => q.name);
+      let baseQueryName = `${cleanTitle}_query`;
+      let counter = 1;
+      while (existingQueries.includes(baseQueryName)) {
+        counter++;
+        baseQueryName = `${cleanTitle}_query_${counter}`;
+      }
+      const newQueryId = `q_${cleanTitle.toLowerCase()}_${Date.now()}`;
+      const now = new Date().toISOString();
+
+      engine.run(
+        'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+        [newQueryId, baseQueryName, `Saved query for table "${cleanTitle}"`, contentToSave, '{}', '{}', now]
+      );
+      engine.notifyChange(true);
+      setDbVersion((v) => v + 1);
+
+      // Keep table tab marked saved
       setTabs((prev) =>
         prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
-      gawContext?.toast?.success?.(`Saved table definition for "${cleanTitle}". Click Run or press Ctrl+Shift+F to execute.`);
+
+      // Automatically expand queries folder in explorer and move to the newly created query in queries section
+      setExpandedFolders((prev) => {
+        const next = { ...prev, queries: true };
+        safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+        return next;
+      });
+
+      openOrActivateItem({
+        type: 'query',
+        id: newQueryId,
+        name: baseQueryName,
+        code: contentToSave,
+      });
+
+      gawContext?.toast?.success?.(`Created new query "${baseQueryName}" with table SQL. Use Run or Ctrl+Shift+F in query to execute.`);
+      return;
     } else if (currentTab.type === 'report' && currentTab.reportId) {
       try {
         const parsed = JSON.parse(contentToSave);
@@ -1105,7 +1231,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     const currentEditorVal = editorRef.current ? editorRef.current.getValue() : currentTab.content;
     const cleanTitle = (currentTab.type === 'table' ? (currentTab.tableName || currentTab.title) : currentTab.title).replace(/\.sql$/i, '');
 
-    if (currentTab.type === 'sql' || currentTab.type === 'query' || currentTab.type === 'table') {
+    if (currentTab.type === 'table') {
+      // When in a table in the IDE and ctrl+shift+f is pressed, automatically switch to the non-IDE view
+      // of the data in the table but don't automatically save the query or run any of the sql.
+      if (onExitIDE) {
+        onExitIDE({ type: 'table', name: cleanTitle });
+      } else {
+        handleExitIDE();
+      }
+      return;
+    }
+
+    if (currentTab.type === 'sql' || currentTab.type === 'query') {
       let queryId = currentTab.queryId;
       const now = new Date().toISOString();
 
@@ -1153,7 +1290,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           });
         } else if (onExitIDE) {
           onExitIDE({
-            type: currentTab.type === 'table' ? 'table' : 'query',
+            type: 'query',
             id: queryId,
             name: cleanTitle,
             code: currentEditorVal,
@@ -1212,18 +1349,24 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       }
     } else if (currentTab.type === 'table') {
       const tableName = currentTab.tableName || cleanTitle;
-      if (engine.isSystemTable(tableName)) {
-        gawContext?.toast?.error?.(`Table "${tableName}" is a system table and cannot be deleted.`);
-        return;
+      const dropScript = engine.getTableDropScript(tableName);
+
+      if (editorRef.current) {
+        editorRef.current.setValue(dropScript);
       }
-      if (onDeleteObject) {
-        onDeleteObject('table', tableName, tableName);
-      } else {
-        engine.deleteTable(tableName);
-        closeTab(currentTab.id);
-        setDbVersion((v) => v + 1);
-        gawContext?.toast?.success?.(`Deleted table "${tableName}"`);
-      }
+
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === currentTab.id
+            ? { ...t, content: dropScript, savedContent: dropScript, isDirty: false }
+            : t
+        )
+      );
+
+      gawContext?.toast?.info?.(
+        `Loaded DROP statement for table "${tableName}". Press Ctrl+/ to uncomment, then Save to create a query.`
+      );
+      return;
     } else if (currentTab.type === 'plugin' && currentTab.pluginId) {
       if (onDeleteObject) {
         onDeleteObject('plugin', currentTab.pluginId, cleanTitle);
@@ -3026,16 +3169,33 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleRunAndShowInNonIDERef.current?.()}
-                  title="Run Query & Show Results in Non-IDE (Ctrl+Shift+F)"
-                  className="p-1.5 rounded transition flex items-center justify-center text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/40"
+                  disabled={activeTab?.type === 'table'}
+                  onClick={() => {
+                    if (activeTab?.type !== 'table') {
+                      handleRunAndShowInNonIDERef.current?.();
+                    }
+                  }}
+                  title={
+                    activeTab?.type === 'table'
+                      ? 'Run is disabled for tables (Press Ctrl+Shift+F to view table data in non-IDE)'
+                      : 'Run Query & Show Results in Non-IDE (Ctrl+Shift+F)'
+                  }
+                  className={`p-1.5 rounded transition flex items-center justify-center ${
+                    activeTab?.type === 'table'
+                      ? 'opacity-35 cursor-not-allowed text-slate-500'
+                      : 'text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/40'
+                  }`}
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDeleteActiveItemRef.current?.()}
-                  title="Delete query or table"
+                  title={
+                    activeTab?.type === 'table'
+                      ? 'Delete table (Loads drop template in editor)'
+                      : 'Delete query or object'
+                  }
                   className="p-1.5 rounded transition flex items-center justify-center text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
