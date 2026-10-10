@@ -10,6 +10,11 @@ export interface FiveRegionLayoutProps {
   initialBottomHeight?: number;
   initialLeftWidth?: number;
   initialRightWidth?: number;
+  topHeight?: number;
+  bottomHeight?: number;
+  leftWidth?: number;
+  rightWidth?: number;
+  onDimensionsChange?: (dims: { topHeight: number; bottomHeight: number; leftWidth: number; rightWidth: number }) => void;
   minTopHeight?: number;
   maxTopHeight?: number;
   minBottomHeight?: number;
@@ -32,6 +37,11 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
   initialBottomHeight = 28,
   initialLeftWidth = 280,
   initialRightWidth = 300,
+  topHeight: controlledTopHeight,
+  bottomHeight: controlledBottomHeight,
+  leftWidth: controlledLeftWidth,
+  rightWidth: controlledRightWidth,
+  onDimensionsChange,
   minTopHeight = 40,
   maxTopHeight = 400,
   minBottomHeight = 20,
@@ -46,10 +56,26 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
   const isDark = theme === 'vs-dark';
 
   // Heights and widths state
-  const [topHeight, setTopHeight] = useState<number>(initialTopHeight);
-  const [bottomHeight, setBottomHeight] = useState<number>(initialBottomHeight);
-  const [leftWidth, setLeftWidth] = useState<number>(initialLeftWidth);
-  const [rightWidth, setRightWidth] = useState<number>(initialRightWidth);
+  const [topHeight, setTopHeight] = useState<number>(controlledTopHeight ?? initialTopHeight);
+  const [bottomHeight, setBottomHeight] = useState<number>(controlledBottomHeight ?? initialBottomHeight);
+  const [leftWidth, setLeftWidth] = useState<number>(controlledLeftWidth ?? initialLeftWidth);
+  const [rightWidth, setRightWidth] = useState<number>(controlledRightWidth ?? initialRightWidth);
+
+  useEffect(() => {
+    if (controlledTopHeight !== undefined) setTopHeight(controlledTopHeight);
+  }, [controlledTopHeight]);
+
+  useEffect(() => {
+    if (controlledBottomHeight !== undefined) setBottomHeight(controlledBottomHeight);
+  }, [controlledBottomHeight]);
+
+  useEffect(() => {
+    if (controlledLeftWidth !== undefined) setLeftWidth(controlledLeftWidth);
+  }, [controlledLeftWidth]);
+
+  useEffect(() => {
+    if (controlledRightWidth !== undefined) setRightWidth(controlledRightWidth);
+  }, [controlledRightWidth]);
 
   // Active dragging handle state
   const [activeDrag, setActiveDrag] = useState<'top' | 'bottom' | 'left' | 'right' | null>(null);
@@ -114,23 +140,35 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
       const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
 
+      let nextTop = topHeight;
+      let nextBottom = bottomHeight;
+      let nextLeft = leftWidth;
+      let nextRight = rightWidth;
+
       if (activeDrag === 'top') {
         const deltaY = clientY - dragRef.current.startY;
-        const newHeight = Math.max(minTopHeight, Math.min(maxTopHeight, dragRef.current.startDimension + deltaY));
-        setTopHeight(newHeight);
+        nextTop = Math.max(minTopHeight, Math.min(maxTopHeight, dragRef.current.startDimension + deltaY));
+        setTopHeight(nextTop);
       } else if (activeDrag === 'bottom') {
         const deltaY = dragRef.current.startY - clientY;
-        const newHeight = Math.max(minBottomHeight, Math.min(maxBottomHeight, dragRef.current.startDimension + deltaY));
-        setBottomHeight(newHeight);
+        nextBottom = Math.max(minBottomHeight, Math.min(maxBottomHeight, dragRef.current.startDimension + deltaY));
+        setBottomHeight(nextBottom);
       } else if (activeDrag === 'left') {
         const deltaX = clientX - dragRef.current.startX;
-        const newWidth = Math.max(minLeftWidth, Math.min(maxLeftWidth, dragRef.current.startDimension + deltaX));
-        setLeftWidth(newWidth);
+        nextLeft = Math.max(minLeftWidth, Math.min(maxLeftWidth, dragRef.current.startDimension + deltaX));
+        setLeftWidth(nextLeft);
       } else if (activeDrag === 'right') {
         const deltaX = dragRef.current.startX - clientX;
-        const newWidth = Math.max(minRightWidth, Math.min(maxRightWidth, dragRef.current.startDimension + deltaX));
-        setRightWidth(newWidth);
+        nextRight = Math.max(minRightWidth, Math.min(maxRightWidth, dragRef.current.startDimension + deltaX));
+        setRightWidth(nextRight);
       }
+
+      onDimensionsChange?.({
+        topHeight: nextTop,
+        bottomHeight: nextBottom,
+        leftWidth: nextLeft,
+        rightWidth: nextRight,
+      });
     };
 
     const handlePointerUp = () => {

@@ -129,6 +129,29 @@ export default function App() {
   }, [plugins]);
   const [appTitle, setAppTitle] = useState('New Application');
 
+  // Layout area dimensions state (persisted to localStorage & t_settings when DB active)
+  const [topHeight, setTopHeight] = useState<number>(() => {
+    const saved = safeStorage.getItem('gaw_layout_top_height');
+    return saved ? Math.max(40, Math.min(400, parseInt(saved, 10))) : 96;
+  });
+  const [bottomHeight, setBottomHeight] = useState<number>(() => {
+    const saved = safeStorage.getItem('gaw_layout_bottom_height');
+    return saved ? Math.max(20, Math.min(300, parseInt(saved, 10))) : 28;
+  });
+  const [leftWidth, setLeftWidth] = useState<number>(() => {
+    const saved = safeStorage.getItem('gaw_layout_left_width');
+    return saved ? Math.max(160, Math.min(600, parseInt(saved, 10))) : 280;
+  });
+  const [rightWidth, setRightWidth] = useState<number>(() => {
+    const saved = safeStorage.getItem('gaw_layout_right_width');
+    return saved ? Math.max(160, Math.min(600, parseInt(saved, 10))) : 300;
+  });
+
+  // Track whether an actual user database file is currently being worked on
+  const [isDbActive, setIsDbActive] = useState<boolean>(() => {
+    return safeStorage.getItem('gaw_db_active') === 'true';
+  });
+
   // Sidebar state loaded from & persisted to localStorage
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     const currentMode = safeStorage.getItem('gaw_mode');
@@ -466,6 +489,77 @@ export default function App() {
     };
   }, [storageEngine]);
 
+  // Synchronize layout dimensions with t_settings if a database is currently active
+  const syncLayoutWithDatabase = useCallback((active: boolean) => {
+    if (!active) return;
+    const engine = SQLiteEngine.getInstance();
+    try {
+      const savedTop = engine.getSetting('layout_top_height');
+      const savedBottom = engine.getSetting('layout_bottom_height');
+      const savedLeft = engine.getSetting('layout_left_width');
+      const savedRight = engine.getSetting('layout_right_width');
+
+      if (savedTop && savedBottom && savedLeft && savedRight) {
+        const t = Math.max(40, Math.min(400, parseInt(savedTop, 10)));
+        const b = Math.max(20, Math.min(300, parseInt(savedBottom, 10)));
+        const l = Math.max(160, Math.min(600, parseInt(savedLeft, 10)));
+        const r = Math.max(160, Math.min(600, parseInt(savedRight, 10)));
+
+        setTopHeight(t);
+        setBottomHeight(b);
+        setLeftWidth(l);
+        setRightWidth(r);
+
+        safeStorage.setItem('gaw_layout_top_height', String(t));
+        safeStorage.setItem('gaw_layout_bottom_height', String(b));
+        safeStorage.setItem('gaw_layout_left_width', String(l));
+        safeStorage.setItem('gaw_layout_right_width', String(r));
+      } else {
+        const curTop = safeStorage.getItem('gaw_layout_top_height') || '96';
+        const curBottom = safeStorage.getItem('gaw_layout_bottom_height') || '28';
+        const curLeft = safeStorage.getItem('gaw_layout_left_width') || '280';
+        const curRight = safeStorage.getItem('gaw_layout_right_width') || '300';
+
+        engine.setSetting('layout_top_height', curTop);
+        engine.setSetting('layout_bottom_height', curBottom);
+        engine.setSetting('layout_left_width', curLeft);
+        engine.setSetting('layout_right_width', curRight);
+      }
+    } catch (e) {
+      console.error('Failed to sync layout settings with database:', e);
+    }
+  }, []);
+
+  // Handle layout resizing from drag handles
+  const handleLayoutDimensionsChange = useCallback(
+    (dims: { topHeight: number; bottomHeight: number; leftWidth: number; rightWidth: number }) => {
+      setTopHeight(dims.topHeight);
+      setBottomHeight(dims.bottomHeight);
+      setLeftWidth(dims.leftWidth);
+      setRightWidth(dims.rightWidth);
+
+      // Always update local browser storage
+      safeStorage.setItem('gaw_layout_top_height', String(dims.topHeight));
+      safeStorage.setItem('gaw_layout_bottom_height', String(dims.bottomHeight));
+      safeStorage.setItem('gaw_layout_left_width', String(dims.leftWidth));
+      safeStorage.setItem('gaw_layout_right_width', String(dims.rightWidth));
+
+      // Only add or update entries in t_settings when an actual database file is active
+      if (isDbActive) {
+        try {
+          const engine = SQLiteEngine.getInstance();
+          engine.setSetting('layout_top_height', String(dims.topHeight));
+          engine.setSetting('layout_bottom_height', String(dims.bottomHeight));
+          engine.setSetting('layout_left_width', String(dims.leftWidth));
+          engine.setSetting('layout_right_width', String(dims.rightWidth));
+        } catch (e) {
+          console.error('Failed to update layout in t_settings:', e);
+        }
+      }
+    },
+    [isDbActive]
+  );
+
   // Refresh DB Schema & Objects
   const refreshDatabaseState = useCallback(() => {
     const engine = SQLiteEngine.getInstance();
@@ -489,10 +583,14 @@ export default function App() {
       const desc = engine.getSetting('app_description') || engine.getSetting('app_descripton', '');
       const initPlugin = engine.getSetting('initial_plugin', 'main');
       setAppSettings({ appName: name, appDescription: desc, initialPlugin: initPlugin });
+
+      if (safeStorage.getItem('gaw_db_active') === 'true') {
+        syncLayoutWithDatabase(true);
+      }
     } catch (e) {
       console.error('Failed to refresh database state:', e);
     }
-  }, []);
+  }, [syncLayoutWithDatabase]);
 
   // On initial startup/refresh in App mode, determine initial view according to the 3 rules:
   // 1. If there is only one user plugin, it is shown.
@@ -1241,9 +1339,12 @@ export default function App() {
         openFile: async () => {
           const ok = await storageEngine.openFile();
           if (ok) {
+            setIsDbActive(true);
+            safeStorage.setItem('gaw_db_active', 'true');
             toastApi.success('Database opened successfully.');
             setSidebarOpen(true);
             refreshDatabaseState();
+            syncLayoutWithDatabase(true);
           }
           return ok;
         },
@@ -1373,6 +1474,8 @@ export default function App() {
           eventBusApi.emit('recent_files_changed');
         },
         loadNorthwindDemo: () => {
+          setIsDbActive(true);
+          safeStorage.setItem('gaw_db_active', 'true');
           SQLiteEngine.getInstance().createNorthwindDemoDatabase();
           RecentFilesManager.addRecentFile({
             name: 'Northwind Modern Commerce Demo',
@@ -1381,19 +1484,45 @@ export default function App() {
           });
           setSidebarOpen(true);
           refreshDatabaseState();
+          syncLayoutWithDatabase(true);
           setActiveView('plugin:plugin_crm');
           setActiveRoute('plugins');
           navigateTo('plugins', 'plugin:plugin_crm');
           toastApi.success('Northwind Demo database opened.');
         },
+        createNewDatabase: (name, title, company) => {
+          setIsDbActive(true);
+          safeStorage.setItem('gaw_db_active', 'true');
+          SQLiteEngine.getInstance().createMinimalDatabase(name || 'new_database.sqlite', title || 'New Application', company || 'None');
+          refreshDatabaseState();
+          syncLayoutWithDatabase(true);
+          setActiveView('plugin:plugin_crm');
+          setActiveRoute('plugins');
+          navigateTo('plugins', 'plugin:plugin_crm');
+          toastApi.success('Created new database.');
+        },
         closeDatabase: async () => {
+          setIsDbActive(false);
+          safeStorage.setItem('gaw_db_active', 'false');
           storageEngine.closeFile();
           SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
           refreshDatabaseState();
+
+          // Restore layout settings from local browser storage (or defaults)
+          const savedTop = safeStorage.getItem('gaw_layout_top_height');
+          const savedBottom = safeStorage.getItem('gaw_layout_bottom_height');
+          const savedLeft = safeStorage.getItem('gaw_layout_left_width');
+          const savedRight = safeStorage.getItem('gaw_layout_right_width');
+
+          setTopHeight(savedTop ? parseInt(savedTop, 10) : 96);
+          setBottomHeight(savedBottom ? parseInt(savedBottom, 10) : 28);
+          setLeftWidth(savedLeft ? parseInt(savedLeft, 10) : 280);
+          setRightWidth(savedRight ? parseInt(savedRight, 10) : 300);
+
           setActiveView('plugin:plugin_file_manager');
           setActiveRoute('file');
           navigateTo('file', 'plugin:plugin_file_manager');
-          toastApi.info('Active database reset to new database.');
+          toastApi.info('Active database closed.');
         },
       },
     };
@@ -1957,10 +2086,11 @@ export default function App() {
         rightContent={rightContent}
         middleContent={middleContent}
         bottomContent={bottomContent}
-        initialTopHeight={96}
-        initialBottomHeight={28}
-        initialLeftWidth={280}
-        initialRightWidth={300}
+        topHeight={topHeight}
+        bottomHeight={bottomHeight}
+        leftWidth={leftWidth}
+        rightWidth={rightWidth}
+        onDimensionsChange={handleLayoutDimensionsChange}
       />
 
       {/* Modals & Dialogs */}
