@@ -2207,7 +2207,7 @@ export default function LocalStoragePlugin({ gaw }) {
       </div>
 
       {/* Content Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Card 1: Storage Telemetry */}
         <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
           <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
@@ -2216,29 +2216,29 @@ export default function LocalStoragePlugin({ gaw }) {
           </h2>
 
           <div className="space-y-2.5 text-xs">
-            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
               <span>File Name:</span>
               <span className={'font-mono font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{meta.fileName}</span>
             </div>
-            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
               <span>File Handle Path:</span>
               <span className="font-mono text-emerald-500 truncate max-w-[220px]">
                 {meta.filePath || (meta.hasFileHandle ? 'Active OS File Handle' : 'In-Memory WebAssembly')}
               </span>
             </div>
-            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
               <span>File Size on Disk:</span>
               <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{(meta.fileSize / 1024).toFixed(1)} KB</span>
             </div>
-            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
               <span>Active Tables:</span>
               <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{tableCount} tables</span>
             </div>
-            <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
               <span>Last Saved to Disk:</span>
               <span className="font-mono text-emerald-500">{lastSavedFormatted}</span>
             </div>
-            <div className={'flex justify-between items-center py-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
               <span>Internal State Tally:</span>
               <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
                 meta.hasUserModifications
@@ -2251,7 +2251,7 @@ export default function LocalStoragePlugin({ gaw }) {
           </div>
 
           {/* Quick Actions: Save, Save as..., and Export */}
-          <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="pt-2 flex flex-wrap gap-2">
             <button
               onClick={handleSave}
               disabled={isSaving}
@@ -3521,12 +3521,26 @@ export default function PluginManagerPlugin({ gaw }) {
   const activeCount = plugins.filter((p) => p.enabled !== 0).length;
   const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
 
+  const getAreaLabel = (area) => {
+    switch (area) {
+      case 'top': return 'Top';
+      case 'left': return 'Left';
+      case 'middle': return 'Middle';
+      case 'right': return 'Right';
+      case 'bottom': return 'Bottom';
+      case 'not_shown': return 'Not shown';
+      default: return area ? area.charAt(0).toUpperCase() + area.slice(1) : 'Middle';
+    }
+  };
+
   const activeAreasMap = useMemo(() => {
     const map = {};
     plugins.forEach((p) => {
       if (p.enabled !== 0) {
         const area = p.target_area || p.targetArea || 'middle';
-        map[area] = p;
+        if (area !== 'not_shown' && area !== 'none') {
+          map[area] = p;
+        }
       }
     });
     return map;
@@ -3540,11 +3554,11 @@ export default function PluginManagerPlugin({ gaw }) {
     const isEnabling = plugin.enabled === 0;
     const targetArea = plugin.target_area || plugin.targetArea || 'middle';
 
-    if (isEnabling) {
+    if (isEnabling && targetArea !== 'not_shown' && targetArea !== 'none') {
       const occupant = activeAreasMap[targetArea];
       if (occupant && occupant.id !== plugin.id) {
         gaw.toast.warning(
-          'Cannot activate "' + plugin.name + '": Target area "' + targetArea.toUpperCase() + '" is currently occupied by active plugin "' + occupant.name + '". Deactivate "' + occupant.name + '" or change area first.'
+          'Cannot activate "' + plugin.name + '": Target area "' + getAreaLabel(targetArea) + '" is currently occupied by active plugin "' + occupant.name + '". Deactivate "' + occupant.name + '" or change area first.'
         );
         return;
       }
@@ -3554,7 +3568,7 @@ export default function PluginManagerPlugin({ gaw }) {
     gaw.plugins.toggleEnabled(plugin.id, nextState);
     loadPlugins();
     gaw.toast.success(
-      'Plugin "' + plugin.name + '" is now ' + (nextState ? 'Active in ' + targetArea.toUpperCase() + ' area' : 'Inactive')
+      'Plugin "' + plugin.name + '" is now ' + (nextState ? (targetArea === 'not_shown' ? 'Active (Not shown)' : 'Active in ' + getAreaLabel(targetArea) + ' area') : 'Inactive')
     );
   };
 
@@ -3563,11 +3577,11 @@ export default function PluginManagerPlugin({ gaw }) {
     if (currentArea === newArea) return;
 
     const isActive = plugin.enabled !== 0;
-    const occupant = activeAreasMap[newArea];
+    const occupant = (newArea !== 'not_shown' && newArea !== 'none') ? activeAreasMap[newArea] : null;
 
     if (isActive && occupant && occupant.id !== plugin.id) {
       gaw.toast.warning(
-        'Area "' + newArea.toUpperCase() + '" is already occupied by active plugin "' + occupant.name + '". Deactivate "' + occupant.name + '" first or select a different area.'
+        'Area "' + getAreaLabel(newArea) + '" is already occupied by active plugin "' + occupant.name + '". Deactivate "' + occupant.name + '" first or select a different area.'
       );
       return;
     }
@@ -3579,14 +3593,14 @@ export default function PluginManagerPlugin({ gaw }) {
     }
     loadPlugins();
     if (isActive) {
-      gaw.toast.success('Moved plugin "' + plugin.name + '" to ' + newArea.toUpperCase() + ' area.');
+      gaw.toast.success('Moved plugin "' + plugin.name + '" to ' + getAreaLabel(newArea) + (newArea === 'not_shown' ? '' : ' area') + '.');
     } else {
       if (occupant && occupant.id !== plugin.id) {
         gaw.toast.info(
-          'Target area for "' + plugin.name + '" set to ' + newArea.toUpperCase() + '. Note: "' + occupant.name + '" is currently active in this area.'
+          'Target area for "' + plugin.name + '" set to ' + getAreaLabel(newArea) + '. Note: "' + occupant.name + '" is currently active in this area.'
         );
       } else {
-        gaw.toast.success('Target area for "' + plugin.name + '" set to ' + newArea.toUpperCase() + ' area.');
+        gaw.toast.success('Target area for "' + plugin.name + '" set to ' + getAreaLabel(newArea) + (newArea === 'not_shown' ? '' : ' area') + '.');
       }
     }
   };
@@ -3959,12 +3973,12 @@ export default function PluginManagerPlugin({ gaw }) {
                 <div className={'pt-2.5 pb-1 border-t flex flex-wrap items-center justify-between gap-2 ' + (isDark ? 'border-slate-800/60' : 'border-slate-200/80')}>
                   <div className="flex items-center gap-1.5">
                     <span className={'text-[11px] font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>Area:</span>
-                    <span className={'text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase border ' + (
+                    <span className={'text-[10px] font-mono px-2 py-0.5 rounded font-bold border ' + (
                       isActive
                         ? isDark ? 'bg-indigo-950/80 border-indigo-700/60 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
                         : isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'
                     )}>
-                      {p.target_area || p.targetArea || 'middle'}
+                      {getAreaLabel(p.target_area || p.targetArea || 'middle')}
                     </span>
                   </div>
 
@@ -3976,13 +3990,13 @@ export default function PluginManagerPlugin({ gaw }) {
                         ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-indigo-500'
                         : 'bg-white border-slate-300 text-slate-800 hover:border-indigo-500'
                     )}
-                    title="Choose layout area for this plugin (Top, Bottom, Left, Right, or Middle)"
+                    title="Choose layout area for this plugin (Top, Bottom, Left, Right, Middle, or Not shown)"
                   >
-                    {['top', 'left', 'middle', 'right', 'bottom'].map((area) => {
-                      const occupant = activeAreasMap[area];
+                    {['top', 'left', 'middle', 'right', 'bottom', 'not_shown'].map((area) => {
+                      const occupant = area !== 'not_shown' ? activeAreasMap[area] : null;
                       const isOccupiedByOther = occupant && occupant.id !== p.id;
                       const isDisabled = isActive && isOccupiedByOther;
-                      const label = area.toUpperCase() + (isOccupiedByOther ? ' (Occupied: ' + occupant.name + ')' : '');
+                      const label = getAreaLabel(area) + (isOccupiedByOther ? ' (Occupied: ' + occupant.name + ')' : '');
                       return (
                         <option key={area} value={area} disabled={isDisabled}>
                           {label}

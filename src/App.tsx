@@ -119,9 +119,9 @@ export default function App() {
     };
     plugins.forEach((p) => {
       if (p.enabled !== 0) {
-        const area = (p.target_area || p.targetArea || 'middle') as 'top' | 'bottom' | 'left' | 'right' | 'middle';
-        if (!map[area]) {
-          map[area] = p;
+        const area = (p.target_area || p.targetArea || 'middle') as string;
+        if (area !== 'not_shown' && area !== 'none' && area in map && !map[area as keyof typeof map]) {
+          map[area as keyof typeof map] = p;
         }
       }
     });

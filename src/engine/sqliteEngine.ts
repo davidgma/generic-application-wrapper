@@ -1256,7 +1256,7 @@ export class SQLiteEngine {
   }
 
   public setPluginTargetArea(pluginId: string, area: string): void {
-    const validArea = ['top', 'bottom', 'left', 'right', 'middle'].includes(area) ? area : 'middle';
+    const validArea = ['top', 'bottom', 'left', 'right', 'middle', 'not_shown'].includes(area) ? area : 'middle';
     if (SYSTEM_PLUGIN_IDS.has(pluginId)) {
       const sys = this.systemPlugins.get(pluginId);
       if (sys) {

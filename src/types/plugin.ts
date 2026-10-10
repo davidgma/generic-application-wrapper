@@ -115,7 +115,7 @@ export interface GAWPluginsApi {
   toggleEnabled: (pluginId: string, enabled: boolean) => void;
   delete: (pluginId: string) => void;
   importPlugin: (plugin: Partial<PluginRecord>) => void;
-  setTargetArea: (pluginId: string, area: 'top' | 'bottom' | 'left' | 'right' | 'middle') => void;
+  setTargetArea: (pluginId: string, area: 'top' | 'bottom' | 'left' | 'right' | 'middle' | 'not_shown') => void;
   openInIDE: (pluginId: string, name?: string) => void;
   openAddModal: () => void;
 }
