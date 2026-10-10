@@ -12,6 +12,24 @@
   }
 }
 
+/* Container query utilities for panel-aware responsive layouts */
+.plugin-container, .panel-container, [data-panel-container="true"] {
+  container-type: inline-size;
+}
+
+@container (max-width: 600px) {
+  .cq-stack {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+  .cq-stack-2 {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
+  .cq-flex-col {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+}
+
 /* Ensure all text elements, tables, plugin outputs, reports are freely selectable and copyable */
 p, span, td, th, h1, h2, h3, h4, h5, h6, pre, code, blockquote, label, div, section, article, aside, main, header, footer, b, i, strong, em, button, a {
   user-select: text !important;

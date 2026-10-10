@@ -161,7 +161,7 @@ export default function CustomerCrmPlugin({ gaw }) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 my-5">
+      <div className="grid grid-cols-1 @[500px]:grid-cols-3 gap-4 my-5 cq-stack">
         <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
           <span className={'text-[11px] font-medium uppercase tracking-wider ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Accounts</span>
           <div className={'text-2xl font-bold mt-1 ' + (isDark ? 'text-white' : 'text-slate-900')}>{stats.count}</div>
@@ -366,7 +366,7 @@ export default function CustomerCrmPlugin({ gaw }) {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 @[400px]:grid-cols-2 gap-3 cq-stack">
                 <div>
                   <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Contact Name</label>
                   <input
@@ -390,7 +390,7 @@ export default function CustomerCrmPlugin({ gaw }) {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 @[400px]:grid-cols-2 gap-3 cq-stack">
                 <div>
                   <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>City</label>
                   <input
@@ -414,7 +414,7 @@ export default function CustomerCrmPlugin({ gaw }) {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 @[400px]:grid-cols-2 gap-3 cq-stack">
                 <div>
                   <label className={'block mb-1 font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>Credit Limit ($)</label>
                   <input
@@ -580,7 +580,7 @@ export default function InventoryValuatorPlugin({ gaw }) {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-5">
+      <div className="grid grid-cols-1 @[450px]:grid-cols-2 @[750px]:grid-cols-4 gap-4 my-5 cq-stack">
         <div className={'p-4 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700/60' : 'bg-white border-slate-200')}>
           <span className={'text-[11px] font-medium uppercase ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Gross Inventory Value</span>
           <div className="text-2xl font-bold text-emerald-500 mt-1">
@@ -779,7 +779,7 @@ export default function ExecutivePulsePlugin({ gaw }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 my-6">
+      <div className="grid grid-cols-1 @[450px]:grid-cols-2 @[750px]:grid-cols-4 gap-4 my-6 cq-stack">
         <div className={'p-4 rounded-xl border shadow-sm ' + (
           isDark
             ? 'bg-gradient-to-br from-indigo-900/40 to-slate-800 border-indigo-500/20'
@@ -1135,7 +1135,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
         </div>
 
         {/* Database Primary Options Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 @[550px]:grid-cols-3 gap-3 cq-stack">
           {/* 1. Open SQL Query Editor */}
           <div className={'p-4 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.01] ' + (
             isDark ? 'bg-slate-950/80 border-slate-800 hover:border-indigo-500/50' : 'bg-white border-slate-200 hover:border-indigo-300'
@@ -1213,7 +1213,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
             Database Engine Telemetry
           </h3>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-4 gap-3 text-xs cq-stack">
             <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
               <span className={'block text-[10px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Page Count</span>
               <span className="font-mono font-bold text-sm">{stats.pageCount} pages</span>
@@ -1298,7 +1298,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
             </h3>
             <span className="text-[10px] font-mono text-emerald-400">PRAGMA Inspector</span>
           </div>
-          <div className={'grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs p-3.5 rounded-xl border font-mono ' + (
+          <div className={'grid grid-cols-1 @[500px]:grid-cols-2 gap-3 text-xs p-3.5 rounded-xl border font-mono cq-stack ' + (
             isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
           )}>
             <div>
@@ -1678,7 +1678,7 @@ export default function DropboxSyncPlugin({ gaw }) {
 
       {/* Tab 1: Database Sync & Telemetry */}
       {activeTab === 'sync' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 @[650px]:grid-cols-2 gap-5 cq-stack">
           {/* Card A: Active Database Status */}
           <div className={'p-5 rounded-xl space-y-4 border shadow-sm ' + (
             isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
@@ -1720,7 +1720,7 @@ export default function DropboxSyncPlugin({ gaw }) {
             </div>
 
             {/* Quick Actions: Save, Save as..., and Pull */}
-            <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="pt-2 grid grid-cols-1 @[450px]:grid-cols-3 gap-2 cq-stack">
               <button
                 onClick={handleSave}
                 disabled={isSaving || !config.connected}
@@ -2207,7 +2207,7 @@ export default function LocalStoragePlugin({ gaw }) {
       </div>
 
       {/* Content Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 @[650px]:grid-cols-2 gap-5 cq-stack">
         {/* Card 1: Storage Telemetry */}
         <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
           <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
@@ -2742,7 +2742,7 @@ export default function HelpPlugin({ gaw }) {
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Primary Action Cards: AI Spec Generator + PWA Installation */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 @[600px]:grid-cols-2 gap-4 cq-stack">
               {/* 1. AI Specification Generator */}
               <div className={'p-5 rounded-2xl border flex flex-col justify-between shadow-sm transition hover:scale-[1.005] ' + (
                 isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
@@ -2855,7 +2855,7 @@ export default function HelpPlugin({ gaw }) {
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 text-xs">
+              <div className="grid grid-cols-1 @[450px]:grid-cols-2 gap-2.5 pt-3 text-xs cq-stack">
                 {[
                   ['Ctrl + Shift + F', 'Toggle Full Monaco IDE Mode / Gawkyy Shell'],
                   ['Ctrl + O', 'Open Local SQLite Database File'],
@@ -2915,7 +2915,7 @@ export default function HelpPlugin({ gaw }) {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 @[600px]:grid-cols-2 gap-3.5 cq-stack">
               {technologies.map((t, idx) => (
                 <div
                   key={idx}
@@ -3064,7 +3064,7 @@ export default function HelpPlugin({ gaw }) {
               isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
             )}>
               <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-indigo-400' : 'text-indigo-700')}>Step-by-Step: Creating a New Plugin</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 @[500px]:grid-cols-2 gap-3 text-xs cq-stack">
                 <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                   <div className={'flex items-center gap-2 font-bold ' + (isDark ? 'text-slate-200' : 'text-slate-900')}>
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px]">1</span>
@@ -3174,7 +3174,7 @@ export default function HelpPlugin({ gaw }) {
                 <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-emerald-400' : 'text-emerald-800')}>
                   The 6 Core Visual Report Elements
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 @[500px]:grid-cols-2 gap-3 text-xs cq-stack">
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
                       <span className="text-emerald-600 dark:text-emerald-400 font-mono">1.</span>
@@ -3763,7 +3763,7 @@ export default function PluginManagerPlugin({ gaw }) {
       </div>
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+      <div className="grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-4 gap-3 text-xs cq-stack">
         <div className={'p-3.5 rounded-xl space-y-1 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
           <span className={'text-[11px] font-medium ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Total Plugins</span>
           <p className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>{plugins.length}</p>
@@ -3888,7 +3888,7 @@ export default function PluginManagerPlugin({ gaw }) {
       </div>
 
       {/* Plugins Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 @[650px]:grid-cols-2 gap-4 cq-stack">
         {filteredPlugins.map((p) => {
           const isActive = p.enabled !== 0;
           const isSystem = isSysPlugin(p);
@@ -4620,7 +4620,7 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
 
         {/* Middle Row: Editable Details (Database Name, Application Title, Organization Name) */}
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-3 py-2 border-b border-slate-800/40'>
+        <div className='grid grid-cols-1 @[600px]:grid-cols-3 gap-3 py-2 border-b border-slate-800/40 cq-stack'>
           {/* 1. Database File Name */}
           <div className={'p-3 rounded-xl border transition ' + (
             isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
@@ -4806,7 +4806,7 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
 
         {/* Bottom Row: Stats Grid */}
-        <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1'>
+        <div className='grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-4 gap-3 text-xs pt-1 cq-stack'>
           <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
             <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>File Size</span>
             <span className={'font-mono font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
@@ -4839,7 +4839,7 @@ export default function FileManagerPlugin({ gaw }) {
         <h2 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
           Launch & Open Databases
         </h2>
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+        <div className='grid grid-cols-1 @[550px]:grid-cols-2 @[900px]:grid-cols-4 gap-4 cq-stack'>
           {/* Card 1: Create New Database */}
           <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
             isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'

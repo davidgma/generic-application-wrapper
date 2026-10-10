@@ -225,7 +225,7 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
       {/* 1. TOP AREA */}
       {topContent && (
         <div className="relative flex-shrink-0 flex flex-col w-full overflow-hidden" style={{ height: `${topHeight}px` }}>
-          <div className="flex-1 overflow-hidden">{topContent}</div>
+          <div className="@container plugin-container flex-1 overflow-hidden">{topContent}</div>
 
           {/* Top-to-Bottom Horizontal Resize Handle */}
           <div
@@ -249,7 +249,7 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
             className="relative flex-shrink-0 flex flex-row h-full overflow-hidden"
             style={{ width: `${leftWidth}px` }}
           >
-            <div className="flex-1 h-full overflow-hidden">{leftContent}</div>
+            <div className="@container plugin-container flex-1 h-full overflow-hidden">{leftContent}</div>
 
             {/* Left-to-Middle Vertical Resize Handle */}
             <div
@@ -268,7 +268,9 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
         {/* MIDDLE AREA */}
         {middleContent && (
           <div className="flex-1 flex flex-col h-full min-w-0 min-h-0 overflow-hidden relative">
-            {middleContent}
+            <div className="@container plugin-container w-full h-full flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden relative">
+              {middleContent}
+            </div>
           </div>
         )}
 
@@ -290,7 +292,7 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
               <div className={`h-8 w-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'bg-slate-400' : 'bg-slate-600'}`} />
             </div>
 
-            <div className="flex-1 h-full overflow-hidden">{rightContent}</div>
+            <div className="@container plugin-container flex-1 h-full overflow-hidden">{rightContent}</div>
           </div>
         )}
       </div>
@@ -310,7 +312,7 @@ export const FiveRegionLayout: React.FC<FiveRegionLayoutProps> = ({
             <div className={`w-8 h-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'bg-slate-400' : 'bg-slate-600'}`} />
           </div>
 
-          <div className="flex-1 overflow-hidden">{bottomContent}</div>
+          <div className="@container plugin-container flex-1 overflow-hidden">{bottomContent}</div>
         </div>
       )}
     </div>

@@ -119,7 +119,7 @@ export const PluginHost: React.FC<PluginHostProps> = ({
 
   return (
     <PluginErrorBoundary pluginName={pluginName} onOpenInIDE={onOpenInIDE}>
-      <div className={`w-full h-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+      <div className={`@container plugin-container w-full h-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
         <Component gaw={gawContext} />
       </div>
     </PluginErrorBoundary>
