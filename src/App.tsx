@@ -26,7 +26,6 @@ import { DropboxModal } from './components/DropboxModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ConflictDialog } from './components/ConflictDialog';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { FilePane } from './components/panes/FilePane';
 import { ViewPane } from './components/panes/ViewPane';
 import { DatabasePane } from './components/panes/DatabasePane';
 import { PluginsPane } from './components/panes/PluginsPane';
@@ -77,7 +76,7 @@ export default function App() {
   // Routes: 'file' | 'view' | 'database' | 'plugins' | 'help'
   // Views: 'file', 'view', 'database', 'plugins', 'help', 'app_hub', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
   const [activeRoute, setActiveRoute] = useState<'file' | 'view' | 'database' | 'plugins' | 'help'>('file');
-  const [activeView, setActiveView] = useState<string>('file');
+  const [activeView, setActiveView] = useState<string>('plugin:plugin_file_manager');
 
   // Dev / App mode state (persisted to localStorage)
   const [mode, setMode] = useState<'dev' | 'app'>(() => {
@@ -218,9 +217,10 @@ export default function App() {
         } else if (targetView === 'app_hub') {
           setActiveRoute('plugins');
           navigateTo('plugins', 'app_hub');
-        } else if (targetView === 'file') {
+        } else if (targetView === 'file' || targetView === 'plugin:plugin_file_manager') {
           setActiveRoute('file');
-          navigateTo('file', 'file');
+          setActiveView('plugin:plugin_file_manager');
+          navigateTo('file', 'plugin:plugin_file_manager');
         }
       } else {
         // Switching to Dev Mode: restore sidebar or not, depending on how it was before (default: restore)
@@ -247,9 +247,10 @@ export default function App() {
         ) {
           setActiveRoute('view');
           navigateTo('view', targetView);
-        } else if (targetView === 'file') {
+        } else if (targetView === 'file' || targetView === 'plugin:plugin_file_manager') {
           setActiveRoute('file');
-          navigateTo('file', 'file');
+          setActiveView('plugin:plugin_file_manager');
+          navigateTo('file', 'plugin:plugin_file_manager');
         } else if (targetView === 'database') {
           setActiveRoute('database');
           navigateTo('database', 'database');
@@ -1107,9 +1108,9 @@ export default function App() {
   useEffect(() => {
     const parseHash = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').trim();
-      if (!hash || hash === 'file') {
+      if (!hash || hash === 'file' || hash === 'plugin/plugin_file_manager') {
         setActiveRoute('file');
-        setActiveView('file');
+        setActiveView('plugin:plugin_file_manager');
         if (!window.location.hash || window.location.hash === '#') {
           window.location.hash = '#file';
         }
@@ -1364,9 +1365,9 @@ export default function App() {
           storageEngine.closeFile();
           SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
           refreshDatabaseState();
-          setActiveView('file');
+          setActiveView('plugin:plugin_file_manager');
           setActiveRoute('file');
-          navigateTo('file', 'file');
+          navigateTo('file', 'plugin:plugin_file_manager');
           toastApi.info('Active database reset to new database.');
         },
       },
@@ -1503,7 +1504,11 @@ export default function App() {
           activeRoute={activeRoute}
           activeView={activeView}
           onSelectRoute={(route) => {
-            if (route === 'help') {
+            if (route === 'file') {
+              setActiveRoute('file');
+              setActiveView('plugin:plugin_file_manager');
+              navigateTo('file', 'plugin:plugin_file_manager');
+            } else if (route === 'help') {
               setActiveRoute('help');
               setActiveView('plugin:plugin_help');
               navigateTo('help', 'plugin:plugin_help');
@@ -1616,67 +1621,7 @@ export default function App() {
             sidebarOpen ? 'max-md:portrait:hidden' : ''
           } ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}
         >
-          {/* Pane 1: File Route */}
-          {activeRoute === 'file' && activeView === 'file' && (
-            <FilePane
-              storageMeta={storageMeta}
-              theme={theme}
-              onNewDatabase={() => {
-                SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
-                storageEngine.resetActiveFile('new_database.sqlite');
-                storageEngine.setUserModified(false);
-                storageEngine.setInternalStateModifiedTime(null);
-                storageEngine.markSaved();
-                toastApi.success('Created new database (new_database.sqlite).');
-                refreshDatabaseState();
-                setActiveRoute('file');
-                setActiveView('file');
-                navigateTo('file', 'file');
-              }}
-              onOpenFile={async () => {
-                const ok = await storageEngine.openFile();
-                if (ok) {
-                  toastApi.success('Opened database file successfully.');
-                  setSidebarOpenWithStorage(true);
-                  refreshDatabaseState();
-                  setActiveView('view');
-                  navigateTo('view', 'view');
-                }
-              }}
-              onOpenDropbox={() => setShowDropboxModal(true)}
-              onOpenFileManager={() => {
-                setActiveView('plugin:plugin_file_manager');
-                setActiveRoute('plugins');
-                navigateTo('plugins', 'plugin:plugin_file_manager');
-              }}
-              onOpenDemo={() => {
-                SQLiteEngine.getInstance().createNorthwindDemoDatabase();
-                storageEngine.resetActiveFile('northwind_commerce.db');
-                storageEngine.setUserModified(false);
-                storageEngine.setInternalStateModifiedTime(null);
-                storageEngine.markSaved();
-                RecentFilesManager.addRecentFile({
-                  name: 'Northwind Modern Commerce Demo',
-                  source: 'demo',
-                  path: 'northwind_commerce.db',
-                });
-                toastApi.success('Loaded Northwind Modern Commerce Demo.');
-                setSidebarOpenWithStorage(true);
-                refreshDatabaseState();
-                setActiveView('plugin:plugin_crm');
-                setActiveRoute('plugins');
-                navigateTo('plugins', 'plugin:plugin_crm');
-              }}
-              onOpenSettings={() => setShowSettingsModal(true)}
-              onOpenPlugin={(pId) => {
-                setActiveView(`plugin:${pId}`);
-                setActiveRoute('plugins');
-                navigateTo('plugins', `plugin:${pId}`);
-              }}
-              onToast={addToast}
-              onConfirm={handleConfirmDialog}
-            />
-          )}
+
 
           {/* Pane 2: View Hub */}
           {activeRoute === 'view' && activeView === 'view' && (

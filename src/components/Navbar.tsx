@@ -255,7 +255,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {navItems.map((item) => {
           const isActive =
             item.id === 'file'
-              ? activeRoute === 'file' || activeView === 'plugin:plugin_file_manager' || activeView === 'file'
+              ? activeRoute === 'file' || activeView === 'plugin:plugin_file_manager'
               : mode === 'app'
               ? activeView === item.id || activeRoute === item.id
               : activeRoute === item.id;
