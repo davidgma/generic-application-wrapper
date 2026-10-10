@@ -119,7 +119,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems = mode === 'app' ? appNavItems : devNavItems;
 
   const handleNavItemClick = (item: { id: string; isView?: boolean }) => {
-    if (item.isView && onSelectView) {
+    if (item.id === 'file') {
+      onSelectRoute('file');
+    } else if (item.isView && onSelectView) {
       onSelectView(item.id);
     } else if (item.id.startsWith('plugin:') && onSelectView) {
       onSelectView(item.id);
@@ -252,7 +254,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       >
         {navItems.map((item) => {
           const isActive =
-            mode === 'app'
+            item.id === 'file'
+              ? activeRoute === 'file' || activeView === 'plugin:plugin_file_manager' || activeView === 'file'
+              : mode === 'app'
               ? activeView === item.id || activeRoute === item.id
               : activeRoute === item.id;
 

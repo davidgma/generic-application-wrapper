@@ -807,12 +807,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           <div
             onClick={() => toggleSection('reports')}
-            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
-              isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'
+            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer transition select-none ${
+              isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-600 hover:text-emerald-700'
             }`}
           >
             <div className="flex items-center gap-1.5">
-              {collapsedSections.reports ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {collapsedSections.reports ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {collapsedSections.reports ? (
+                <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+              ) : (
+                <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+              )}
               <span>Reports ({filteredReports.length})</span>
             </div>
             {mode !== 'app' && (
@@ -823,7 +828,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 title="Add New Report"
                 className={`p-1 rounded transition ${
-                  isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                  isDark ? 'hover:bg-slate-800 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-emerald-950'
                 }`}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -832,7 +837,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {!collapsedSections.reports && (
-            <div className="mt-1 space-y-0.5">
+            <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+              isDark ? 'border-emerald-500/30' : 'border-emerald-300'
+            }`}>
               {filteredReports.map((r) => {
                 const isActive = activeView === `report:${r.id}`;
                 const isMenuOpen = activeMenu?.type === 'report' && activeMenu.id === r.id;
@@ -842,14 +849,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onClick={() => onSelectReport(r)}
                       className={`flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-l text-left transition ${
                         isActive
-                          ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                          ? isDark
+                            ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                            : 'bg-emerald-500 text-white font-semibold shadow-sm'
                           : isDark
-                          ? 'hover:bg-slate-900 text-slate-200 hover:text-white'
-                          : 'hover:bg-slate-200 text-slate-800 hover:text-slate-900'
+                          ? 'hover:bg-slate-900 text-emerald-300 hover:text-white'
+                          : 'hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 font-medium'
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-white' : 'text-purple-400'}`} />
+                        <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${
+                          isActive ? 'text-white' : isDark ? 'text-emerald-300' : 'text-emerald-500'
+                        }`} />
                         <span className="truncate">{r.name}</span>
                       </div>
                     </button>
@@ -860,8 +871,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           e.stopPropagation();
                           setActiveMenu(isMenuOpen ? null : { type: 'report', id: r.id });
                         }}
-                        className={`p-1.5 rounded-r transition hover:bg-slate-800 ${
-                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                        className={`p-1.5 rounded-r transition ${
+                          isActive
+                            ? isDark ? 'bg-emerald-600 text-white' : 'bg-emerald-600 text-white'
+                            : isDark ? 'text-emerald-400 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
                         }`}
                         title="Report options"
                       >
@@ -876,9 +889,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             setActiveMenu(null);
                             onOpenIDE({ type: 'report', id: r.id, name: r.name });
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-indigo-600 hover:text-white transition"
+                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-600 hover:text-white transition"
                         >
-                          <Edit3 className="w-3.5 h-3.5 text-purple-400" />
+                          <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
                           <span>Edit Code in IDE</span>
                         </button>
                         {onEditReportVisual && (

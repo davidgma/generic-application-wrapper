@@ -1108,7 +1108,7 @@ export default function DatabaseManagementPlugin({ gaw }) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
-              isDark ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30' : 'bg-purple-50 text-purple-700 border border-purple-200'
+              isDark ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'bg-sky-50 text-sky-700 border border-sky-200'
             )}>
               <Database className="w-5 h-5" />
             </div>
@@ -3136,19 +3136,19 @@ export default function HelpPlugin({ gaw }) {
               isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                <div className="flex items-center gap-2.5 text-purple-600 dark:text-purple-400">
+                <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
                   <BarChart3 className="w-6 h-6" />
                   <div>
                     <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>
                       2. Visual Report Generator and Designer
                     </h3>
-                    <p className={'text-xs ' + (isDark ? 'text-purple-300/80' : 'text-purple-800')}>
+                    <p className={'text-xs ' + (isDark ? 'text-emerald-300/80' : 'text-emerald-800')}>
                       Publication-grade executive reports, KPI scorecards, SVG charts & print-ready PDF export
                     </p>
                   </div>
                 </div>
                 <span className={'px-2.5 py-1 rounded-full text-[11px] font-semibold ' + (
-                  isDark ? 'bg-purple-950/60 text-purple-300 border border-purple-800/60' : 'bg-purple-50 text-purple-800 border border-purple-200'
+                  isDark ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                 )}>
                   Core Architecture
                 </span>
@@ -3156,7 +3156,7 @@ export default function HelpPlugin({ gaw }) {
 
               {/* Overview & Mission */}
               <div className="space-y-2">
-                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-emerald-400' : 'text-emerald-800')}>
                   Overview & Design Philosophy
                 </h4>
                 <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
@@ -3165,19 +3165,19 @@ export default function HelpPlugin({ gaw }) {
                 </p>
                 <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                   Every report is fully reactive: opening a report or clicking <strong>Refresh Data</strong> re-executes the underlying SQL against the active SQLite database in real time.
-                  Reports are stored as structured JSON configurations inside the SQLite database itself (<code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-purple-300 bg-slate-900' : 'text-purple-800 bg-slate-100 border border-slate-200')}>t_reports</code>), so every visual report travels seamlessly across devices inside your portable <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-purple-300 bg-slate-900' : 'text-purple-800 bg-slate-100 border border-slate-200')}>.sqlite</code> file.
+                  Reports are stored as structured JSON configurations inside the SQLite database itself (<code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>t_reports</code>), so every visual report travels seamlessly across devices inside your portable <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>.sqlite</code> file.
                 </p>
               </div>
 
               {/* 6 Core Components Breakdown */}
               <div className="space-y-3">
-                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-emerald-400' : 'text-emerald-800')}>
                   The 6 Core Visual Report Elements
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
-                      <span className="text-purple-600 dark:text-purple-400 font-mono">1.</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">1.</span>
                       <span>Corporate Header & Metadata</span>
                     </div>
                     <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
@@ -3187,7 +3187,7 @@ export default function HelpPlugin({ gaw }) {
 
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
-                      <span className="text-purple-600 dark:text-purple-400 font-mono">2.</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">2.</span>
                       <span>KPI Highlight Scorecards</span>
                     </div>
                     <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
@@ -3197,7 +3197,7 @@ export default function HelpPlugin({ gaw }) {
 
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
-                      <span className="text-purple-600 dark:text-purple-400 font-mono">3.</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">3.</span>
                       <span>Proportional Vector SVG Charts</span>
                     </div>
                     <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
@@ -3207,7 +3207,7 @@ export default function HelpPlugin({ gaw }) {
 
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
-                      <span className="text-purple-600 dark:text-purple-400 font-mono">4.</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">4.</span>
                       <span>Tabular Data Breakdown</span>
                     </div>
                     <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
@@ -3217,7 +3217,7 @@ export default function HelpPlugin({ gaw }) {
 
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
-                      <span className="text-purple-600 dark:text-purple-400 font-mono">5.</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">5.</span>
                       <span>Executive Commentary & Audit Notes</span>
                     </div>
                     <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
@@ -3227,7 +3227,7 @@ export default function HelpPlugin({ gaw }) {
 
                   <div className={'p-3.5 rounded-xl border space-y-1 ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                     <div className={'font-bold flex items-center gap-1.5 ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
-                      <span className="text-purple-600 dark:text-purple-400 font-mono">6.</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono">6.</span>
                       <span>Zero-Watermark Print & PDF Engine</span>
                     </div>
                     <p className={'text-[11px] leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
@@ -3239,7 +3239,7 @@ export default function HelpPlugin({ gaw }) {
 
               {/* Step-by-Step Workflow */}
               <div className="space-y-3">
-                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-emerald-400' : 'text-emerald-800')}>
                   Step-by-Step: Designing a Custom Report
                 </h4>
                 <ol className={'list-decimal pl-5 space-y-2 text-xs ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
@@ -3268,7 +3268,7 @@ export default function HelpPlugin({ gaw }) {
 
               {/* Detailed Real-World Examples */}
               <div className="space-y-4">
-                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-purple-400' : 'text-purple-800')}>
+                <h4 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-emerald-400' : 'text-emerald-800')}>
                   Detailed Examples with SQL & Configurations
                 </h4>
 
@@ -3277,10 +3277,10 @@ export default function HelpPlugin({ gaw }) {
                   isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 )}>
                   <div className="flex items-center justify-between">
-                    <span className={'text-xs font-bold ' + (isDark ? 'text-purple-300' : 'text-purple-900')}>
+                    <span className={'text-xs font-bold ' + (isDark ? 'text-emerald-300' : 'text-emerald-900')}>
                       Example 1: Executive Sales & Inventory Valuation Report
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 font-mono">Retail / E-Commerce</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-400 font-mono">Retail / E-Commerce</span>
                   </div>
                   <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
                     Summarizes inventory valuation, product quantities, and average prices across product categories:
@@ -3300,10 +3300,10 @@ export default function HelpPlugin({ gaw }) {
                   isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 )}>
                   <div className="flex items-center justify-between">
-                    <span className={'text-xs font-bold ' + (isDark ? 'text-purple-300' : 'text-purple-900')}>
+                    <span className={'text-xs font-bold ' + (isDark ? 'text-emerald-300' : 'text-emerald-900')}>
                       Example 2: Customer CRM & Account Activity Audit
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 font-mono">B2B & Accounts</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-400 font-mono">B2B & Accounts</span>
                   </div>
                   <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
                     Aggregates lifetime order volume, total revenue spent, and recency of purchase per client:
@@ -3322,10 +3322,10 @@ export default function HelpPlugin({ gaw }) {
                   isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                 )}>
                   <div className="flex items-center justify-between">
-                    <span className={'text-xs font-bold ' + (isDark ? 'text-purple-300' : 'text-purple-900')}>
+                    <span className={'text-xs font-bold ' + (isDark ? 'text-emerald-300' : 'text-emerald-900')}>
                       Example 3: Dynamic Plugins & Architecture Manifest Report
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-purple-600/20 text-purple-400 font-mono">System Governance</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-400 font-mono">System Governance</span>
                   </div>
                   <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
                     Audits all custom TSX plugins stored and executed inside the database schema:
@@ -3341,17 +3341,17 @@ export default function HelpPlugin({ gaw }) {
 
               {/* Best Practices & PDF Tips */}
               <div className={'p-4 rounded-xl border space-y-2 ' + (
-                isDark ? 'bg-purple-950/20 border-purple-800/40 text-purple-200' : 'bg-purple-50/70 border-purple-200 text-purple-950'
+                isDark ? 'bg-emerald-950/20 border-emerald-800/40 text-emerald-200' : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
               )}>
                 <h5 className="text-xs font-bold flex items-center gap-1.5">
-                  <Lightbulb className="w-4 h-4 text-purple-500" />
+                  <Lightbulb className="w-4 h-4 text-emerald-500" />
                   <span>Executive Reporting & PDF Printing Pro-Tips</span>
                 </h5>
                 <ul className="list-disc pl-5 space-y-1 text-xs">
-                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Enable Background Graphics</strong>: In the browser print dialog (Ctrl + P / Cmd + P), check the box for <em>"Background graphics"</em> to ensure KPI card shading and chart colors are captured in your exported PDF.</li>
-                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Column Aliasing</strong>: Always assign clean SQL aliases (<code className="font-mono">AS revenue</code>, <code className="font-mono">AS order_count</code>) to avoid raw function names appearing in headers.</li>
-                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Rounding & Formats</strong>: Wrap aggregate numbers in SQLite's <code className="font-mono">ROUND(..., 2)</code> function so currency metrics format cleanly to two decimal places.</li>
-                  <li><strong className={isDark ? 'text-white' : 'text-purple-950'}>Paper Layout</strong>: The report canvas is styled to scale naturally to standard Letter and A4 portrait pages with zero clipping.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-emerald-950'}>Enable Background Graphics</strong>: In the browser print dialog (Ctrl + P / Cmd + P), check the box for <em>"Background graphics"</em> to ensure KPI card shading and chart colors are captured in your exported PDF.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-emerald-950'}>Column Aliasing</strong>: Always assign clean SQL aliases (<code className="font-mono">AS revenue</code>, <code className="font-mono">AS order_count</code>) to avoid raw function names appearing in headers.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-emerald-950'}>Rounding & Formats</strong>: Wrap aggregate numbers in SQLite's <code className="font-mono">ROUND(..., 2)</code> function so currency metrics format cleanly to two decimal places.</li>
+                  <li><strong className={isDark ? 'text-white' : 'text-emerald-950'}>Paper Layout</strong>: The report canvas is styled to scale naturally to standard Letter and A4 portrait pages with zero clipping.</li>
                 </ul>
               </div>
             </div>
@@ -3640,12 +3640,12 @@ export default function PluginManagerPlugin({ gaw }) {
       {/* Header Banner */}
       <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-xl backdrop-blur border ' + (
         isDark
-          ? 'bg-gradient-to-r from-purple-950/70 to-indigo-950/70 border-purple-800/50'
-          : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-purple-200'
+          ? 'bg-gradient-to-r from-sky-950/70 to-slate-900 border-sky-800/50'
+          : 'bg-gradient-to-r from-sky-50 to-slate-50 border-sky-200'
       )}>
         <div className="flex items-center gap-3.5">
           <div className={'w-12 h-12 rounded-xl flex items-center justify-center ' + (
-            isDark ? 'bg-purple-600/30 border border-purple-500/40 text-purple-400' : 'bg-purple-100 border border-purple-300 text-purple-600'
+            isDark ? 'bg-sky-600/30 border border-sky-500/40 text-sky-400' : 'bg-sky-100 border border-sky-300 text-sky-600'
           )}>
             <Puzzle className="w-6 h-6" />
           </div>
@@ -3658,7 +3658,7 @@ export default function PluginManagerPlugin({ gaw }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer">
+          <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer">
             <Upload className="w-4 h-4" />
             <span>Import Plugin File...</span>
             <input
@@ -3671,7 +3671,7 @@ export default function PluginManagerPlugin({ gaw }) {
           <button
             onClick={handleCreateBlankPlugin}
             className={'flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold shadow transition active:scale-95 ' + (
-              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              isDark ? 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border-emerald-700/50' : 'bg-white hover:bg-emerald-50 text-emerald-700 border-emerald-300'
             )}
             title="Create a new blank plugin and edit in IDE"
           >
@@ -3681,11 +3681,11 @@ export default function PluginManagerPlugin({ gaw }) {
           <button
             onClick={() => gaw.plugins.openAddModal()}
             className={'flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold shadow transition active:scale-95 ' + (
-              isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+              isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-sky-700/50' : 'bg-white hover:bg-sky-50 text-sky-700 border-sky-300'
             )}
             title="Open Guided Import Wizard"
           >
-            <Sparkles className="w-4 h-4 text-purple-500" />
+            <Sparkles className="w-4 h-4 text-sky-500" />
             <span>Import Wizard...</span>
           </button>
         </div>
@@ -3706,8 +3706,8 @@ export default function PluginManagerPlugin({ gaw }) {
           <p className={'text-xl font-bold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>{inactiveCount}</p>
         </div>
         <div className={'p-3.5 rounded-xl space-y-1 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
-          <span className="text-[11px] text-purple-500 font-medium">Categories</span>
-          <p className="text-xl font-bold text-purple-500">{categories.length}</p>
+          <span className="text-[11px] text-sky-500 font-medium">Categories</span>
+          <p className="text-xl font-bold text-sky-500">{categories.length}</p>
         </div>
       </div>
 
@@ -3723,7 +3723,7 @@ export default function PluginManagerPlugin({ gaw }) {
               placeholder="Search plugins by name, category, or description..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className={'w-full pl-9 pr-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 border ' + (
+              className={'w-full pl-9 pr-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-sky-500 border ' + (
                 isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
               )}
             />
@@ -3736,10 +3736,10 @@ export default function PluginManagerPlugin({ gaw }) {
               title={typeFilter === 'SYSTEM' ? 'Showing System Plugins only (Click to show all)' : 'Show System Plugins only'}
               className={'flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition active:scale-95 cursor-pointer ' + (
                 typeFilter === 'SYSTEM'
-                  ? 'bg-purple-600 border-purple-500 text-white shadow-sm'
+                  ? 'bg-sky-600 border-sky-500 text-white shadow-sm'
                   : isDark
-                  ? 'bg-slate-900 border-slate-700 text-purple-400 hover:text-purple-300 hover:bg-slate-800'
-                  : 'bg-white border-slate-300 text-purple-700 hover:bg-purple-50'
+                  ? 'bg-slate-900 border-slate-700 text-sky-400 hover:text-sky-300 hover:bg-slate-800'
+                  : 'bg-white border-slate-300 text-sky-700 hover:bg-sky-50'
               )}
             >
               <Shield className="w-3.5 h-3.5" />
@@ -3772,7 +3772,7 @@ export default function PluginManagerPlugin({ gaw }) {
               onClick={() => setStatusFilter('ALL')}
               className={'px-2.5 py-1 rounded-md text-[11px] font-medium transition ' + (
                 statusFilter === 'ALL'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-slate-700 text-white shadow-sm'
                   : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
               )}
             >
@@ -3829,10 +3829,10 @@ export default function PluginManagerPlugin({ gaw }) {
                 isActive
                   ? isDark
                     ? isSystem
-                      ? 'bg-slate-950/80 border-purple-800/60 shadow-md hover:border-purple-500'
+                      ? 'bg-slate-950/80 border-sky-800/60 shadow-md hover:border-sky-500'
                       : 'bg-slate-950/80 border-emerald-800/60 shadow-md hover:border-emerald-500'
                     : isSystem
-                    ? 'bg-white border-purple-300 shadow-sm hover:border-purple-400'
+                    ? 'bg-white border-sky-300 shadow-sm hover:border-sky-400'
                     : 'bg-white border-emerald-300 shadow-sm hover:border-emerald-400'
                   : isDark
                   ? 'bg-slate-950/40 border-slate-800/40 opacity-70'
@@ -3854,10 +3854,10 @@ export default function PluginManagerPlugin({ gaw }) {
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                       <span className={'inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ' + (
                         isSystem
-                          ? isDark ? 'bg-purple-950/80 border-purple-700/60 text-purple-300' : 'bg-purple-50 border-purple-300 text-purple-700'
+                          ? isDark ? 'bg-sky-950/80 border-sky-700/60 text-sky-300' : 'bg-sky-50 border-sky-300 text-sky-700'
                           : isDark ? 'bg-emerald-950/80 border-emerald-700/60 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-emerald-700'
                       )}>
-                        {isSystem ? <Shield className="w-2.5 h-2.5 text-purple-400" /> : <User className="w-2.5 h-2.5 text-emerald-400" />}
+                        {isSystem ? <Shield className="w-2.5 h-2.5 text-sky-400" /> : <User className="w-2.5 h-2.5 text-emerald-400" />}
                         <span>{isSystem ? 'System Plugin' : 'User Plugin'}</span>
                       </span>
                       <span className={'inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border ' + (
@@ -3874,7 +3874,7 @@ export default function PluginManagerPlugin({ gaw }) {
                     disabled={isProtected}
                     className={'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition ' + (
                       isProtected
-                        ? isDark ? 'bg-emerald-950/40 border-emerald-700/40 text-emerald-400 cursor-not-allowed opacity-90' : 'bg-emerald-50 border-emerald-200 text-emerald-700 cursor-not-allowed'
+                        ? isDark ? 'bg-sky-950/60 border-sky-700/40 text-sky-300 cursor-not-allowed opacity-90' : 'bg-sky-50 border-sky-200 text-sky-700 cursor-not-allowed'
                         : isActive
                         ? isDark ? 'bg-emerald-950/80 border-emerald-600 text-emerald-300 active:scale-95' : 'bg-emerald-100 border-emerald-400 text-emerald-800 active:scale-95'
                         : isDark ? 'bg-slate-900 border-slate-700 text-slate-400 active:scale-95' : 'bg-slate-200 border-slate-300 text-slate-600 active:scale-95'
@@ -3904,7 +3904,9 @@ export default function PluginManagerPlugin({ gaw }) {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => gaw.navigation.openPlugin(p.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition active:scale-95"
+                    className={'flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-xs font-semibold shadow transition active:scale-95 ' + (
+                      isSystem ? 'bg-sky-600 hover:bg-sky-500' : 'bg-emerald-600 hover:bg-emerald-500'
+                    )}
                   >
                     <Play className="w-3 h-3 fill-white" />
                     <span>Open</span>
@@ -3912,7 +3914,9 @@ export default function PluginManagerPlugin({ gaw }) {
                   <button
                     onClick={() => gaw.plugins.openInIDE(p.id, p.name)}
                     className={'flex items-center gap-1 px-3 py-1.5 rounded-lg border text-xs font-semibold transition active:scale-95 ' + (
-                      isDark ? 'bg-slate-900 hover:bg-slate-800 text-indigo-300 border-slate-700 hover:border-indigo-500/50' : 'bg-slate-50 hover:bg-slate-100 text-indigo-700 border-slate-300 hover:border-indigo-400'
+                      isSystem
+                        ? isDark ? 'bg-slate-900 hover:bg-slate-800 text-sky-300 border-slate-700 hover:border-sky-500/50' : 'bg-slate-50 hover:bg-slate-100 text-sky-700 border-slate-300 hover:border-sky-400'
+                        : isDark ? 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border-slate-700 hover:border-emerald-500/50' : 'bg-slate-50 hover:bg-slate-100 text-emerald-700 border-slate-300 hover:border-emerald-400'
                     )}
                   >
                     <Edit3 className="w-3 h-3" />
@@ -3923,11 +3927,11 @@ export default function PluginManagerPlugin({ gaw }) {
                 {isProtected ? (
                   <span
                     className={'flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[10px] font-semibold select-text ' + (
-                      isDark ? 'bg-indigo-950/60 border-indigo-700/50 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      isDark ? 'bg-sky-950/60 border-sky-700/50 text-sky-300' : 'bg-sky-50 border-sky-200 text-sky-700'
                     )}
                     title="Core System Plugin - Cannot be deleted to ensure application remains operational"
                   >
-                    <Shield className="w-3.5 h-3.5 text-indigo-500" />
+                    <Shield className="w-3.5 h-3.5 text-sky-500" />
                     <span>Protected</span>
                   </span>
                 ) : (
@@ -4004,6 +4008,7 @@ export default function PluginManagerPlugin({ gaw }) {
 export const DEFAULT_FILE_MANAGER_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
 import {
   FolderOpen,
+  PlusCircle,
   HardDrive,
   Cloud,
   Sparkles,
@@ -4024,7 +4029,10 @@ import {
   Check,
   Folder,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Edit2,
+  Building2,
+  Tag
 } from 'lucide-react';
 
 export default function FileManagerPlugin({ gaw }) {
@@ -4037,6 +4045,21 @@ export default function FileManagerPlugin({ gaw }) {
   const [dropboxFiles, setDropboxFiles] = useState([]);
   const [isLoadingDropbox, setIsLoadingDropbox] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // Active Database Information (Editable)
+  const [appTitle, setAppTitle] = useState(() =>
+    gaw.workspace?.getSetting ? gaw.workspace.getSetting('app_title', 'New Application') : 'New Application'
+  );
+  const [companyName, setCompanyName] = useState(() =>
+    gaw.workspace?.getSetting ? gaw.workspace.getSetting('company_name', 'None') : 'None'
+  );
+  const [dbName, setDbName] = useState(() =>
+    storageMeta.fileName || 'new_database.sqlite'
+  );
+
+  // Field being edited inline
+  const [editingField, setEditingField] = useState(null);
+  const [tempValue, setTempValue] = useState('');
 
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -4058,12 +4081,26 @@ export default function FileManagerPlugin({ gaw }) {
   useEffect(() => {
     const unsubStorage = gaw.storage.onStatusChange((meta) => {
       setStorageMeta(meta);
+      if (meta && meta.fileName) {
+        setDbName(meta.fileName);
+      }
     });
     const unsubDropbox = gaw.dropbox.subscribe((cfg) => {
       setDropboxConfig(cfg);
     });
     const unsubRecent = gaw.eventBus.on('recent_files_changed', () => {
       setRecentFiles(gaw.workspace.getRecentFiles());
+    });
+    const unsubDb = gaw.eventBus.on('db_changed', () => {
+      if (gaw.workspace?.getSetting) {
+        setAppTitle(gaw.workspace.getSetting('app_title', 'New Application'));
+        setCompanyName(gaw.workspace.getSetting('company_name', 'None'));
+      }
+      const meta = gaw.storage.getMetadata();
+      setStorageMeta(meta);
+      if (meta && meta.fileName) {
+        setDbName(meta.fileName);
+      }
     });
 
     if (gaw.dropbox.getConfig().accessToken && !gaw.dropbox.getConfig().connected) {
@@ -4083,8 +4120,70 @@ export default function FileManagerPlugin({ gaw }) {
       unsubStorage();
       unsubDropbox();
       unsubRecent();
+      if (unsubDb) unsubDb();
     };
   }, [gaw]);
+
+  const handleStartEdit = (field) => {
+    setEditingField(field);
+    if (field === 'dbName') setTempValue(dbName);
+    if (field === 'appTitle') setTempValue(appTitle);
+    if (field === 'companyName') setTempValue(companyName);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingField(null);
+    setTempValue('');
+  };
+
+  const handleSaveEdit = () => {
+    const clean = tempValue.trim();
+    if (!clean && editingField === 'dbName') {
+      gaw.toast.warning('Database file name cannot be empty.');
+      return;
+    }
+
+    if (editingField === 'dbName') {
+      const finalName = clean.endsWith('.sqlite') || clean.endsWith('.db') || clean.endsWith('.sqlite3')
+        ? clean
+        : clean + '.sqlite';
+
+      if (gaw.storage.setFileName) {
+        gaw.storage.setFileName(finalName);
+      }
+      setDbName(finalName);
+      gaw.toast.success('Database file name changed to ' + finalName);
+    } else if (editingField === 'appTitle') {
+      const titleVal = clean || 'New Application';
+      if (gaw.workspace?.setSetting) {
+        gaw.workspace.setSetting('app_title', titleVal);
+      }
+      setAppTitle(titleVal);
+      gaw.toast.success('Application Title updated to "' + titleVal + '"');
+    } else if (editingField === 'companyName') {
+      const compVal = clean || 'None';
+      if (gaw.workspace?.setSetting) {
+        gaw.workspace.setSetting('company_name', compVal);
+      }
+      setCompanyName(compVal);
+      gaw.toast.success('Organization Name updated to "' + compVal + '"');
+    }
+
+    setEditingField(null);
+    setTempValue('');
+  };
+
+  const handleNewDatabase = () => {
+    if (gaw.workspace?.createNewDatabase) {
+      gaw.workspace.createNewDatabase('new_database.sqlite', 'New Application', 'None');
+    }
+    setDbName('new_database.sqlite');
+    setAppTitle('New Application');
+    setCompanyName('None');
+    setStorageMeta(gaw.storage.getMetadata());
+    gaw.workspace?.setSidebarOpen(true);
+    setSidebarOpen(true);
+  };
 
   const handleOpenLocal = async () => {
     try {
@@ -4093,6 +4192,13 @@ export default function FileManagerPlugin({ gaw }) {
         gaw.workspace?.setSidebarOpen(true);
         setSidebarOpen(true);
         setRecentFiles(gaw.workspace.getRecentFiles());
+        const meta = gaw.storage.getMetadata();
+        setStorageMeta(meta);
+        if (meta && meta.fileName) setDbName(meta.fileName);
+        if (gaw.workspace?.getSetting) {
+          setAppTitle(gaw.workspace.getSetting('app_title', 'New Application'));
+          setCompanyName(gaw.workspace.getSetting('company_name', 'None'));
+        }
         gaw.toast.success('Local database opened successfully.');
       }
     } catch (err) {
@@ -4125,6 +4231,13 @@ export default function FileManagerPlugin({ gaw }) {
         gaw.workspace?.setSidebarOpen(true);
         setSidebarOpen(true);
         setRecentFiles(gaw.workspace.getRecentFiles());
+        const meta = gaw.storage.getMetadata();
+        setStorageMeta(meta);
+        if (meta && meta.fileName) setDbName(meta.fileName);
+        if (gaw.workspace?.getSetting) {
+          setAppTitle(gaw.workspace.getSetting('app_title', 'New Application'));
+          setCompanyName(gaw.workspace.getSetting('company_name', 'None'));
+        }
         gaw.toast.success('Loaded ' + fileItem.name + ' from Dropbox.');
       }
     } catch (err) {
@@ -4147,6 +4260,9 @@ export default function FileManagerPlugin({ gaw }) {
     }
     await gaw.workspace.closeDatabase();
     setStorageMeta(gaw.storage.getMetadata());
+    setDbName('new_database.sqlite');
+    setAppTitle('New Application');
+    setCompanyName('None');
   };
 
   const handleClearRecentFiles = () => {
@@ -4181,6 +4297,13 @@ export default function FileManagerPlugin({ gaw }) {
           gaw.workspace?.setSidebarOpen(true);
           setSidebarOpen(true);
           setRecentFiles(gaw.workspace.getRecentFiles());
+          const meta = gaw.storage.getMetadata();
+          setStorageMeta(meta);
+          if (meta && meta.fileName) setDbName(meta.fileName);
+          if (gaw.workspace?.getSetting) {
+            setAppTitle(gaw.workspace.getSetting('app_title', 'New Application'));
+            setCompanyName(gaw.workspace.getSetting('company_name', 'None'));
+          }
           gaw.toast.success('Loaded ' + file.name + ' from Dropbox.');
         }
       } catch (err) {
@@ -4221,15 +4344,15 @@ export default function FileManagerPlugin({ gaw }) {
   }
 
   return (
-    <div className={'p-6 max-w-6xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+    <div className={'p-4 md:p-6 max-w-6xl mx-auto space-y-6 pb-28 select-text ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Top Header */}
-      <div className={'flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b ' + (
+      <div className={'flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ' + (
         isDark ? 'border-slate-800' : 'border-slate-200'
       )}>
         <div>
           <div className='flex items-center gap-3'>
             <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
-              isDark ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border border-indigo-200 text-indigo-600'
+              isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
             )}>
               <FolderOpen className='w-5 h-5' />
             </div>
@@ -4239,14 +4362,14 @@ export default function FileManagerPlugin({ gaw }) {
               )}>
                 File & Workspace Manager
               </h1>
-              <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                Open local databases, sync with Dropbox, manage recent files, or explore the Northwind demo.
+              <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                Create, open, and save SQLite databases, configure Dropbox cloud sync, manage recent files, or explore the Northwind demo.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Status Indicators */}
+        {/* Status Badges */}
         <div className='flex items-center gap-2 flex-wrap'>
           {/* Dropbox Status Badge */}
           {dropboxConfig.connected ? (
@@ -4284,33 +4407,34 @@ export default function FileManagerPlugin({ gaw }) {
             </div>
           )}
 
-          {/* Storage Mode Badge */}
+          {/* Storage Target Badge */}
           <div className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (
             isDark ? 'bg-slate-800 border border-slate-700 text-slate-300' : 'bg-slate-100 border border-slate-300 text-slate-700'
           )}>
             <HardDrive className={'w-3.5 h-3.5 ' + (isDark ? 'text-indigo-400' : 'text-indigo-600')} />
-            <span>Target: {storageMeta.activeTarget === 'dropbox' ? 'Dropbox' : 'Local Disk'}</span>
+            <span>Target: {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}</span>
           </div>
         </div>
       </div>
 
-      {/* Active Database Overview & File Closing Card */}
-      <div className={'rounded-2xl p-5 shadow-lg space-y-4 border ' + (
+      {/* Active Database Overview & Metadata Card */}
+      <div className={'rounded-2xl p-4 md:p-5 shadow-lg space-y-4 border ' + (
         isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
       )}>
-        <div className={'flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ' + (
+        {/* Top Row: Title + Sync Status + Quick Actions */}
+        <div className={'flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-4 ' + (
           isDark ? 'border-slate-800/80' : 'border-slate-100'
         )}>
           <div className='flex items-center gap-3'>
-            <div className={'w-8 h-8 rounded-lg flex items-center justify-center ' + (
-              isDark ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
+            <div className={'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ' + (
+              isDark ? 'bg-blue-600/20 border border-blue-500/30 text-sky-400' : 'bg-blue-50 border border-blue-200 text-blue-700'
             )}>
-              <Database className='w-4 h-4' />
+              <Database className='w-5 h-5' />
             </div>
             <div>
               <div className='flex items-center gap-2'>
-                <span className={'text-xs font-semibold uppercase tracking-wider ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                  Active Loaded Database
+                <span className={'text-[10px] font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/80' : 'text-blue-700')}>
+                  Active Database Information
                 </span>
                 <span className={'px-2 py-0.5 rounded text-[10px] font-semibold ' + (
                   storageMeta.syncStatus === 'dirty'
@@ -4320,8 +4444,8 @@ export default function FileManagerPlugin({ gaw }) {
                   {storageMeta.syncStatus === 'dirty' ? 'Modified (Unsaved)' : 'Synchronized'}
                 </span>
               </div>
-              <h2 className={'text-base font-bold font-mono mt-0.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                {storageMeta.fileName || 'northwind_commerce.db'}
+              <h2 className={'text-base md:text-lg font-bold font-mono mt-0.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                {dbName}
               </h2>
             </div>
           </div>
@@ -4329,34 +4453,57 @@ export default function FileManagerPlugin({ gaw }) {
           <div className='flex items-center gap-2 flex-wrap'>
             <button
               onClick={() => gaw.storage.save()}
-              className='px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5 shadow transition'
+              className='px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow transition active:scale-95'
+              title='Save active database'
             >
               <Save className='w-3.5 h-3.5' />
               <span>Save Database</span>
             </button>
             <button
               onClick={() => gaw.storage.saveAs()}
-              className={'px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm'
+              className={'px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm'
               )}
+              title='Save copy to new file'
             >
               Save As...
             </button>
             <button
-              onClick={() => gaw.storage.exportDownload()}
-              className={'px-3 py-1.5 rounded-lg text-xs font-medium transition ' + (
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm'
+              onClick={() => gaw.navigation.openPlugin('plugin_local_storage')}
+              className={'px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-emerald-700 border-slate-300'
               )}
-              title='Export direct file download'
+              title='Open Local Storage & Disk Sync plugin'
             >
-              Export .db
+              <HardDrive className='w-3.5 h-3.5 text-emerald-500' />
+              <span>Local Storage & Sync</span>
+            </button>
+            <button
+              onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+              className={'px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-sky-700 border-slate-300'
+              )}
+              title='Open Dropbox Cloud Sync plugin'
+            >
+              <Cloud className='w-3.5 h-3.5 text-sky-500' />
+              <span>Dropbox Cloud Sync</span>
+            </button>
+            <button
+              onClick={() => gaw.storage.exportDownload()}
+              className={'px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1 ' + (
+                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300 shadow-sm'
+              )}
+              title='Download raw SQLite .db file directly'
+            >
+              <Download className='w-3.5 h-3.5' />
+              <span className='hidden sm:inline text-[11px]'>Export .db</span>
             </button>
             <button
               onClick={handleCloseActiveDatabase}
-              className={'px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ' + (
+              className={'px-3 py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 active:scale-95 ' + (
                 isDark ? 'bg-red-950/40 hover:bg-red-900/60 border-red-800/40 text-red-300' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'
               )}
-              title='Close active file and unload database'
+              title='Close active file and reset to blank database'
             >
               <X className='w-3.5 h-3.5 text-red-500' />
               <span>Close Active Database</span>
@@ -4364,7 +4511,194 @@ export default function FileManagerPlugin({ gaw }) {
           </div>
         </div>
 
-        <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs'>
+        {/* Middle Row: Editable Details (Database Name, Application Title, Organization Name) */}
+        <div className='grid grid-cols-1 md:grid-cols-3 gap-3 py-2 border-b border-slate-800/40'>
+          {/* 1. Database File Name */}
+          <div className={'p-3 rounded-xl border transition ' + (
+            isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+          )}>
+            <div className='flex items-center justify-between mb-1.5'>
+              <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
+                <Database className='w-3.5 h-3.5' />
+                <span>Database File Name</span>
+              </span>
+              {editingField !== 'dbName' && (
+                <button
+                  onClick={() => handleStartEdit('dbName')}
+                  className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition'
+                  title='Change database file name'
+                >
+                  <Edit2 className='w-3 h-3' />
+                </button>
+              )}
+            </div>
+
+            {editingField === 'dbName' ? (
+              <div className='space-y-2'>
+                <input
+                  type='text'
+                  value={tempValue}
+                  onChange={(e) => setTempValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                  placeholder='database_name.sqlite'
+                  className={'w-full px-2.5 py-1 rounded text-xs border font-mono font-semibold focus:outline-none focus:border-sky-500 ' + (
+                    isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                  )}
+                  autoFocus
+                />
+                <div className='flex items-center gap-1.5'>
+                  <button
+                    onClick={handleSaveEdit}
+                    className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1'
+                  >
+                    <Check className='w-3 h-3' />
+                    <span>Save</span>
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px]'
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className={'font-mono font-bold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {dbName}
+                </p>
+                <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                  Changes file name locally and on Dropbox.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Application Title */}
+          <div className={'p-3 rounded-xl border transition ' + (
+            isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+          )}>
+            <div className='flex items-center justify-between mb-1.5'>
+              <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
+                <Tag className='w-3.5 h-3.5' />
+                <span>Application Title</span>
+              </span>
+              {editingField !== 'appTitle' && (
+                <button
+                  onClick={() => handleStartEdit('appTitle')}
+                  className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition'
+                  title='Change application title'
+                >
+                  <Edit2 className='w-3 h-3' />
+                </button>
+              )}
+            </div>
+
+            {editingField === 'appTitle' ? (
+              <div className='space-y-2'>
+                <input
+                  type='text'
+                  value={tempValue}
+                  onChange={(e) => setTempValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                  placeholder='Application Title'
+                  className={'w-full px-2.5 py-1 rounded text-xs border font-semibold focus:outline-none focus:border-sky-500 ' + (
+                    isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                  )}
+                  autoFocus
+                />
+                <div className='flex items-center gap-1.5'>
+                  <button
+                    onClick={handleSaveEdit}
+                    className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1'
+                  >
+                    <Check className='w-3 h-3' />
+                    <span>Save</span>
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px]'
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className={'font-semibold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {appTitle}
+                </p>
+                <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                  Saved in database settings (app_title).
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Organization / Company Name */}
+          <div className={'p-3 rounded-xl border transition ' + (
+            isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+          )}>
+            <div className='flex items-center justify-between mb-1.5'>
+              <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
+                <Building2 className='w-3.5 h-3.5' />
+                <span>Organization / Company</span>
+              </span>
+              {editingField !== 'companyName' && (
+                <button
+                  onClick={() => handleStartEdit('companyName')}
+                  className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition'
+                  title='Change organization name'
+                >
+                  <Edit2 className='w-3 h-3' />
+                </button>
+              )}
+            </div>
+
+            {editingField === 'companyName' ? (
+              <div className='space-y-2'>
+                <input
+                  type='text'
+                  value={tempValue}
+                  onChange={(e) => setTempValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                  placeholder='Organization Name'
+                  className={'w-full px-2.5 py-1 rounded text-xs border font-semibold focus:outline-none focus:border-sky-500 ' + (
+                    isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                  )}
+                  autoFocus
+                />
+                <div className='flex items-center gap-1.5'>
+                  <button
+                    onClick={handleSaveEdit}
+                    className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1'
+                  >
+                    <Check className='w-3 h-3' />
+                    <span>Save</span>
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px]'
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className={'font-semibold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {companyName}
+                </p>
+                <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                  Saved in database settings (company_name).
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom Row: Stats Grid */}
+        <div className='grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-1'>
           <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
             <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>File Size</span>
             <span className={'font-mono font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
@@ -4386,25 +4720,53 @@ export default function FileManagerPlugin({ gaw }) {
           <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
             <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Database Tables</span>
             <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
-              {gaw.db.getTables().length + ' user tables'}
+              {gaw.db.getTables().length + ' tables'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Main 3 File Opening Options */}
+      {/* Main 4 Launch & Open Database Options */}
       <div>
-        <h2 className={'text-xs font-semibold uppercase tracking-wider mb-3 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-          Open or Launch Database
+        <h2 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
+          Launch & Open Databases
         </h2>
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-          {/* Card 1: Local File */}
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+          {/* Card 1: Create New Database */}
           <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
-            isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+            isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
           )}>
             <div className='space-y-3'>
               <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-blue-600/20 border border-blue-500/30 text-blue-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
+                isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
+              )}>
+                <PlusCircle className='w-6 h-6' />
+              </div>
+              <div>
+                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Create New Database</h3>
+                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                  Creates a fresh database named "new_database.sqlite" with the minimal starting set. You can customize defaults and save locally or in Dropbox.
+                </p>
+              </div>
+            </div>
+            <div className='pt-5'>
+              <button
+                onClick={handleNewDatabase}
+                className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-95'
+              >
+                <PlusCircle className='w-4 h-4' />
+                <span>Create New Database</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: Open Local File */}
+          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+            isDark ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-300 shadow-sm'
+          )}>
+            <div className='space-y-3'>
+              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                isDark ? 'bg-blue-600/20 border border-blue-500/30 text-sky-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
               )}>
                 <HardDrive className='w-6 h-6' />
               </div>
@@ -4426,13 +4788,13 @@ export default function FileManagerPlugin({ gaw }) {
             </div>
           </div>
 
-          {/* Card 2: Dropbox Cloud */}
+          {/* Card 3: Dropbox Cloud */}
           <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
-            isDark ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+            isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
           )}>
             <div className='space-y-3'>
               <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-400' : 'bg-indigo-50 border border-indigo-200 text-indigo-600'
+                isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
               )}>
                 <Cloud className='w-6 h-6' />
               </div>
@@ -4458,7 +4820,7 @@ export default function FileManagerPlugin({ gaw }) {
               {dropboxConfig.connected ? (
                 <button
                   onClick={handleOpenDropboxBrowser}
-                  className='w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
+                  className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
                 >
                   <Cloud className='w-4 h-4' />
                   <span>Browse Dropbox Files...</span>
@@ -4467,7 +4829,7 @@ export default function FileManagerPlugin({ gaw }) {
                 <button
                   onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
                   className={'w-full py-2.5 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98 border ' + (
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-indigo-300 border-indigo-700/40' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-sky-700/40' : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200'
                   )}
                 >
                   <ExternalLink className='w-4 h-4' />
@@ -4477,7 +4839,7 @@ export default function FileManagerPlugin({ gaw }) {
             </div>
           </div>
 
-          {/* Card 3: Northwind Demo */}
+          {/* Card 4: Northwind Demo */}
           <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
             isDark
               ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30 border-indigo-900/40 hover:border-indigo-600/50'
@@ -4485,7 +4847,7 @@ export default function FileManagerPlugin({ gaw }) {
           )}>
             <div className='space-y-3'>
               <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-purple-600/20 border border-purple-500/30 text-purple-400' : 'bg-purple-50 border border-purple-200 text-purple-600'
+                isDark ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border border-emerald-200 text-emerald-600'
               )}>
                 <Sparkles className='w-6 h-6' />
               </div>
@@ -4493,7 +4855,7 @@ export default function FileManagerPlugin({ gaw }) {
                 <div className='flex items-center gap-2'>
                   <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Northwind Demo</h3>
                   <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
-                    isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-800 border border-purple-300'
+                    isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                   )}>
                     Demo Template
                   </span>
@@ -4506,7 +4868,7 @@ export default function FileManagerPlugin({ gaw }) {
             <div className='pt-5'>
               <button
                 onClick={handleOpenNorthwindDemo}
-                className='w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
+                className='w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
               >
                 <Sparkles className='w-4 h-4' />
                 <span>Open Northwind Demo</span>
@@ -4517,7 +4879,7 @@ export default function FileManagerPlugin({ gaw }) {
       </div>
 
       {/* Recent Files Log Section */}
-      <div className={'rounded-2xl p-5 shadow-lg space-y-4 border ' + (
+      <div className={'rounded-2xl p-4 md:p-5 shadow-lg space-y-4 border ' + (
         isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
       )}>
         <div className={'flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ' + (
@@ -4526,7 +4888,7 @@ export default function FileManagerPlugin({ gaw }) {
           <div>
             <div className='flex items-center gap-2'>
               <h2 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                <Clock className='w-4 h-4 text-indigo-500' />
+                <Clock className='w-4 h-4 text-sky-500' />
                 <span>Recent Files Log</span>
               </h2>
               <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + (
@@ -4543,7 +4905,7 @@ export default function FileManagerPlugin({ gaw }) {
           {recentFiles.length > 0 && (
             <button
               onClick={() => setShowClearConfirm(true)}
-              className={'px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 self-start sm:self-auto ' + (
+              className={'px-3 py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto ' + (
                 isDark ? 'bg-slate-800 hover:bg-red-950/40 text-slate-300 hover:text-red-300 border-slate-700 hover:border-red-800/40' : 'bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border-slate-300 hover:border-red-200'
               )}
               title='Delete recent files log from local browser storage'
@@ -4598,7 +4960,7 @@ export default function FileManagerPlugin({ gaw }) {
                         <div className='flex items-center gap-2.5'>
                           <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
                             isDemo
-                              ? isDark ? 'bg-purple-600/20 text-purple-400' : 'bg-purple-100 text-purple-600'
+                              ? isDark ? 'bg-emerald-600/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
                               : isDropbox
                               ? isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'
                               : isDark ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-600'
@@ -4627,7 +4989,7 @@ export default function FileManagerPlugin({ gaw }) {
                       <td className='py-3 px-3'>
                         <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ' + (
                           isDemo
-                            ? isDark ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-purple-100 text-purple-800 border border-purple-200'
+                            ? isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                             : isDropbox
                             ? isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
                             : isDark ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
@@ -4868,3 +5230,4 @@ export default function FileManagerPlugin({ gaw }) {
   );
 }
 `;
+

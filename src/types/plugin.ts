@@ -79,6 +79,7 @@ export interface GAWStorageApi {
   getMetadata: () => StorageMetadata;
   save: () => Promise<boolean>;
   saveAs: (suggestedName?: string) => Promise<boolean>;
+  setFileName?: (fileName: string) => void;
   openFile: () => Promise<boolean>;
   exportDownload: (fileName?: string) => void;
   setAutoSyncInterval: (seconds: number) => void;
@@ -127,6 +128,9 @@ export interface GAWWorkspaceApi {
   clearRecentFiles: () => void;
   loadNorthwindDemo: () => void;
   closeDatabase: () => Promise<void>;
+  createNewDatabase?: (name?: string, title?: string, company?: string) => void;
+  getSetting?: (key: string, defaultValue?: string) => string;
+  setSetting?: (key: string, value: string) => void;
 }
 
 export interface GAWContext {

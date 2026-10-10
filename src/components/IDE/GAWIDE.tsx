@@ -2870,12 +2870,12 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     <div
                       onClick={() => toggleFolder('reports')}
                       className={`flex items-center justify-between px-2 py-1 font-bold cursor-pointer rounded transition group ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
+                        isDark ? 'text-emerald-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-emerald-600 font-extrabold hover:text-emerald-800 hover:bg-emerald-50'
                       }`}
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
                         {expandedFolders.reports ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                        <Folder className="w-3.5 h-3.5 text-purple-500" />
+                        <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
                         <span>reports ({allReports.length})</span>
                       </div>
                       <button
@@ -2885,7 +2885,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           handleAddNewReport();
                         }}
                         className={`p-0.5 rounded transition ${
-                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                          isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
                         }`}
                         title="Add New Report (.json)"
                       >
@@ -2893,16 +2893,16 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                       </button>
                     </div>
                     {expandedFolders.reports && (
-                      <div className="pl-6 space-y-0.5 mt-0.5">
+                      <div className={`pl-6 space-y-0.5 mt-0.5 border-l ml-3 ${isDark ? 'border-emerald-500/30' : 'border-emerald-300'}`}>
                         {allReports.map((r) => (
                           <div
                             key={r.id}
                             onClick={() => openOrActivateItem({ type: 'report', id: r.id, name: r.name })}
                             className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
+                              isDark ? 'text-emerald-300 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
                             }`}
                           >
-                            <FileText className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                            <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
                             <span className="truncate">{r.name}.json</span>
                           </div>
                         ))}
@@ -3228,7 +3228,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     ) : tab.type === 'table' ? (
                       <TableIcon className="w-3.5 h-3.5 text-amber-400" />
                     ) : tab.type === 'report' ? (
-                      <FileText className="w-3.5 h-3.5 text-purple-400" />
+                      <FileText className="w-3.5 h-3.5 text-emerald-400" />
                     ) : (
                       <Database className="w-3.5 h-3.5 text-indigo-400" />
                     )}
@@ -3408,7 +3408,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 ) : activeTab.type === 'table' ? (
                   <TableIcon className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
                 ) : activeTab.type === 'report' ? (
-                  <FileText className="w-3.5 h-3.5 text-purple-300 flex-shrink-0" />
+                  <FileText className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
                 ) : (
                   <Database className="w-3.5 h-3.5 text-cyan-300 flex-shrink-0" />
                 )}
