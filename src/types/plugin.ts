@@ -34,6 +34,8 @@ export interface PluginRecord {
   updated_at?: string;
   is_system?: boolean;
   isSystem?: boolean;
+  target_area?: 'top' | 'bottom' | 'left' | 'right' | 'middle' | string;
+  targetArea?: 'top' | 'bottom' | 'left' | 'right' | 'middle' | string;
 }
 
 export interface GAWToastApi {
@@ -113,6 +115,7 @@ export interface GAWPluginsApi {
   toggleEnabled: (pluginId: string, enabled: boolean) => void;
   delete: (pluginId: string) => void;
   importPlugin: (plugin: Partial<PluginRecord>) => void;
+  setTargetArea: (pluginId: string, area: 'top' | 'bottom' | 'left' | 'right' | 'middle') => void;
   openInIDE: (pluginId: string, name?: string) => void;
   openAddModal: () => void;
 }

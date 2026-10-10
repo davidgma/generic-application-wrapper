@@ -62,6 +62,8 @@ export class SQLiteEngine {
         updated_at: now,
         is_system: true,
         isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
       {
         id: 'plugin_local_storage',
@@ -77,6 +79,8 @@ export class SQLiteEngine {
         updated_at: now,
         is_system: true,
         isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
       {
         id: 'plugin_manager',
@@ -92,6 +96,8 @@ export class SQLiteEngine {
         updated_at: now,
         is_system: true,
         isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
       {
         id: 'plugin_file_manager',
@@ -107,6 +113,8 @@ export class SQLiteEngine {
         updated_at: now,
         is_system: true,
         isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
       {
         id: 'plugin_database_management',
@@ -122,6 +130,8 @@ export class SQLiteEngine {
         updated_at: now,
         is_system: true,
         isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
       {
         id: 'plugin_help',
@@ -137,6 +147,8 @@ export class SQLiteEngine {
         updated_at: now,
         is_system: true,
         isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
     ];
     for (const p of defaults) {
@@ -1145,10 +1157,16 @@ export class SQLiteEngine {
     try {
       this.db.run(`
         CREATE TABLE IF NOT EXISTS t_settings (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
-        CREATE TABLE IF NOT EXISTS t_plugins (id TEXT PRIMARY KEY, name TEXT, version TEXT, enabled INTEGER, icon TEXT, menu_category TEXT, route TEXT, description TEXT, code TEXT, created_at TEXT, updated_at TEXT);
+        CREATE TABLE IF NOT EXISTS t_plugins (id TEXT PRIMARY KEY, name TEXT, version TEXT, enabled INTEGER, icon TEXT, menu_category TEXT, route TEXT, description TEXT, code TEXT, target_area TEXT DEFAULT 'middle', created_at TEXT, updated_at TEXT);
         CREATE TABLE IF NOT EXISTS t_sql_queries (id TEXT PRIMARY KEY, name TEXT, description TEXT, query TEXT, params TEXT, layout TEXT, created_at TEXT);
         CREATE TABLE IF NOT EXISTS t_reports (id TEXT PRIMARY KEY, name TEXT, description TEXT, query_id TEXT, custom_sql TEXT, config TEXT, created_at TEXT);
       `);
+
+      try {
+        this.db.run("ALTER TABLE t_plugins ADD COLUMN target_area TEXT DEFAULT 'middle';");
+      } catch (e) {
+        // Column already exists
+      }
 
       // System plugins are maintained in-memory as part of Gawkyy core.
       // Remove any previously stored system plugins from t_plugins to keep database clean.
@@ -1192,7 +1210,13 @@ export class SQLiteEngine {
     try {
       const userList = this.queryObjects<PluginRecord>('SELECT * FROM t_plugins ORDER BY name ASC;')
         .filter((p) => !SYSTEM_PLUGIN_IDS.has(p.id))
-        .map((p) => ({ ...p, is_system: false, isSystem: false }));
+        .map((p) => ({
+          ...p,
+          target_area: p.target_area || (p as any).targetArea || 'middle',
+          targetArea: p.target_area || (p as any).targetArea || 'middle',
+          is_system: false,
+          isSystem: false,
+        }));
       return [...sysList, ...userList];
     } catch (e) {
       return sysList;
@@ -1231,6 +1255,29 @@ export class SQLiteEngine {
     this.notifyChange(true);
   }
 
+  public setPluginTargetArea(pluginId: string, area: string): void {
+    const validArea = ['top', 'bottom', 'left', 'right', 'middle'].includes(area) ? area : 'middle';
+    if (SYSTEM_PLUGIN_IDS.has(pluginId)) {
+      const sys = this.systemPlugins.get(pluginId);
+      if (sys) {
+        sys.target_area = validArea;
+        sys.targetArea = validArea;
+        this.notifyChange(false);
+      }
+      return;
+    }
+    if (!this.db) return;
+    try {
+      this.db.run("ALTER TABLE t_plugins ADD COLUMN target_area TEXT DEFAULT 'middle';");
+    } catch (e) {}
+    this.run('UPDATE t_plugins SET target_area = ?, updated_at = ? WHERE id = ?;', [
+      validArea,
+      new Date().toISOString(),
+      pluginId,
+    ]);
+    this.notifyChange(true);
+  }
+
   public savePlugin(plugin: Partial<PluginRecord> & { id: string; name: string; code: string }): void {
     // If it's a system plugin, only update in-memory instance for this session (temporary edit)
     if (SYSTEM_PLUGIN_IDS.has(plugin.id)) {
@@ -1263,6 +1310,7 @@ export class SQLiteEngine {
            route = ?,
            description = ?,
            code = ?,
+           target_area = ?,
            updated_at = ?
          WHERE id = ?;`,
         [
@@ -1274,14 +1322,15 @@ export class SQLiteEngine {
           plugin.route || existing[0].route || ('/' + plugin.id),
           plugin.description || existing[0].description || '',
           plugin.code,
+          plugin.target_area || plugin.targetArea || existing[0].target_area || 'middle',
           now,
           plugin.id,
         ]
       );
     } else {
       this.run(
-        `INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        `INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, target_area, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           plugin.id,
           plugin.name,
@@ -1292,6 +1341,7 @@ export class SQLiteEngine {
           plugin.route || ('/' + plugin.id),
           plugin.description || '',
           plugin.code,
+          plugin.target_area || plugin.targetArea || 'middle',
           now,
           now,
         ]

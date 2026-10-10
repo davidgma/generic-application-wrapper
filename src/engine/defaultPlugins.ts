@@ -3521,17 +3521,74 @@ export default function PluginManagerPlugin({ gaw }) {
   const activeCount = plugins.filter((p) => p.enabled !== 0).length;
   const inactiveCount = plugins.filter((p) => p.enabled === 0).length;
 
+  const activeAreasMap = useMemo(() => {
+    const map = {};
+    plugins.forEach((p) => {
+      if (p.enabled !== 0) {
+        const area = p.target_area || p.targetArea || 'middle';
+        map[area] = p;
+      }
+    });
+    return map;
+  }, [plugins]);
+
   const handleToggleActive = (plugin) => {
     if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage' || plugin.id === 'plugin_file_manager' || plugin.id === 'plugin_database_management') {
       gaw.toast.warning('Core system plugin "' + plugin.name + '" must remain active to keep the application operational.');
       return;
     }
-    const nextState = plugin.enabled === 0 ? true : false;
+    const isEnabling = plugin.enabled === 0;
+    const targetArea = plugin.target_area || plugin.targetArea || 'middle';
+
+    if (isEnabling) {
+      const occupant = activeAreasMap[targetArea];
+      if (occupant && occupant.id !== plugin.id) {
+        gaw.toast.warning(
+          'Cannot activate "' + plugin.name + '": Target area "' + targetArea.toUpperCase() + '" is currently occupied by active plugin "' + occupant.name + '". Deactivate "' + occupant.name + '" or change area first.'
+        );
+        return;
+      }
+    }
+
+    const nextState = isEnabling;
     gaw.plugins.toggleEnabled(plugin.id, nextState);
     loadPlugins();
     gaw.toast.success(
-      'Plugin "' + plugin.name + '" is now ' + (nextState ? 'Active (visible in sidebar)' : 'Inactive (hidden from sidebar)')
+      'Plugin "' + plugin.name + '" is now ' + (nextState ? 'Active in ' + targetArea.toUpperCase() + ' area' : 'Inactive')
     );
+  };
+
+  const handleChangeTargetArea = (plugin, newArea) => {
+    const currentArea = plugin.target_area || plugin.targetArea || 'middle';
+    if (currentArea === newArea) return;
+
+    const isActive = plugin.enabled !== 0;
+    const occupant = activeAreasMap[newArea];
+
+    if (isActive && occupant && occupant.id !== plugin.id) {
+      gaw.toast.warning(
+        'Area "' + newArea.toUpperCase() + '" is already occupied by active plugin "' + occupant.name + '". Deactivate "' + occupant.name + '" first or select a different area.'
+      );
+      return;
+    }
+
+    if (gaw.plugins.setTargetArea) {
+      gaw.plugins.setTargetArea(plugin.id, newArea);
+    } else if (gaw.plugins.importPlugin) {
+      gaw.plugins.importPlugin({ ...plugin, target_area: newArea });
+    }
+    loadPlugins();
+    if (isActive) {
+      gaw.toast.success('Moved plugin "' + plugin.name + '" to ' + newArea.toUpperCase() + ' area.');
+    } else {
+      if (occupant && occupant.id !== plugin.id) {
+        gaw.toast.info(
+          'Target area for "' + plugin.name + '" set to ' + newArea.toUpperCase() + '. Note: "' + occupant.name + '" is currently active in this area.'
+        );
+      } else {
+        gaw.toast.success('Target area for "' + plugin.name + '" set to ' + newArea.toUpperCase() + ' area.');
+      }
+    }
   };
 
   const handleConfirmDelete = () => {
@@ -3896,6 +3953,43 @@ export default function PluginManagerPlugin({ gaw }) {
                   <span>ID: {p.id}</span>
                   <span>•</span>
                   <span>Route: {p.route || '/' + p.id}</span>
+                </div>
+
+                {/* Target Area Selector */}
+                <div className={'pt-2.5 pb-1 border-t flex flex-wrap items-center justify-between gap-2 ' + (isDark ? 'border-slate-800/60' : 'border-slate-200/80')}>
+                  <div className="flex items-center gap-1.5">
+                    <span className={'text-[11px] font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>Area:</span>
+                    <span className={'text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase border ' + (
+                      isActive
+                        ? isDark ? 'bg-indigo-950/80 border-indigo-700/60 text-indigo-300' : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                        : isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'
+                    )}>
+                      {p.target_area || p.targetArea || 'middle'}
+                    </span>
+                  </div>
+
+                  <select
+                    value={p.target_area || p.targetArea || 'middle'}
+                    onChange={(e) => handleChangeTargetArea(p, e.target.value)}
+                    className={'px-2 py-1 rounded text-xs font-semibold focus:outline-none border transition cursor-pointer ' + (
+                      isDark
+                        ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-indigo-500'
+                        : 'bg-white border-slate-300 text-slate-800 hover:border-indigo-500'
+                    )}
+                    title="Choose layout area for this plugin (Top, Bottom, Left, Right, or Middle)"
+                  >
+                    {['top', 'left', 'middle', 'right', 'bottom'].map((area) => {
+                      const occupant = activeAreasMap[area];
+                      const isOccupiedByOther = occupant && occupant.id !== p.id;
+                      const isDisabled = isActive && isOccupiedByOther;
+                      const label = area.toUpperCase() + (isOccupiedByOther ? ' (Occupied: ' + occupant.name + ')' : '');
+                      return (
+                        <option key={area} value={area} disabled={isDisabled}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
               </div>
 
