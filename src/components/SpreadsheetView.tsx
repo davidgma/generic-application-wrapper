@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import writeXlsxFile from 'write-excel-file/browser';
 import readXlsxFile from 'read-excel-file/browser';
 import {
+  ArrowLeft,
   Bold,
   DollarSign,
   Download,
@@ -40,6 +41,12 @@ interface SpreadsheetViewProps {
     columns: string[];
     values: any[][];
   }>;
+  sourceInfo?: {
+    type: 'query' | 'table';
+    id?: string;
+    name: string;
+  } | null;
+  onReturnToSource?: () => void;
   onClose?: () => void;
   theme?: 'vs-dark' | 'vs-light';
 }
@@ -66,6 +73,8 @@ function letterToCol(letter: string): number {
 
 export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
   initialSheets,
+  sourceInfo,
+  onReturnToSource,
   onClose,
   theme = 'vs-dark',
 }) => {
@@ -487,8 +496,21 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
           </button>
         </div>
 
-        {/* Import & Export */}
+        {/* Import, Export & Return Controls */}
         <div className="flex items-center gap-2">
+          {onReturnToSource && (
+            <button
+              onClick={onReturnToSource}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-sm transition active:scale-95 cursor-pointer"
+              title={`Return to ${sourceInfo?.type === 'table' ? 'Table' : 'Query'} View (${sourceInfo?.name || 'View'})`}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>
+                Return to {sourceInfo?.type === 'table' ? 'Table' : 'Query'} View {sourceInfo?.name ? `(${sourceInfo.name.replace(/\.sql$/i, '')})` : ''}
+              </span>
+            </button>
+          )}
+
           <label className={`flex items-center gap-1 px-2.5 py-1 rounded border text-xs cursor-pointer ${isDark ? 'border-slate-700 hover:bg-slate-800 text-slate-300' : 'border-slate-300 hover:bg-slate-200'}`}>
             <Upload className="w-3 h-3" />
             <span>Import Excel</span>
@@ -506,7 +528,8 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 ml-2"
+              className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 ml-1"
+              title="Close Spreadsheet"
             >
               <X className="w-4 h-4" />
             </button>

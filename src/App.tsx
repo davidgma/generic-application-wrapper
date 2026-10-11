@@ -349,10 +349,20 @@ export default function App() {
     name: string;
   } | null>(null);
 
-  // Spreadsheet Transfer data
+  // Spreadsheet Transfer data & source info
   const [spreadsheetInitialSheets, setSpreadsheetInitialSheets] = useState<
     Array<{ name: string; columns: string[]; values: any[][] }> | undefined
   >(undefined);
+  const [spreadsheetSource, setSpreadsheetSource] = useState<{
+    type: 'query' | 'table';
+    id?: string;
+    name: string;
+  } | null>(null);
+  const spreadsheetReturnTargetRef = useRef<{
+    type: 'query' | 'table';
+    id?: string;
+    name: string;
+  } | null>(null);
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -1091,11 +1101,28 @@ export default function App() {
     }
   }, [navigateTo]);
 
-  // Correspondence: Exit IDE into non-IDE view of the active item in IDE
+  // Correspondence: Exit IDE into non-IDE view of the active item in IDE (or return to Spreadsheet)
   const handleExitIDE = useCallback(
     (targetInfo?: TargetTabInfo | null) => {
       const target = targetInfo !== undefined ? targetInfo : currentIdeTarget;
       const engine = SQLiteEngine.getInstance();
+
+      // Check if opened from Spreadsheet and still on the same definition tab
+      if (
+        spreadsheetReturnTargetRef.current &&
+        target &&
+        ((spreadsheetReturnTargetRef.current.type === 'table' && target.type === 'table' && target.name === spreadsheetReturnTargetRef.current.name) ||
+         (spreadsheetReturnTargetRef.current.type === 'query' && target.type === 'query' &&
+          (target.id === spreadsheetReturnTargetRef.current.id || target.name === spreadsheetReturnTargetRef.current.name)))
+      ) {
+        spreadsheetReturnTargetRef.current = null;
+        setActiveView('spreadsheet');
+        setActiveRoute('view');
+        navigateTo('view', 'spreadsheet');
+        return;
+      }
+
+      spreadsheetReturnTargetRef.current = null;
 
       if (target) {
         if (target.type === 'plugin') {
@@ -1187,7 +1214,92 @@ export default function App() {
     }
   }, [activeView, plugins, queries, reports, activeQueryTitle, handleOpenInIDE]);
 
-  // Global Ctrl+Shift+F toggle between Full Screen Monaco IDE and corresponding non-IDE view
+  // Open Spreadsheet with specific data & track source item
+  const handleOpenSpreadsheet = useCallback((
+    data?: { columns: string[]; values: any[][] },
+    sheetName: string = 'Data',
+    updateHash: boolean = true,
+    sourceInfo?: { type: 'query' | 'table'; id?: string; name: string } | null
+  ) => {
+    if (data) {
+      setSpreadsheetInitialSheets([{ name: sheetName, columns: data.columns, values: data.values }]);
+    }
+    let src = sourceInfo;
+    if (!src) {
+      if (activeView.startsWith('query:')) {
+        src = {
+          type: 'query',
+          id: activeSavedQuery?.id || activeView.replace('query:', ''),
+          name: activeSavedQuery?.name || activeQueryTitle || sheetName,
+        };
+      } else if (activeView.startsWith('table:')) {
+        src = {
+          type: 'table',
+          name: activeView.replace('table:', ''),
+        };
+      }
+    }
+    if (src) {
+      setSpreadsheetSource(src);
+    }
+    setActiveView('spreadsheet');
+    setActiveRoute('view');
+    if (updateHash) {
+      navigateTo('view', 'spreadsheet');
+    }
+  }, [activeView, activeSavedQuery, activeQueryTitle, navigateTo]);
+
+  // Return to Query or Table view from Spreadsheet View
+  const handleReturnFromSpreadsheet = useCallback(() => {
+    if (!spreadsheetSource) {
+      setActiveView('view');
+      navigateTo('view', 'view');
+      return;
+    }
+    const engine = SQLiteEngine.getInstance();
+    if (spreadsheetSource.type === 'table') {
+      handleSelectTable(spreadsheetSource.name);
+    } else if (spreadsheetSource.type === 'query') {
+      const allQueries = engine.getSavedQueries();
+      const q = (spreadsheetSource.id ? allQueries.find((x) => x.id === spreadsheetSource.id) : null) ||
+        allQueries.find((x) => x.name === spreadsheetSource.name);
+      if (q) {
+        handleSelectQuery(q);
+      } else {
+        setActiveView('view');
+        navigateTo('view', 'view');
+      }
+    } else {
+      setActiveView('view');
+      navigateTo('view', 'view');
+    }
+  }, [spreadsheetSource, handleSelectTable, handleSelectQuery, navigateTo]);
+
+  // Open definition in IDE from Spreadsheet View
+  const handleOpenDefinitionFromSpreadsheet = useCallback(() => {
+    if (!spreadsheetSource) {
+      handleOpenInIDE();
+      return;
+    }
+    spreadsheetReturnTargetRef.current = spreadsheetSource;
+    if (spreadsheetSource.type === 'table') {
+      handleOpenInIDE({ type: 'table', name: spreadsheetSource.name });
+    } else if (spreadsheetSource.type === 'query') {
+      const engine = SQLiteEngine.getInstance();
+      const q = (spreadsheetSource.id ? engine.getSavedQueries().find((x) => x.id === spreadsheetSource.id) : null) ||
+        engine.getSavedQueries().find((x) => x.name === spreadsheetSource.name);
+      handleOpenInIDE({
+        type: 'query',
+        id: spreadsheetSource.id || q?.id,
+        name: spreadsheetSource.name || q?.name,
+        code: q?.query,
+      });
+    } else {
+      handleOpenInIDE();
+    }
+  }, [spreadsheetSource, handleOpenInIDE]);
+
+  // Global Ctrl+Shift+F toggle between Full Screen Monaco IDE, Spreadsheet view, and corresponding non-IDE view
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1196,32 +1308,19 @@ export default function App() {
         (e.key === 'F' || e.key === 'f')
       ) {
         e.preventDefault();
-        if (activeView === 'ide') {
+        e.stopPropagation();
+        if (activeView === 'spreadsheet') {
+          handleOpenDefinitionFromSpreadsheet();
+        } else if (activeView === 'ide') {
           handleExitIDE(currentIdeTarget);
         } else {
           handleEnterIDEFromCurrentView();
         }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeView, currentIdeTarget, handleExitIDE, handleEnterIDEFromCurrentView]);
-
-  // Open Spreadsheet with specific data
-  const handleOpenSpreadsheet = useCallback((
-    data?: { columns: string[]; values: any[][] },
-    sheetName: string = 'Data',
-    updateHash: boolean = true
-  ) => {
-    if (data) {
-      setSpreadsheetInitialSheets([{ name: sheetName, columns: data.columns, values: data.values }]);
-    }
-    setActiveView('spreadsheet');
-    setActiveRoute('view');
-    if (updateHash) {
-      navigateTo('view', 'spreadsheet');
-    }
-  }, [navigateTo]);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [activeView, currentIdeTarget, handleExitIDE, handleEnterIDEFromCurrentView, handleOpenDefinitionFromSpreadsheet]);
 
   // Hash route parsing and synchronization
   useEffect(() => {
@@ -1976,6 +2075,8 @@ export default function App() {
         <div className="flex-1 overflow-hidden select-text">
           <SpreadsheetView
             initialSheets={spreadsheetInitialSheets}
+            sourceInfo={spreadsheetSource}
+            onReturnToSource={handleReturnFromSpreadsheet}
             onClose={() => {
               setActiveView('view');
               navigateTo('view', 'view');
