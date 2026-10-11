@@ -5550,7 +5550,6 @@ export default function ComponentsListPlugin({ gaw }) {
     tables: false,
     queries: false,
     reports: false,
-    tools: false,
   });
 
   useEffect(() => {
@@ -5558,15 +5557,28 @@ export default function ComponentsListPlugin({ gaw }) {
     const u1 = gaw.eventBus?.on('db_changed', forceUpdate);
     const u2 = gaw.eventBus?.on('view_changed', forceUpdate);
     const u3 = gaw.eventBus?.on('theme_changed', forceUpdate);
-    return () => { u1?.(); u2?.(); u3?.(); };
+    
+    // Subscribe to SQLiteEngine directly for instant updates when a new database is loaded
+    let unsubEngine;
+    try {
+      if (typeof window !== 'undefined' && window.SQLiteEngine) {
+        unsubEngine = window.SQLiteEngine.getInstance().subscribe(forceUpdate);
+      }
+    } catch (e) {}
+
+    return () => {
+      u1?.(); u2?.(); u3?.();
+      unsubEngine?.();
+    };
   }, [gaw.eventBus]);
 
   const isDark = (gaw.theme || 'vs-dark') === 'vs-dark';
   const activeView = gaw.activeView || '';
 
-  const tables = useMemo(() => {
+  const schemas = useMemo(() => {
     try {
-      return gaw.workspace?.getTables() || [];
+      if (gaw.workspace?.getTables) return gaw.workspace.getTables();
+      return [];
     } catch (e) {
       return [];
     }
@@ -5596,14 +5608,34 @@ export default function ComponentsListPlugin({ gaw }) {
     }
   }, [gaw.plugins]);
 
+  const isSystemTable = (name, isSys) => {
+    if (isSys) return true;
+    if (!name) return false;
+    return name.startsWith('t_') || name.startsWith('sqlite_') || name.startsWith('_');
+  };
+
+  const userTables = useMemo(() => schemas.filter(t => !isSystemTable(t.name, t.isSystem)), [schemas]);
+  const systemTables = useMemo(() => schemas.filter(t => isSystemTable(t.name, t.isSystem)), [schemas]);
+
+  const userPlugins = useMemo(() => plugins.filter(p => !p.is_system && !p.isSystem), [plugins]);
+  const systemPlugins = useMemo(() => plugins.filter(p => p.is_system || p.isSystem), [plugins]);
+
   const toggleSection = (sec) => {
     setCollapsed(prev => ({ ...prev, [sec]: !prev[sec] }));
   };
 
-  const filteredTables = tables.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
-  const filteredQueries = queries.filter(q => q.name.toLowerCase().includes(search.toLowerCase()));
-  const filteredReports = reports.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
-  const filteredPlugins = plugins.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filterSearch = (item) => {
+    if (!search.trim()) return true;
+    const name = item.name || item.id || '';
+    return name.toLowerCase().includes(search.toLowerCase());
+  };
+
+  const filteredUserTables = userTables.filter(filterSearch);
+  const filteredSystemTables = systemTables.filter(filterSearch);
+  const filteredQueries = queries.filter(filterSearch);
+  const filteredReports = reports.filter(filterSearch);
+  const filteredUserPlugins = userPlugins.filter(filterSearch);
+  const filteredSystemPlugins = systemPlugins.filter(filterSearch);
 
   return (
     <aside className={'w-full h-full flex flex-col overflow-hidden border-r select-text font-sans text-xs ' + (
@@ -5634,81 +5666,21 @@ export default function ComponentsListPlugin({ gaw }) {
 
       {/* Components List Container */}
       <div className="flex-1 overflow-y-auto p-2 space-y-3">
-        {/* Section 1: Plugins */}
-        <div>
-          <div
-            onClick={() => toggleSection('plugins')}
-            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
-              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              {collapsed.plugins ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
-              <span>Plugins ({filteredPlugins.length})</span>
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); gaw.plugins?.openAddModal(); }}
-              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
-            >
-              <LucideIcons.Plus className="w-3 h-3" /> Add
-            </button>
-          </div>
-
-          {!collapsed.plugins && (
-            <div className="mt-1 space-y-0.5 pl-2">
-              <button
-                onClick={() => gaw.navigation?.selectView('app_hub')}
-                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
-                  activeView === 'app_hub'
-                    ? (isDark ? 'bg-indigo-600/30 text-indigo-400 font-semibold' : 'bg-indigo-50 text-indigo-700 font-semibold')
-                    : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
-                )}
-              >
-                <LucideIcons.LayoutGrid className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                <span className="truncate">All Plugins (App Hub)</span>
-              </button>
-
-              {filteredPlugins.map((p) => {
-                const isActive = activeView === 'plugin:' + p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => gaw.navigation?.openPlugin(p.id)}
-                    className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition group ' + (
-                      isActive
-                        ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
-                        : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
-                    )}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <LucideIcons.Puzzle className={'w-3.5 h-3.5 flex-shrink-0 ' + (p.is_system ? 'text-amber-400' : 'text-indigo-400')} />
-                      <span className="truncate">{p.name}</span>
-                    </div>
-                    {p.is_system && (
-                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400/10 text-amber-400 border border-amber-400/20 font-mono">SYS</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Section 2: Database Tables */}
+        {/* Section 1: User Database Tables & Views (Green Color Scheme) */}
         <div>
           <div
             onClick={() => toggleSection('tables')}
             className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
-              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+              isDark ? 'text-emerald-400 hover:bg-slate-900' : 'text-emerald-700 hover:bg-slate-100'
             )}
           >
             <div className="flex items-center gap-1.5">
               {collapsed.tables ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
-              <span>Database Tables ({filteredTables.length})</span>
+              <span>User Tables & Views ({filteredUserTables.length})</span>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); gaw.workspace?.newTable(); }}
-              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+              className="text-emerald-500 hover:text-emerald-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
             >
               <LucideIcons.Plus className="w-3 h-3" /> New
             </button>
@@ -5716,26 +5688,36 @@ export default function ComponentsListPlugin({ gaw }) {
 
           {!collapsed.tables && (
             <div className="mt-1 space-y-0.5 pl-2">
-              {filteredTables.length === 0 ? (
-                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No tables found</div>
+              {filteredUserTables.length === 0 ? (
+                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user tables or views</div>
               ) : (
-                filteredTables.map((t) => {
+                filteredUserTables.map((t) => {
                   const isActive = activeView === 'table:' + t.name;
+                  const isView = t.type === 'view';
                   return (
                     <button
                       key={t.name}
                       onClick={() => gaw.navigation?.selectView('table:' + t.name)}
                       className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
                         isActive
-                          ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
-                          : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                          ? (isDark ? 'bg-emerald-900/40 text-emerald-300 font-semibold border border-emerald-700/50' : 'bg-emerald-100 text-emerald-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-200' : 'hover:bg-emerald-50/70 text-slate-800')
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <LucideIcons.Table className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                        {isView ? (
+                          <LucideIcons.Eye className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        ) : (
+                          <LucideIcons.Table className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        )}
                         <span className="truncate">{t.name}</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-mono">{t.columns?.length || 0} cols</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
+                          {isView ? 'VIEW' : 'USER'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{t.columns?.length || 0}c</span>
+                      </div>
                     </button>
                   );
                 })
@@ -5744,12 +5726,12 @@ export default function ComponentsListPlugin({ gaw }) {
           )}
         </div>
 
-        {/* Section 3: Saved Queries */}
+        {/* Section 2: User Saved Queries (Green Color Scheme) */}
         <div>
           <div
             onClick={() => toggleSection('queries')}
             className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
-              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+              isDark ? 'text-emerald-400 hover:bg-slate-900' : 'text-emerald-700 hover:bg-slate-100'
             )}
           >
             <div className="flex items-center gap-1.5">
@@ -5758,7 +5740,7 @@ export default function ComponentsListPlugin({ gaw }) {
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); gaw.workspace?.newQuery(); }}
-              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+              className="text-emerald-500 hover:text-emerald-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
             >
               <LucideIcons.Plus className="w-3 h-3" /> New
             </button>
@@ -5777,14 +5759,17 @@ export default function ComponentsListPlugin({ gaw }) {
                       onClick={() => gaw.navigation?.selectView('query:' + q.id)}
                       className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
                         isActive
-                          ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
-                          : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                          ? (isDark ? 'bg-emerald-900/40 text-emerald-300 font-semibold border border-emerald-700/50' : 'bg-emerald-100 text-emerald-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-200' : 'hover:bg-emerald-50/70 text-slate-800')
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <LucideIcons.FileCode className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                         <span className="truncate">{q.name}</span>
                       </div>
+                      <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
+                        USER
+                      </span>
                     </button>
                   );
                 })
@@ -5793,32 +5778,24 @@ export default function ComponentsListPlugin({ gaw }) {
           )}
         </div>
 
-        {/* Section 4: Custom Reports */}
-        <div>
-          <div
-            onClick={() => toggleSection('reports')}
-            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
-              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
-            )}
-          >
-            <div className="flex items-center gap-1.5">
-              {collapsed.reports ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
-              <span>Custom Reports ({filteredReports.length})</span>
-            </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); gaw.workspace?.newReport(); }}
-              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+        {/* Section 3: Custom Reports & Views (Green Color Scheme) */}
+        {filteredReports.length > 0 && (
+          <div>
+            <div
+              onClick={() => toggleSection('reports')}
+              className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+                isDark ? 'text-emerald-400 hover:bg-slate-900' : 'text-emerald-700 hover:bg-slate-100'
+              )}
             >
-              <LucideIcons.Plus className="w-3 h-3" /> New
-            </button>
-          </div>
+              <div className="flex items-center gap-1.5">
+                {collapsed.reports ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+                <span>Custom Reports ({filteredReports.length})</span>
+              </div>
+            </div>
 
-          {!collapsed.reports && (
-            <div className="mt-1 space-y-0.5 pl-2">
-              {filteredReports.length === 0 ? (
-                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No reports created</div>
-              ) : (
-                filteredReports.map((r) => {
+            {!collapsed.reports && (
+              <div className="mt-1 space-y-0.5 pl-2">
+                {filteredReports.map((r) => {
                   const isActive = activeView === 'report:' + r.id;
                   return (
                     <button
@@ -5826,23 +5803,141 @@ export default function ComponentsListPlugin({ gaw }) {
                       onClick={() => gaw.navigation?.selectView('report:' + r.id)}
                       className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
                         isActive
-                          ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
-                          : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                          ? (isDark ? 'bg-emerald-900/40 text-emerald-300 font-semibold border border-emerald-700/50' : 'bg-emerald-100 text-emerald-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-200' : 'hover:bg-emerald-50/70 text-slate-800')
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <LucideIcons.FileText className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                        <LucideIcons.FileText className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                         <span className="truncate">{r.name}</span>
                       </div>
+                      <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
+                        USER
+                      </span>
                     </button>
                   );
-                })
-              )}
-            </div>
-          )}
-        </div>
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Section 5: Tools & Workspace */}
+        {/* Section 4: User Plugins (Green Color Scheme) */}
+        {filteredUserPlugins.length > 0 && (
+          <div>
+            <div
+              className={'flex items-center justify-between px-2 py-1 font-bold uppercase text-[10px] tracking-wider ' + (
+                isDark ? 'text-emerald-400' : 'text-emerald-700'
+              )}
+            >
+              <span>User Micro-Apps ({filteredUserPlugins.length})</span>
+            </div>
+            <div className="mt-1 space-y-0.5 pl-2">
+              {filteredUserPlugins.map((p) => {
+                const isActive = activeView === 'plugin:' + p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => gaw.navigation?.openPlugin(p.id)}
+                    className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                      isActive
+                        ? (isDark ? 'bg-emerald-900/40 text-emerald-300 font-semibold border border-emerald-700/50' : 'bg-emerald-100 text-emerald-900 font-semibold')
+                        : (isDark ? 'hover:bg-slate-900 text-slate-200' : 'hover:bg-emerald-50/70 text-slate-800')
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <LucideIcons.Puzzle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <span className="truncate">{p.name}</span>
+                    </div>
+                    <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
+                      USER
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Section 5: System Tables & Plugins (Blue Color Scheme) */}
+        <div>
+          <div
+            onClick={() => toggleSection('plugins')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-blue-400 hover:bg-slate-900' : 'text-blue-700 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.plugins ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>System Items & Plugins ({filteredSystemPlugins.length + filteredSystemTables.length})</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); gaw.plugins?.openAddModal(); }}
+              className="text-blue-400 hover:text-blue-300 font-normal normal-case text-[11px] flex items-center gap-0.5"
+            >
+              <LucideIcons.Plus className="w-3 h-3" /> Add
+            </button>
+          </div>
+
+          {!collapsed.plugins && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              <button
+                onClick={() => gaw.navigation?.selectView('app_hub')}
+                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
+                  activeView === 'app_hub'
+                    ? (isDark ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30' : 'bg-blue-50 text-blue-700 font-semibold')
+                    : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
+                )}
+              >
+                <LucideIcons.LayoutGrid className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                <span className="truncate">All System Apps (App Hub)</span>
+              </button>
+
+              {/* System Plugins */}
+              {filteredSystemPlugins.map((p) => {
+                const isActive = activeView === 'plugin:' + p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => gaw.navigation?.openPlugin(p.id)}
+                    className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                      isActive
+                        ? (isDark ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30' : 'bg-blue-100 text-blue-900 font-semibold')
+                        : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <LucideIcons.Puzzle className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                      <span className="truncate">{p.name}</span>
+                    </div>
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">SYS</span>
+                  </button>
+                );
+              })}
+
+              {/* System Tables */}
+              {filteredSystemTables.map((t) => {
+                const isActive = activeView === 'table:' + t.name;
+                return (
+                  <button
+                    key={t.name}
+                    onClick={() => gaw.navigation?.selectView('table:' + t.name)}
+                    className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                      isActive
+                        ? (isDark ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30' : 'bg-blue-100 text-blue-900 font-semibold')
+                        : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <LucideIcons.Table className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                      <span className="truncate">{t.name}</span>
+                    </div>
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">SYS</span>
+                  </button>
+                );
+              })}
+            </div>
+        {/* Section 6: Tools & Workspace */}
         <div>
           <div
             onClick={() => toggleSection('tools')}

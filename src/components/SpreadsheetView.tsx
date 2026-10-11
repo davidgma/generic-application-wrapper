@@ -502,11 +502,11 @@ export const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({
             <button
               onClick={onReturnToSource}
               className="flex items-center gap-1.5 px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-sm transition active:scale-95 cursor-pointer"
-              title={`Return to ${sourceInfo?.type === 'table' ? 'Table' : 'Query'} View (${sourceInfo?.name || 'View'})`}
+              title={`Return to ${sourceInfo?.type === 'table' ? 'Table' : sourceInfo?.type === 'query' ? 'Query' : 'Query or Table'} View (${sourceInfo?.name || 'View'})`}
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>
-                Return to {sourceInfo?.type === 'table' ? 'Table' : 'Query'} View {sourceInfo?.name ? `(${sourceInfo.name.replace(/\.sql$/i, '')})` : ''}
+                Return to {sourceInfo?.type === 'table' ? 'Table View' : sourceInfo?.type === 'query' ? 'Query View' : 'Query or Table View'} {sourceInfo?.name ? `(${sourceInfo.name.replace(/\.sql$/i, '')})` : ''}
               </span>
             </button>
           )}
