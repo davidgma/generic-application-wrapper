@@ -342,4 +342,11 @@ declare module 'lucide-react' {
   const icons: { [key: string]: LucideIcon } & Record<string, any>;
   export default icons;
 }
+
+declare const LucideIcons: Record<string, any>;
+
+declare global {
+  const LucideIcons: Record<string, any>;
+}
+
 `;

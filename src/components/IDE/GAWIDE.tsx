@@ -11,6 +11,7 @@ import {
   Sparkles,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
   Eye,
   FolderOpen,
   ChevronDown,
@@ -380,6 +381,39 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     error?: string;
   }>({ valid: true });
 
+  // Monaco diagnostic marker statistics (errors & warnings)
+  const [markerStats, setMarkerStats] = useState({ errors: 0, warnings: 0 });
+
+  const updateMarkers = useCallback(() => {
+    if (!monacoRef.current || !editorRef.current) return;
+    const model = editorRef.current.getModel();
+    if (!model) {
+      setMarkerStats({ errors: 0, warnings: 0 });
+      return;
+    }
+    try {
+      const markers = monacoRef.current.editor.getModelMarkers({ resource: model.getUri() });
+      let errors = 0;
+      let warnings = 0;
+      markers.forEach((m: any) => {
+        const severity = m.severity;
+        if (severity === monacoRef.current.MarkerSeverity.Error || severity === 8) {
+          errors++;
+        } else if (severity === monacoRef.current.MarkerSeverity.Warning || severity === 4) {
+          warnings++;
+        }
+      });
+
+      if (activeTab?.type === 'plugin' && !compileStatus.valid && compileStatus.error && errors === 0) {
+        errors = 1;
+      }
+
+      setMarkerStats({ errors, warnings });
+    } catch {
+      // ignore
+    }
+  }, [compileStatus, activeTab?.type]);
+
   // Preview panel toggle for plugins
   const [showLivePreview, setShowLivePreview] = useState<boolean>(false);
 
@@ -558,11 +592,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           (t) =>
             t.id === tabId ||
             (item.type === 'plugin' && item.id && t.pluginId === item.id) ||
-            (item.type === 'table' &&
-              cleanTableName &&
-              (t.tableName === cleanTableName || t.title.replace(/\.sql$/i, '') === cleanTableName)) ||
-            (item.type === 'query' && item.id && t.queryId === item.id) ||
-            (item.type === 'query' && cleanQueryName && t.title.replace(/\.sql$/i, '') === cleanQueryName) ||
+            (item.type === 'table' && cleanTableName && (t.tableName === cleanTableName || t.title.replace(/\.sql$/i, '') === cleanTableName)) ||
+            (item.type === 'query' && ((item.id && t.queryId === item.id) || (!item.id && cleanQueryName && t.title.replace(/\.sql$/i, '') === cleanQueryName))) ||
             (item.type === 'report' && item.id && t.reportId === item.id)
         );
         if (existing) {
@@ -750,6 +781,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   }, [activeTab?.content, activeTab?.type, activeTab?.pluginId]);
 
+  // Update diagnostic marker counts (errors & warnings)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateMarkers();
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [activeTabId, activeTab?.content, compileStatus, updateMarkers]);
+
   // Prettier Formatting Handler
   const handleFormatDocument = async () => {
     if (!activeTab || activeTab.type === 'types') return;
@@ -862,6 +901,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     editor.onDidChangeCursorPosition((e) => {
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
+
+    // Track Diagnostic Markers (Errors & Warnings)
+    try {
+      monaco.editor.onDidChangeMarkers(() => {
+        updateMarkers();
+      });
+    } catch {
+      // ignore
+    }
 
     // Keybinding: Ctrl+Shift+F to automatically save changes, run query, and show results in non-IDE view
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
@@ -3435,7 +3483,25 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             );
           })()}
 
-          <span className="opacity-80 hidden md:inline flex-shrink-0">0 errors, 0 warnings</span>
+          <button
+            type="button"
+            onClick={() => {
+              editorRef.current?.getAction('editor.action.marker.next')?.run();
+              editorRef.current?.focus();
+            }}
+            className="hidden md:flex items-center gap-1.5 opacity-90 hover:opacity-100 transition cursor-pointer text-[11px] flex-shrink-0"
+            title="Click to jump to next diagnostic error/warning in active file"
+          >
+            <span className={markerStats.errors > 0 ? "text-red-200 font-bold flex items-center gap-1" : "flex items-center gap-1 opacity-90"}>
+              <AlertCircle className="w-3.5 h-3.5 text-red-200" />
+              {markerStats.errors} {markerStats.errors === 1 ? 'error' : 'errors'}
+            </span>
+            <span>,</span>
+            <span className={markerStats.warnings > 0 ? "text-amber-200 font-bold flex items-center gap-1" : "flex items-center gap-1 opacity-90"}>
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-200" />
+              {markerStats.warnings} {markerStats.warnings === 1 ? 'warning' : 'warnings'}
+            </span>
+          </button>
         </div>
 
         <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">

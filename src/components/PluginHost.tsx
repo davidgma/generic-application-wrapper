@@ -10,6 +10,9 @@ import {
   DEFAULT_FILE_MANAGER_PLUGIN_CODE,
   DEFAULT_DATABASE_MANAGEMENT_PLUGIN_CODE,
   DEFAULT_HELLO_WORLD_PLUGIN_CODE,
+  DEFAULT_HEADER_NAVBAR_PLUGIN_CODE,
+  DEFAULT_COMPONENTS_LIST_PLUGIN_CODE,
+  DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
 } from '../engine/defaultPlugins';
 
 const DEFAULT_PLUGIN_REGISTRY: Record<string, string> = {
@@ -20,6 +23,9 @@ const DEFAULT_PLUGIN_REGISTRY: Record<string, string> = {
   plugin_file_manager: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
   plugin_database_management: DEFAULT_DATABASE_MANAGEMENT_PLUGIN_CODE,
   plugin_hello_world: DEFAULT_HELLO_WORLD_PLUGIN_CODE,
+  plugin_header_navbar: DEFAULT_HEADER_NAVBAR_PLUGIN_CODE,
+  plugin_components_list: DEFAULT_COMPONENTS_LIST_PLUGIN_CODE,
+  plugin_footer_status: DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
 };
 
 interface PluginHostProps {

@@ -995,7 +995,7 @@ export default function App() {
     toastApi.info(`Opened table creation query "${queryName}" in IDE. Review and click Run or press Ctrl+Shift+F to execute.`);
   }, [handleOpenInIDE, toastApi]);
 
-  // Add New Query in non-IDE view
+  // Add New Query
   const handleNewQuery = useCallback(() => {
     const engine = SQLiteEngine.getInstance();
     const existingQueries = engine.getSavedQueries().map((q) => q.name);
@@ -1006,7 +1006,7 @@ export default function App() {
       baseName = `New_Query_${counter}`;
     }
     const newId = `q_${baseName.toLowerCase()}_${Date.now()}`;
-    const firstTable = engine.getSchema().find((t) => !t.isSystem)?.name || 'customers';
+    const firstTable = engine.getSchema().find((t) => !t.isSystem && !engine.isSystemTable(t.name))?.name || 'customers';
     const querySql = `-- SQL Query\nSELECT * FROM "${firstTable}" LIMIT 25;\n`;
     const newQuery: SavedQuery = {
       id: newId,
@@ -1021,15 +1021,20 @@ export default function App() {
       [newId, baseName, newQuery.description, querySql, '{}', '{}', newQuery.created_at]
     );
     engine.notifyChange(true);
-    // Switch to IDE without running immediately
-    handleOpenInIDE({
-      type: 'query',
-      id: newId,
-      name: baseName,
-      code: querySql,
-    });
+    refreshDatabaseState();
+
+    if (activeView === 'ide') {
+      handleOpenInIDE({
+        type: 'query',
+        id: newId,
+        name: baseName,
+        code: querySql,
+      });
+    } else {
+      handleSelectQuery(newQuery);
+    }
     toastApi.info(`Created query "${baseName}". Edit and click Run or press Ctrl+Shift+F to execute.`);
-  }, [handleOpenInIDE, toastApi]);
+  }, [activeView, handleOpenInIDE, handleSelectQuery, refreshDatabaseState, toastApi]);
 
   // Correspondence: Run query from IDE, execute in SQLite, dynamically update side pane, and show in non-IDE view
   const handleRunAndExitToNonIDE = useCallback(
@@ -1320,6 +1325,31 @@ export default function App() {
           eventBusApi.emit('view_changed', route, route);
         },
         selectView: (v: string) => {
+          if (v.startsWith('query:')) {
+            const qId = v.replace('query:', '');
+            const engine = SQLiteEngine.getInstance();
+            const q = engine.getSavedQueries().find((x) => x.id === qId);
+            if (q) {
+              handleSelectQuery(q);
+              eventBusApi.emit('view_changed', v, 'view');
+              return;
+            }
+          } else if (v.startsWith('table:')) {
+            const tName = v.replace('table:', '');
+            handleSelectTable(tName);
+            eventBusApi.emit('view_changed', v, 'view');
+            return;
+          } else if (v.startsWith('report:')) {
+            const rId = v.replace('report:', '');
+            const engine = SQLiteEngine.getInstance();
+            const r = engine.getSavedReports().find((x) => x.id === rId);
+            if (r) {
+              handleSelectReport(r);
+              eventBusApi.emit('view_changed', v, 'view');
+              return;
+            }
+          }
+
           setActiveView(v);
           if (v.startsWith('plugin:')) {
             setActiveRoute('plugins');

@@ -88,6 +88,17 @@ export class FileStorageEngine {
     SQLiteEngine.getInstance().setOnDatabaseReset((name) => {
       this.resetActiveFile(name);
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', () => {
+        this.checkAndReconcileLocal();
+      });
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.checkAndReconcileLocal();
+        }
+      });
+    }
   }
 
   public static getInstance(): FileStorageEngine {
@@ -657,11 +668,13 @@ export class FileStorageEngine {
   private startAutoSync(): void {
     if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
 
-    if (!this.isAutoSyncEnabled || this.autoSyncIntervalSec <= 0) return;
+    // Poll every 3 seconds if local fileHandle exists or autoSync is enabled
+    const intervalSec = this.fileHandle ? Math.min(3, this.autoSyncIntervalSec) : this.autoSyncIntervalSec;
+    if (intervalSec <= 0) return;
 
     this.autoSyncTimer = setInterval(async () => {
       await this.checkAndReconcileLocal();
-    }, this.autoSyncIntervalSec * 1000);
+    }, intervalSec * 1000);
   }
 
   public async checkAndReconcileLocal(): Promise<void> {
@@ -683,7 +696,7 @@ export class FileStorageEngine {
         (lastSyncedInt === null || internalModified > lastSyncedInt);
 
       const externalHasChanged =
-        lastSyncedExt !== null && externalModified > lastSyncedExt;
+        lastSyncedExt === null || externalModified > lastSyncedExt;
 
       // Rule 1: If neither state has changed, do nothing
       if (!internalHasChanged && !externalHasChanged) {
@@ -727,6 +740,7 @@ export class FileStorageEngine {
         const binary = new Uint8Array(buffer);
         const engine = SQLiteEngine.getInstance();
         engine.loadBinary(binary, file.name);
+        engine.notifyChange(true);
 
         this.lastModifiedDisk = file.lastModified;
         this.lastLocalSyncExternalTime = file.lastModified;

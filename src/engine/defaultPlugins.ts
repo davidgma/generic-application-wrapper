@@ -5340,6 +5340,7 @@ export default function FileManagerPlugin({ gaw }) {
 `;
 
 export const DEFAULT_HEADER_NAVBAR_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+import * as LucideIcons from 'lucide-react';
 
 export default function HeaderNavbarPlugin({ gaw }) {
   const [, setTick] = useState(0);
@@ -5376,15 +5377,15 @@ export default function HeaderNavbarPlugin({ gaw }) {
   }, [gaw.plugins, gaw.plugins?.getAll]);
 
   const devNavItems = [
-    { id: 'file', label: 'File', icon: 'FolderOpen' },
-    { id: 'view', label: 'View', icon: 'LayoutGrid' },
-    { id: 'database', label: 'Database', icon: 'Database' },
-    { id: 'plugins', label: 'Plugins', icon: 'Puzzle' },
-    { id: 'help', label: 'Help', icon: 'HelpCircle' },
+    { id: 'file', label: 'File', icon: 'FolderOpen', isView: false },
+    { id: 'view', label: 'View', icon: 'LayoutGrid', isView: false },
+    { id: 'database', label: 'Database', icon: 'Database', isView: false },
+    { id: 'plugins', label: 'Plugins', icon: 'Puzzle', isView: false },
+    { id: 'help', label: 'Help', icon: 'HelpCircle', isView: false },
   ];
 
   const appNavItems = useMemo(() => {
-    const items = [{ id: 'file', label: 'Files', icon: 'FolderOpen' }];
+    const items = [{ id: 'file', label: 'Files', icon: 'FolderOpen', isView: false }];
     if (userPlugins.length === 1) {
       items.push({ id: 'plugin:' + userPlugins[0].id, label: userPlugins[0].name, icon: 'Sparkles', isView: true });
     } else if (userPlugins.length > 1 && userPlugins.length <= 4) {
@@ -5539,6 +5540,7 @@ export default function HeaderNavbarPlugin({ gaw }) {
 `;
 
 export const DEFAULT_COMPONENTS_LIST_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+import * as LucideIcons from 'lucide-react';
 
 export default function ComponentsListPlugin({ gaw }) {
   const [, setTick] = useState(0);
@@ -5899,6 +5901,7 @@ export default function ComponentsListPlugin({ gaw }) {
 `;
 
 export const DEFAULT_FOOTER_STATUS_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import * as LucideIcons from 'lucide-react';
 
 export default function FooterStatusPlugin({ gaw }) {
   const [, setTick] = useState(0);
