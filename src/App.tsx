@@ -23,11 +23,9 @@ import { DropboxModal } from './components/DropboxModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ConflictDialog } from './components/ConflictDialog';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { ViewPane } from './components/panes/ViewPane';
 import { DatabasePane } from './components/panes/DatabasePane';
 import { PluginsPane } from './components/panes/PluginsPane';
 import { HelpPane } from './components/panes/HelpPane';
-import { AppHubPane } from './components/panes/AppHubPane';
 import { DEFAULT_HELP_PLUGIN_CODE } from './engine/defaultPlugins';
 import { FiveRegionLayout } from './components/FiveRegionLayout';
 
@@ -71,9 +69,9 @@ export default function App() {
   }, [theme]);
 
   // Navigation: Active Route & Active View
-  // Routes: 'file' | 'view' | 'database' | 'plugins' | 'help'
-  // Views: 'file', 'view', 'database', 'plugins', 'help', 'app_hub', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
-  const [activeRoute, setActiveRoute] = useState<'file' | 'view' | 'database' | 'plugins' | 'help'>('file');
+  // Routes: 'file' | 'database' | 'plugins' | 'help'
+  // Views: 'file', 'database', 'plugins', 'help', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
+  const [activeRoute, setActiveRoute] = useState<'file' | 'database' | 'plugins' | 'help'>('file');
   const [activeView, setActiveView] = useState<string>('plugin:plugin_file_manager');
 
   // Dev / App mode state (persisted to localStorage)
@@ -271,7 +269,7 @@ export default function App() {
         setLastAppView(activeView);
         safeStorage.setItem('gaw_last_app_view', activeView);
 
-        const targetView = lastDevView || 'view';
+        const targetView = lastDevView && lastDevView !== 'view' && lastDevView !== 'app_hub' ? lastDevView : 'plugin:plugin_file_manager';
         setMode('dev');
         safeStorage.setItem('gaw_mode', 'dev');
         setActiveView(targetView);
@@ -282,10 +280,10 @@ export default function App() {
           targetView.startsWith('table:') ||
           targetView.startsWith('query:') ||
           targetView.startsWith('report:') ||
-          targetView === 'view'
+          targetView === 'spreadsheet'
         ) {
-          setActiveRoute('view');
-          navigateTo('view', targetView);
+          setActiveRoute('file');
+          navigateTo('file', targetView);
         } else if (targetView === 'file' || targetView === 'plugin:plugin_file_manager') {
           setActiveRoute('file');
           setActiveView('plugin:plugin_file_manager');
@@ -297,8 +295,8 @@ export default function App() {
           setActiveRoute('plugins');
           navigateTo('plugins', 'plugins');
         } else if (targetView === 'ide') {
-          setActiveRoute('view');
-          navigateTo('view', 'ide');
+          setActiveRoute('file');
+          navigateTo('file', 'ide');
         } else if (targetView === 'help' || targetView === 'plugin:plugin_help') {
           setActiveRoute('help');
           navigateTo('help', 'plugin:plugin_help');
@@ -772,8 +770,8 @@ export default function App() {
         });
       }
       setActiveView('ide');
-      setActiveRoute('view');
-      navigateTo('view', 'ide');
+      setActiveRoute('file');
+      navigateTo('file', 'ide');
     },
     [navigateTo]
   );
@@ -916,9 +914,9 @@ export default function App() {
       });
       setActiveQueryTitle(`Table: ${tableName}`);
       setActiveView(`table:${tableName}`);
-      setActiveRoute('view');
+      setActiveRoute('file');
       if (updateHash) {
-        navigateTo('view', `table:${tableName}`);
+        navigateTo('file', `table:${tableName}`);
       }
     } catch (err: any) {
       toastApi.error('Error opening table: ' + err.message);
@@ -939,11 +937,11 @@ export default function App() {
         setActiveQueryResult(null);
       }
       setActiveView(`query:${q.id}`);
-      setActiveRoute('view');
+      setActiveRoute('file');
       setLastDevView(`query:${q.id}`);
       safeStorage.setItem('gaw_last_dev_view', `query:${q.id}`);
       if (updateHash) {
-        navigateTo('view', `query:${q.id}`);
+        navigateTo('file', `query:${q.id}`);
       }
     } catch (err: any) {
       toastApi.error('Error running query: ' + err.message);
@@ -1066,10 +1064,10 @@ export default function App() {
       setActiveSavedQuery(sq);
       setActiveQueryTitle(info.name);
       setActiveView(`query:${info.id}`);
-      setActiveRoute('view');
+      setActiveRoute('file');
       setLastDevView(`query:${info.id}`);
       safeStorage.setItem('gaw_last_dev_view', `query:${info.id}`);
-      navigateTo('view', `query:${info.id}`);
+      navigateTo('file', `query:${info.id}`);
     },
     [refreshDatabaseState, navigateTo]
   );
@@ -1093,11 +1091,11 @@ export default function App() {
   // Select Report
   const handleSelectReport = useCallback((r: SavedReport, updateHash: boolean = true) => {
     setActiveView(`report:${r.id}`);
-    setActiveRoute('view');
+    setActiveRoute('file');
     setLastDevView(`report:${r.id}`);
     safeStorage.setItem('gaw_last_dev_view', `report:${r.id}`);
     if (updateHash) {
-      navigateTo('view', `report:${r.id}`);
+      navigateTo('file', `report:${r.id}`);
     }
   }, [navigateTo]);
 
@@ -1117,8 +1115,8 @@ export default function App() {
       ) {
         spreadsheetReturnTargetRef.current = null;
         setActiveView('spreadsheet');
-        setActiveRoute('view');
-        navigateTo('view', 'spreadsheet');
+        setActiveRoute('file');
+        navigateTo('file', 'spreadsheet');
         return;
       }
 
@@ -1157,7 +1155,7 @@ export default function App() {
               if (results.length > 0) setActiveQueryResult(results[0]);
               setActiveQueryTitle(target.name || 'Ad-hoc Query');
               setActiveView('query:adhoc');
-              setActiveRoute('view');
+              setActiveRoute('file');
               return;
             } catch (err: any) {
               toastApi.error('Error running query: ' + err.message);
@@ -1175,10 +1173,17 @@ export default function App() {
       }
 
       // Default fallback if no specific target item
-      const returnView = lastDevView && lastDevView !== 'ide' ? lastDevView : 'view';
+      const returnView = lastDevView && lastDevView !== 'ide' && lastDevView !== 'view' && lastDevView !== 'app_hub'
+        ? lastDevView
+        : 'plugin:plugin_file_manager';
       setActiveView(returnView);
-      setActiveRoute('view');
-      navigateTo('view', returnView);
+      if (returnView.startsWith('plugin:')) {
+        setActiveRoute('plugins');
+        navigateTo('plugins', returnView);
+      } else {
+        setActiveRoute('file');
+        navigateTo('file', returnView);
+      }
     },
     [currentIdeTarget, lastDevView, handleSelectPlugin, handleSelectTable, handleSelectQuery, handleSelectReport, navigateTo, toastApi]
   );
@@ -1243,17 +1248,17 @@ export default function App() {
       setSpreadsheetSource(src);
     }
     setActiveView('spreadsheet');
-    setActiveRoute('view');
+    setActiveRoute('file');
     if (updateHash) {
-      navigateTo('view', 'spreadsheet');
+      navigateTo('file', 'spreadsheet');
     }
   }, [activeView, activeSavedQuery, activeQueryTitle, navigateTo]);
 
   // Return to Query or Table view from Spreadsheet View
   const handleReturnFromSpreadsheet = useCallback(() => {
     if (!spreadsheetSource) {
-      setActiveView('view');
-      navigateTo('view', 'view');
+      setActiveView('plugin:plugin_file_manager');
+      navigateTo('file', 'plugin:plugin_file_manager');
       return;
     }
     const engine = SQLiteEngine.getInstance();
@@ -1266,12 +1271,12 @@ export default function App() {
       if (q) {
         handleSelectQuery(q);
       } else {
-        setActiveView('view');
-        navigateTo('view', 'view');
+        setActiveView('plugin:plugin_file_manager');
+        navigateTo('file', 'plugin:plugin_file_manager');
       }
     } else {
-      setActiveView('view');
-      navigateTo('view', 'view');
+      setActiveView('plugin:plugin_file_manager');
+      navigateTo('file', 'plugin:plugin_file_manager');
     }
   }, [spreadsheetSource, handleSelectTable, handleSelectQuery, navigateTo]);
 
@@ -1322,22 +1327,41 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [activeView, currentIdeTarget, handleExitIDE, handleEnterIDEFromCurrentView, handleOpenDefinitionFromSpreadsheet]);
 
+  // Global Shift+Ctrl+N shortcut: In Dev Mode, toggle Components List navigation pane (or IDE sidebar in IDE mode)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key === 'N' || e.key === 'n')
+      ) {
+        if (mode !== 'dev') {
+          // Pass-through in App Mode to browser or user plugin
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (activeView === 'ide') {
+          eventBusApi.emit('ide_toggle_sidebar');
+        } else {
+          handleToggleSidebar();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [mode, activeView, handleToggleSidebar, eventBusApi]);
+
   // Hash route parsing and synchronization
   useEffect(() => {
     const parseHash = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').trim();
-      if (!hash || hash === 'file' || hash === 'plugin/plugin_file_manager') {
+      if (!hash || hash === 'file' || hash === 'plugin/plugin_file_manager' || hash === 'view' || hash === 'app_hub') {
         setActiveRoute('file');
         setActiveView('plugin:plugin_file_manager');
         if (!window.location.hash || window.location.hash === '#') {
           window.location.hash = '#file';
         }
-      } else if (hash === 'view') {
-        setActiveRoute('view');
-        setActiveView('view');
-      } else if (hash === 'app_hub') {
-        setActiveRoute('plugins');
-        setActiveView('app_hub');
       } else if (hash === 'database' || hash === 'plugin/plugin_database_management') {
         setActiveRoute('database');
         setActiveView('plugin:plugin_database_management');
@@ -1348,10 +1372,10 @@ export default function App() {
         setActiveRoute('help');
         setActiveView('plugin:plugin_help');
       } else if (hash === 'spreadsheet') {
-        setActiveRoute('view');
+        setActiveRoute('file');
         setActiveView('spreadsheet');
       } else if (hash.startsWith('ide')) {
-        setActiveRoute('view');
+        setActiveRoute('file');
         setActiveView('ide');
       } else if (hash.startsWith('table/')) {
         const tName = hash.replace('table/', '');
@@ -1362,12 +1386,12 @@ export default function App() {
         if (q) {
           handleSelectQuery(q, false);
         } else {
-          setActiveRoute('view');
+          setActiveRoute('file');
           setActiveView(`query:${qId}`);
         }
       } else if (hash.startsWith('report/')) {
         const rId = hash.replace('report/', '');
-        setActiveRoute('view');
+        setActiveRoute('file');
         setActiveView(`report:${rId}`);
       } else if (hash.startsWith('plugin/')) {
         const pId = hash.replace('plugin/', '');
@@ -1430,13 +1454,13 @@ export default function App() {
             const q = engine.getSavedQueries().find((x) => x.id === qId);
             if (q) {
               handleSelectQuery(q);
-              eventBusApi.emit('view_changed', v, 'view');
+              eventBusApi.emit('view_changed', v, 'file');
               return;
             }
           } else if (v.startsWith('table:')) {
             const tName = v.replace('table:', '');
             handleSelectTable(tName);
-            eventBusApi.emit('view_changed', v, 'view');
+            eventBusApi.emit('view_changed', v, 'file');
             return;
           } else if (v.startsWith('report:')) {
             const rId = v.replace('report:', '');
@@ -1444,7 +1468,7 @@ export default function App() {
             const r = engine.getSavedReports().find((x) => x.id === rId);
             if (r) {
               handleSelectReport(r);
-              eventBusApi.emit('view_changed', v, 'view');
+              eventBusApi.emit('view_changed', v, 'file');
               return;
             }
           }
@@ -1468,9 +1492,9 @@ export default function App() {
         openSpreadsheet: (data?: any, sheetName?: string) => handleOpenSpreadsheet(data, sheetName),
         openReport: (repId: string) => {
           setActiveView(`report:${repId}`);
-          setActiveRoute('view');
-          navigateTo('view', `report:${repId}`);
-          eventBusApi.emit('view_changed', `report:${repId}`, 'view');
+          setActiveRoute('file');
+          navigateTo('file', `report:${repId}`);
+          eventBusApi.emit('view_changed', `report:${repId}`, 'file');
         },
         openPlugin: (plgId: string) => {
           setActiveView(`plugin:${plgId}`);
@@ -1877,27 +1901,6 @@ export default function App() {
         theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
-      {/* Pane 2: View Hub */}
-      {activeRoute === 'view' && activeView === 'view' && (
-        <ViewPane
-          theme={theme}
-          tables={tables}
-          queries={queries}
-          reports={reports}
-          plugins={plugins}
-          isVSCodeMode={isVSCodeMode}
-          isSidebarOpen={sidebarOpen}
-          onToggleSidebar={handleToggleSidebar}
-          onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-          onOpenIDE={handleOpenInIDE}
-          onToggleVSCodeMode={handleToggleVSCodeMode}
-          onSelectView={(v) => {
-            setActiveView(v);
-            navigateTo('view', v);
-          }}
-        />
-      )}
-
       {/* Pane 3: Database Hub */}
       {activeRoute === 'database' && activeView === 'database' && (
         <DatabasePane
@@ -1916,7 +1919,8 @@ export default function App() {
           }}
           onSelectView={(v) => {
             setActiveView(v);
-            navigateTo('view', v);
+            if (v.startsWith('plugin:')) navigateTo('plugins', v);
+            else navigateTo('file', v);
           }}
           onToast={addToast}
         />
@@ -1954,24 +1958,6 @@ export default function App() {
             onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' })}
           />
         </div>
-      )}
-
-      {/* View 0: App Hub (List of User Plugins in App Mode) */}
-      {activeView === 'app_hub' && (
-        <AppHubPane
-          theme={theme}
-          plugins={plugins}
-          appName={appSettings.appName}
-          appDescription={appSettings.appDescription}
-          onSelectPlugin={(p) => {
-            setActiveView(`plugin:${p.id}`);
-            setActiveRoute('plugins');
-            setLastAppView(`plugin:${p.id}`);
-            safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
-            navigateTo('plugins', `plugin:${p.id}`);
-          }}
-          onSwitchToDev={() => handleToggleMode('dev')}
-        />
       )}
 
       {/* View 1: Active Dynamic TSX Plugin */}

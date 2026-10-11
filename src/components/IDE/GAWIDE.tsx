@@ -123,6 +123,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   // Monaco IDE Layout state
   const [activeActivity, setActiveActivity] = useState<ActivityBarTab>('explorer');
   const [isPrimarySidebarOpen, setIsPrimarySidebarOpen] = useState(true);
+
+  useEffect(() => {
+    const unsub = gawContext?.eventBus?.on('ide_toggle_sidebar', () => {
+      setIsPrimarySidebarOpen((prev) => !prev);
+    });
+    return () => {
+      unsub?.();
+    };
+  }, [gawContext?.eventBus]);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
@@ -1044,8 +1053,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () => {
       setShowCommandPalette(true);
     });
-    // Ctrl+B: Toggle Sidebar
+    // Ctrl+B / Shift+Ctrl+N: Toggle Sidebar
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
+      setIsPrimarySidebarOpen((prev) => !prev);
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyN, () => {
       setIsPrimarySidebarOpen((prev) => !prev);
     });
     // Alt+N: New Query Tab

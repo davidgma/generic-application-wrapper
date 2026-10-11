@@ -5378,7 +5378,6 @@ export default function HeaderNavbarPlugin({ gaw }) {
 
   const devNavItems = [
     { id: 'file', label: 'File', icon: 'FolderOpen', isView: false },
-    { id: 'view', label: 'View', icon: 'LayoutGrid', isView: false },
     { id: 'database', label: 'Database', icon: 'Database', isView: false },
     { id: 'plugins', label: 'Plugins', icon: 'Puzzle', isView: false },
     { id: 'help', label: 'Help', icon: 'HelpCircle', isView: false },
@@ -5388,12 +5387,8 @@ export default function HeaderNavbarPlugin({ gaw }) {
     const items = [{ id: 'file', label: 'Files', icon: 'FolderOpen', isView: false }];
     if (userPlugins.length === 1) {
       items.push({ id: 'plugin:' + userPlugins[0].id, label: userPlugins[0].name, icon: 'Sparkles', isView: true });
-    } else if (userPlugins.length > 1 && userPlugins.length <= 4) {
+    } else if (userPlugins.length > 1) {
       userPlugins.forEach(p => items.push({ id: 'plugin:' + p.id, label: p.name, icon: 'Sparkles', isView: true }));
-      items.push({ id: 'app_hub', label: 'All Panes', icon: 'LayoutGrid', isView: true });
-    } else if (userPlugins.length > 4) {
-      userPlugins.slice(0, 3).forEach(p => items.push({ id: 'plugin:' + p.id, label: p.name, icon: 'Sparkles', isView: true }));
-      items.push({ id: 'app_hub', label: 'All Panes', icon: 'LayoutGrid', isView: true });
     }
     return items;
   }, [userPlugins]);
@@ -5882,18 +5877,6 @@ export default function ComponentsListPlugin({ gaw }) {
 
           {!collapsed.plugins && (
             <div className="mt-1 space-y-0.5 pl-2">
-              <button
-                onClick={() => gaw.navigation?.selectView('app_hub')}
-                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
-                  activeView === 'app_hub'
-                    ? (isDark ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30' : 'bg-blue-50 text-blue-700 font-semibold')
-                    : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
-                )}
-              >
-                <LucideIcons.LayoutGrid className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-                <span className="truncate">All System Apps (App Hub)</span>
-              </button>
-
               {/* System Plugins */}
               {filteredSystemPlugins.map((p) => {
                 const isActive = activeView === 'plugin:' + p.id;
