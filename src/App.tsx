@@ -10,9 +10,6 @@ import { ConflictDetails, StorageMetadata } from './types/storage';
 import { RecentFilesManager } from './engine/recentFiles';
 import { safeStorage } from './utils/storage';
 
-import { Navbar } from './components/Navbar';
-import { Sidebar } from './components/Sidebar';
-import { StatusBar } from './components/StatusBar';
 import { QueryGrid } from './components/QueryGrid';
 import { MultiQueryResultsView } from './components/MultiQueryResultsView';
 import { GAWIDE, TargetTabInfo } from './components/IDE/GAWIDE';
@@ -1309,20 +1306,58 @@ export default function App() {
       },
       toast: toastApi,
       dialog: dialogApi,
+      theme,
+      mode,
+      activeRoute,
+      activeView,
+      appName: appSettings.appName,
+      appDescription: appSettings.appDescription,
       navigation: {
-        navigate: (route) => setActiveView(route),
-        openQuery: (sql) => {
-          setActiveView('ide');
+        navigate: (route: string) => {
+          setActiveRoute(route as any);
+          setActiveView(route);
+          navigateTo(route, route);
+          eventBusApi.emit('view_changed', route, route);
         },
-        openSpreadsheet: (data, sheetName) => handleOpenSpreadsheet(data, sheetName),
-        openReport: (repId) => setActiveView(`report:${repId}`),
-        openPlugin: (plgId) => setActiveView(`plugin:${plgId}`),
-        openIDE: (tab) => handleOpenInIDE(tab),
+        selectView: (v: string) => {
+          setActiveView(v);
+          if (v.startsWith('plugin:')) {
+            setActiveRoute('plugins');
+            navigateTo('plugins', v);
+          } else if (v === 'app_hub') {
+            setActiveRoute('plugins');
+            navigateTo('plugins', 'app_hub');
+          } else {
+            navigateTo(activeRoute, v);
+          }
+          eventBusApi.emit('view_changed', v, activeRoute);
+        },
+        openQuery: (sql: string) => {
+          setActiveView('ide');
+          eventBusApi.emit('view_changed', 'ide', activeRoute);
+        },
+        openSpreadsheet: (data?: any, sheetName?: string) => handleOpenSpreadsheet(data, sheetName),
+        openReport: (repId: string) => {
+          setActiveView(`report:${repId}`);
+          setActiveRoute('view');
+          navigateTo('view', `report:${repId}`);
+          eventBusApi.emit('view_changed', `report:${repId}`, 'view');
+        },
+        openPlugin: (plgId: string) => {
+          setActiveView(`plugin:${plgId}`);
+          setActiveRoute('plugins');
+          navigateTo('plugins', `plugin:${plgId}`);
+          eventBusApi.emit('view_changed', `plugin:${plgId}`, 'plugins');
+        },
+        openIDE: (tab?: any) => handleOpenInIDE(tab),
         openAI: () => setShowAIModal(true),
         openSettings: () => setShowSettingsModal(true),
+        toggleTheme: handleToggleTheme,
+        setMode: (m: 'dev' | 'app') => handleToggleMode(m),
+        toggleVSCodeMode: handleToggleVSCodeMode,
+        isVSCodeMode: () => isVSCodeMode,
       },
       eventBus: eventBusApi,
-      theme,
       plugin: activePluginRecord,
       storage: {
         getMetadata: () => storageEngine.getMetadata(),
@@ -1460,6 +1495,17 @@ export default function App() {
         openSidebar: () => setSidebarOpen(true),
         setSidebarOpen: (open: boolean) => setSidebarOpen(open),
         isSidebarOpen: () => sidebarOpen,
+        getTables: () => tables,
+        getQueries: () => queries,
+        getReports: () => reports,
+        getPlugins: () => plugins,
+        newTable: handleNewTable,
+        newQuery: handleNewQuery,
+        newReport: () => {
+          setReportToEdit(null);
+          setShowReportBuilder(true);
+        },
+        deleteObject: handleDeleteObject,
         getRecentFiles: () => RecentFilesManager.getRecentFiles(),
         addRecentFile: (item) => {
           RecentFilesManager.addRecentFile(item);
@@ -1650,149 +1696,33 @@ export default function App() {
 
 
 
-  // 1. Top Area Content: Header navbar & active top plugin if present
+  // 1. Top Area Content: Active top plugin if present (default: Header and Navbar plugin)
   const topPlugin = activePluginsByArea.top;
-  const topContent = !isFullVSCode ? (
+  const topContent = !isFullVSCode && topPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0">
-        <Navbar
-          theme={theme}
-          mode={mode}
-          activeRoute={activeRoute}
-          activeView={activeView}
-          onSelectRoute={(route) => {
-            if (route === 'file') {
-              setActiveRoute('file');
-              setActiveView('plugin:plugin_file_manager');
-              navigateTo('file', 'plugin:plugin_file_manager');
-            } else if (route === 'help') {
-              setActiveRoute('help');
-              setActiveView('plugin:plugin_help');
-              navigateTo('help', 'plugin:plugin_help');
-            } else if (route === 'database') {
-              setActiveRoute('database');
-              setActiveView('plugin:plugin_database_management');
-              navigateTo('database', 'plugin:plugin_database_management');
-            } else if (route === 'plugins') {
-              setActiveRoute('plugins');
-              setActiveView('plugin:plugin_manager');
-              navigateTo('plugins', 'plugin:plugin_manager');
-            } else {
-              setActiveRoute(route as any);
-              setActiveView(route);
-              navigateTo(route, route);
-            }
-          }}
-          onSelectView={(v) => {
-            setActiveView(v);
-            if (v.startsWith('plugin:')) {
-              setActiveRoute('plugins');
-              navigateTo('plugins', v);
-              if (mode === 'app') {
-                setLastAppView(v);
-                safeStorage.setItem('gaw_last_app_view', v);
-              } else {
-                setLastDevView(v);
-                safeStorage.setItem('gaw_last_dev_view', v);
-              }
-            } else if (v === 'app_hub') {
-              setActiveRoute('plugins');
-              navigateTo('plugins', 'app_hub');
-              if (mode === 'app') {
-                setLastAppView('app_hub');
-                safeStorage.setItem('gaw_last_app_view', 'app_hub');
-              }
-            } else {
-              navigateTo(activeRoute, v);
-            }
-          }}
-          onThemeToggle={handleToggleTheme}
-          onModeToggle={handleToggleMode}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          appName={appSettings.appName}
-          appDescription={appSettings.appDescription}
-          userPlugins={userPlugins}
-        />
-      </div>
-      {topPlugin && (
-        <div className="flex-1 min-h-0 w-full overflow-hidden border-t border-slate-800">
-          <PluginHost
-            code={topPlugin.code}
-            pluginName={topPlugin.name}
-            pluginId={topPlugin.id}
-            theme={theme}
-            gawContext={gawContext}
-            onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: topPlugin.id, name: topPlugin.name })}
-          />
-        </div>
-      )}
+      <PluginHost
+        code={topPlugin.code}
+        pluginName={topPlugin.name}
+        pluginId={topPlugin.id}
+        theme={theme}
+        gawContext={gawContext}
+        onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: topPlugin.id, name: topPlugin.name })}
+      />
     </div>
   ) : null;
 
-  // 2. Left Area Content: Navigation sidebar panel or active left plugin
+  // 2. Left Area Content: Active left plugin if present (default: Components List plugin)
   const leftPlugin = activePluginsByArea.left;
-  const leftContent = !isFullVSCode && (leftPlugin || sidebarOpen) ? (
+  const leftContent = !isFullVSCode && sidebarOpen && leftPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden">
-      {leftPlugin ? (
-        <PluginHost
-          code={leftPlugin.code}
-          pluginName={leftPlugin.name}
-          pluginId={leftPlugin.id}
-          theme={theme}
-          gawContext={gawContext}
-          onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: leftPlugin.id, name: leftPlugin.name })}
-        />
-      ) : sidebarOpen ? (
-        <Sidebar
-          isOpen={sidebarOpen}
-          onToggle={handleToggleSidebar}
-          tables={tables}
-          queries={queries}
-          reports={reports}
-          plugins={plugins}
-          activeView={activeView}
-          mode={mode}
-          onSelectTable={(tableName) => {
-            handleSelectTable(tableName);
-          }}
-          onSelectQuery={(q) => {
-            handleSelectQuery(q);
-          }}
-          onSelectReport={(r) => {
-            setActiveView(`report:${r.id}`);
-            setActiveRoute('view');
-            navigateTo('view', `report:${r.id}`);
-          }}
-          onSelectPlugin={(p) => {
-            setActiveView(`plugin:${p.id}`);
-            setActiveRoute('plugins');
-            navigateTo('plugins', `plugin:${p.id}`);
-            if (mode === 'app') {
-              setLastAppView(`plugin:${p.id}`);
-              safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
-            } else {
-              setLastDevView(`plugin:${p.id}`);
-              safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
-            }
-          }}
-          onOpenSpreadsheet={() => handleOpenSpreadsheet()}
-          onOpenIDE={handleOpenInIDE}
-          onNewReport={() => {
-            setReportToEdit(null);
-            setShowReportBuilder(true);
-          }}
-          onNewTable={handleNewTable}
-          onNewQuery={handleNewQuery}
-          onEditReportVisual={(r) => {
-            setReportToEdit(r);
-            setShowReportBuilder(true);
-          }}
-          onDeleteObject={handleDeleteObject}
-          onAddPlugin={() => setShowAddPluginModal(true)}
-          onOpenAI={() => setShowAIModal(true)}
-          theme={theme}
-        />
-      ) : null}
+      <PluginHost
+        code={leftPlugin.code}
+        pluginName={leftPlugin.name}
+        pluginId={leftPlugin.id}
+        theme={theme}
+        gawContext={gawContext}
+        onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: leftPlugin.id, name: leftPlugin.name })}
+      />
     </div>
   ) : null;
 
@@ -2046,34 +1976,18 @@ export default function App() {
     </main>
   );
 
-  // 5. Bottom Area Content: Footer status bar and active bottom plugin if present
+  // 5. Bottom Area Content: Active bottom plugin if present (default: Footer and Status plugin)
   const bottomPlugin = activePluginsByArea.bottom;
-  const bottomContent = !isFullVSCode ? (
+  const bottomContent = !isFullVSCode && bottomPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden">
-      {bottomPlugin && (
-        <div className="flex-1 min-h-0 w-full overflow-hidden border-b border-slate-800">
-          <PluginHost
-            code={bottomPlugin.code}
-            pluginName={bottomPlugin.name}
-            pluginId={bottomPlugin.id}
-            theme={theme}
-            gawContext={gawContext}
-            onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: bottomPlugin.id, name: bottomPlugin.name })}
-          />
-        </div>
-      )}
-      <div className="flex-shrink-0">
-        <StatusBar
-          storageMeta={storageMeta}
-          tableCount={tables.length}
-          pluginCount={plugins.length}
-          theme={theme}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          isVSCodeMode={isVSCodeMode}
-          onToggleVSCodeMode={handleToggleVSCodeMode}
-          activeView={activeView}
-        />
-      </div>
+      <PluginHost
+        code={bottomPlugin.code}
+        pluginName={bottomPlugin.name}
+        pluginId={bottomPlugin.id}
+        theme={theme}
+        gawContext={gawContext}
+        onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: bottomPlugin.id, name: bottomPlugin.name })}
+      />
     </div>
   ) : null;
 

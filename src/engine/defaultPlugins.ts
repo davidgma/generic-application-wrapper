@@ -5335,7 +5335,659 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
       )}
     </div>
+}
   );
 }
 `;
+
+export const DEFAULT_HEADER_NAVBAR_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+
+export default function HeaderNavbarPlugin({ gaw }) {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const forceUpdate = () => setTick(t => t + 1);
+    const u1 = gaw.eventBus?.on('theme_changed', forceUpdate);
+    const u2 = gaw.eventBus?.on('view_changed', forceUpdate);
+    const u3 = gaw.eventBus?.on('mode_changed', forceUpdate);
+    const u4 = gaw.eventBus?.on('settings_changed', forceUpdate);
+    const u5 = gaw.eventBus?.on('db_changed', forceUpdate);
+    return () => { u1?.(); u2?.(); u3?.(); u4?.(); u5?.(); };
+  }, [gaw.eventBus]);
+
+  const currentTheme = gaw.theme || 'vs-dark';
+  const isDark = currentTheme === 'vs-dark';
+  const mode = gaw.mode || 'dev';
+  const activeRoute = gaw.activeRoute || 'file';
+  const activeView = gaw.activeView || '';
+
+  const appName = gaw.appName || 'New App';
+  const appDescription = gaw.appDescription || '';
+
+  const brandTitle = mode === 'app' ? (appName || 'App') : 'Gawkyy';
+  const brandSubtitle = mode === 'app' ? appDescription : 'Generic Application Wrapper';
+
+  const userPlugins = useMemo(() => {
+    try {
+      const all = gaw.plugins?.getAll() || [];
+      return all.filter(p => !p.is_system && !p.isSystem && p.enabled === 1);
+    } catch (e) {
+      return [];
+    }
+  }, [gaw.plugins, gaw.plugins?.getAll]);
+
+  const devNavItems = [
+    { id: 'file', label: 'File', icon: 'FolderOpen' },
+    { id: 'view', label: 'View', icon: 'LayoutGrid' },
+    { id: 'database', label: 'Database', icon: 'Database' },
+    { id: 'plugins', label: 'Plugins', icon: 'Puzzle' },
+    { id: 'help', label: 'Help', icon: 'HelpCircle' },
+  ];
+
+  const appNavItems = useMemo(() => {
+    const items = [{ id: 'file', label: 'Files', icon: 'FolderOpen' }];
+    if (userPlugins.length === 1) {
+      items.push({ id: 'plugin:' + userPlugins[0].id, label: userPlugins[0].name, icon: 'Sparkles', isView: true });
+    } else if (userPlugins.length > 1 && userPlugins.length <= 4) {
+      userPlugins.forEach(p => items.push({ id: 'plugin:' + p.id, label: p.name, icon: 'Sparkles', isView: true }));
+      items.push({ id: 'app_hub', label: 'All Panes', icon: 'LayoutGrid', isView: true });
+    } else if (userPlugins.length > 4) {
+      userPlugins.slice(0, 3).forEach(p => items.push({ id: 'plugin:' + p.id, label: p.name, icon: 'Sparkles', isView: true }));
+      items.push({ id: 'app_hub', label: 'All Panes', icon: 'LayoutGrid', isView: true });
+    }
+    return items;
+  }, [userPlugins]);
+
+  const navItems = mode === 'app' ? appNavItems : devNavItems;
+
+  const handleNavClick = (item) => {
+    if (item.isView) {
+      gaw.navigation?.selectView(item.id);
+    } else if (item.id === 'file') {
+      gaw.navigation?.selectView('plugin:plugin_file_manager');
+    } else if (item.id === 'help') {
+      gaw.navigation?.selectView('plugin:plugin_help');
+    } else if (item.id === 'database') {
+      gaw.navigation?.selectView('plugin:plugin_database_management');
+    } else if (item.id === 'plugins') {
+      gaw.navigation?.selectView('plugin:plugin_manager');
+    } else {
+      gaw.navigation?.navigate(item.id);
+    }
+  };
+
+  const renderIcon = (name) => {
+    const IconComp = LucideIcons[name] || LucideIcons.Sparkles;
+    return <IconComp className="w-3.5 h-3.5" />;
+  };
+
+  return (
+    <header className={'w-full h-full flex flex-wrap items-center justify-between px-3 py-2 border-b select-none transition-colors ' + (
+      isDark ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+    )}>
+      {/* Brand & Sidebar Toggle */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => gaw.workspace?.toggleSidebar()}
+          className={'p-1.5 rounded-lg transition active:scale-95 ' + (
+            isDark ? 'hover:bg-slate-800 text-slate-300 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
+          )}
+          title="Toggle Navigation Sidebar"
+        >
+          <LucideIcons.Menu className="w-4 h-4" />
+        </button>
+
+        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => handleNavClick({ id: 'file' })}>
+          <div className="w-7 h-7 rounded-lg overflow-hidden ring-1 ring-amber-400/50 bg-slate-900 flex items-center justify-center p-0.5 flex-shrink-0">
+            <img src="/gawkyy-cat-256x256.png" alt="Gawkyy Logo" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex flex-col">
+            <span className={'text-xs font-bold leading-tight flex items-center gap-1.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+              {brandTitle}
+              <span className={'text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded border ' + (
+                mode === 'dev'
+                  ? (isDark ? 'bg-amber-400/10 border-amber-400/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-700')
+                  : (isDark ? 'bg-indigo-400/10 border-indigo-400/30 text-indigo-400' : 'bg-indigo-50 border-indigo-300 text-indigo-700')
+              )}>
+                {mode === 'dev' ? 'DEV' : 'APP'}
+              </span>
+            </span>
+            {brandSubtitle && (
+              <span className={'text-[10px] truncate max-w-[180px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                {brandSubtitle}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <nav className="flex items-center gap-1 overflow-x-auto py-1">
+        {navItems.map((item) => {
+          const isActive = item.isView
+            ? activeView === item.id
+            : activeRoute === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item)}
+              className={'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition cursor-pointer active:scale-95 ' + (
+                isActive
+                  ? (isDark ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-indigo-600 text-white shadow-sm')
+                  : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/80' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100')
+              )}
+            >
+              {renderIcon(item.icon)}
+              <span className="whitespace-nowrap">{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Right Controls: Mode Toggle, Theme Toggle, Settings */}
+      <div className="flex items-center gap-2">
+        {/* Dev / App Mode Switcher */}
+        <div className={'flex items-center p-0.5 rounded-lg border text-[11px] font-medium ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+        )}>
+          <button
+            onClick={() => gaw.navigation?.setMode('dev')}
+            className={'px-2 py-0.5 rounded-md transition ' + (
+              mode === 'dev'
+                ? (isDark ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'bg-white text-slate-900 font-bold shadow-sm')
+                : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+            )}
+          >
+            Dev Mode
+          </button>
+          <button
+            onClick={() => gaw.navigation?.setMode('app')}
+            className={'px-2 py-0.5 rounded-md transition ' + (
+              mode === 'app'
+                ? (isDark ? 'bg-indigo-600 text-white font-bold shadow' : 'bg-indigo-600 text-white font-bold shadow-sm')
+                : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+            )}
+          >
+            App Mode
+          </button>
+        </div>
+
+        {/* Theme Toggle Button */}
+        <button
+          onClick={() => gaw.navigation?.toggleTheme()}
+          className={'p-1.5 rounded-lg border transition active:scale-95 ' + (
+            isDark ? 'bg-slate-900 border-slate-800 text-amber-400 hover:bg-slate-800' : 'bg-slate-100 border-slate-200 text-indigo-600 hover:bg-slate-200'
+          )}
+          title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+        >
+          {isDark ? <LucideIcons.Sun className="w-4 h-4" /> : <LucideIcons.Moon className="w-4 h-4" />}
+        </button>
+
+        {/* Settings Modal Trigger */}
+        <button
+          onClick={() => gaw.navigation?.openSettings()}
+          className={'p-1.5 rounded-lg border transition active:scale-95 ' + (
+            isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800' : 'bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+          )}
+          title="Open Settings"
+        >
+          <LucideIcons.Settings className="w-4 h-4" />
+        </button>
+      </div>
+    </header>
+  );
+}
+`;
+
+export const DEFAULT_COMPONENTS_LIST_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+
+export default function ComponentsListPlugin({ gaw }) {
+  const [, setTick] = useState(0);
+  const [search, setSearch] = useState('');
+  const [collapsed, setCollapsed] = useState({
+    plugins: false,
+    tables: false,
+    queries: false,
+    reports: false,
+    tools: false,
+  });
+
+  useEffect(() => {
+    const forceUpdate = () => setTick(t => t + 1);
+    const u1 = gaw.eventBus?.on('db_changed', forceUpdate);
+    const u2 = gaw.eventBus?.on('view_changed', forceUpdate);
+    const u3 = gaw.eventBus?.on('theme_changed', forceUpdate);
+    return () => { u1?.(); u2?.(); u3?.(); };
+  }, [gaw.eventBus]);
+
+  const isDark = (gaw.theme || 'vs-dark') === 'vs-dark';
+  const activeView = gaw.activeView || '';
+
+  const tables = useMemo(() => {
+    try {
+      return gaw.workspace?.getTables() || [];
+    } catch (e) {
+      return [];
+    }
+  }, [gaw.workspace, gaw.db]);
+
+  const queries = useMemo(() => {
+    try {
+      return gaw.workspace?.getQueries() || [];
+    } catch (e) {
+      return [];
+    }
+  }, [gaw.workspace, gaw.db]);
+
+  const reports = useMemo(() => {
+    try {
+      return gaw.workspace?.getReports() || [];
+    } catch (e) {
+      return [];
+    }
+  }, [gaw.workspace, gaw.db]);
+
+  const plugins = useMemo(() => {
+    try {
+      return gaw.plugins?.getAll() || [];
+    } catch (e) {
+      return [];
+    }
+  }, [gaw.plugins]);
+
+  const toggleSection = (sec) => {
+    setCollapsed(prev => ({ ...prev, [sec]: !prev[sec] }));
+  };
+
+  const filteredTables = tables.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredQueries = queries.filter(q => q.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredReports = reports.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredPlugins = plugins.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <aside className={'w-full h-full flex flex-col overflow-hidden border-r select-text font-sans text-xs ' + (
+      isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-800'
+    )}>
+      {/* Search Header */}
+      <div className={'p-2.5 border-b flex items-center justify-between gap-2 ' + (isDark ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white')}>
+        <div className={'relative flex-1 flex items-center rounded-lg border px-2 py-1 ' + (
+          isDark ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
+        )}>
+          <LucideIcons.Search className="w-3.5 h-3.5 text-slate-400 mr-1.5 flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="Search components..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-transparent text-xs focus:outline-none"
+          />
+        </div>
+        <button
+          onClick={() => gaw.workspace?.toggleSidebar()}
+          className={'p-1 rounded transition ' + (isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600')}
+          title="Collapse Sidebar"
+        >
+          <LucideIcons.X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Components List Container */}
+      <div className="flex-1 overflow-y-auto p-2 space-y-3">
+        {/* Section 1: Plugins */}
+        <div>
+          <div
+            onClick={() => toggleSection('plugins')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.plugins ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>Plugins ({filteredPlugins.length})</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); gaw.plugins?.openAddModal(); }}
+              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+            >
+              <LucideIcons.Plus className="w-3 h-3" /> Add
+            </button>
+          </div>
+
+          {!collapsed.plugins && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              <button
+                onClick={() => gaw.navigation?.selectView('app_hub')}
+                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
+                  activeView === 'app_hub'
+                    ? (isDark ? 'bg-indigo-600/30 text-indigo-400 font-semibold' : 'bg-indigo-50 text-indigo-700 font-semibold')
+                    : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
+                )}
+              >
+                <LucideIcons.LayoutGrid className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                <span className="truncate">All Plugins (App Hub)</span>
+              </button>
+
+              {filteredPlugins.map((p) => {
+                const isActive = activeView === 'plugin:' + p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => gaw.navigation?.openPlugin(p.id)}
+                    className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition group ' + (
+                      isActive
+                        ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
+                        : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <LucideIcons.Puzzle className={'w-3.5 h-3.5 flex-shrink-0 ' + (p.is_system ? 'text-amber-400' : 'text-indigo-400')} />
+                      <span className="truncate">{p.name}</span>
+                    </div>
+                    {p.is_system && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400/10 text-amber-400 border border-amber-400/20 font-mono">SYS</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: Database Tables */}
+        <div>
+          <div
+            onClick={() => toggleSection('tables')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.tables ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>Database Tables ({filteredTables.length})</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); gaw.workspace?.newTable(); }}
+              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+            >
+              <LucideIcons.Plus className="w-3 h-3" /> New
+            </button>
+          </div>
+
+          {!collapsed.tables && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              {filteredTables.length === 0 ? (
+                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No tables found</div>
+              ) : (
+                filteredTables.map((t) => {
+                  const isActive = activeView === 'table:' + t.name;
+                  return (
+                    <button
+                      key={t.name}
+                      onClick={() => gaw.navigation?.selectView('table:' + t.name)}
+                      className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                        isActive
+                          ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <LucideIcons.Table className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                        <span className="truncate">{t.name}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono">{t.columns?.length || 0} cols</span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 3: Saved Queries */}
+        <div>
+          <div
+            onClick={() => toggleSection('queries')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.queries ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>Saved Queries ({filteredQueries.length})</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); gaw.workspace?.newQuery(); }}
+              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+            >
+              <LucideIcons.Plus className="w-3 h-3" /> New
+            </button>
+          </div>
+
+          {!collapsed.queries && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              {filteredQueries.length === 0 ? (
+                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No saved queries</div>
+              ) : (
+                filteredQueries.map((q) => {
+                  const isActive = activeView === 'query:' + q.id;
+                  return (
+                    <button
+                      key={q.id}
+                      onClick={() => gaw.navigation?.selectView('query:' + q.id)}
+                      className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                        isActive
+                          ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <LucideIcons.FileCode className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <span className="truncate">{q.name}</span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 4: Custom Reports */}
+        <div>
+          <div
+            onClick={() => toggleSection('reports')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.reports ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>Custom Reports ({filteredReports.length})</span>
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); gaw.workspace?.newReport(); }}
+              className="text-indigo-500 hover:text-indigo-400 font-normal normal-case text-[11px] flex items-center gap-0.5"
+            >
+              <LucideIcons.Plus className="w-3 h-3" /> New
+            </button>
+          </div>
+
+          {!collapsed.reports && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              {filteredReports.length === 0 ? (
+                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No reports created</div>
+              ) : (
+                filteredReports.map((r) => {
+                  const isActive = activeView === 'report:' + r.id;
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => gaw.navigation?.selectView('report:' + r.id)}
+                      className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                        isActive
+                          ? (isDark ? 'bg-indigo-600/30 text-indigo-300 font-semibold' : 'bg-indigo-100 text-indigo-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <LucideIcons.FileText className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                        <span className="truncate">{r.name}</span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 5: Tools & Workspace */}
+        <div>
+          <div
+            onClick={() => toggleSection('tools')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-slate-400 hover:bg-slate-900' : 'text-slate-500 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.tools ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>Tools & Workspace</span>
+            </div>
+          </div>
+
+          {!collapsed.tools && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              <button
+                onClick={() => gaw.navigation?.openIDE()}
+                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
+                  activeView === 'ide'
+                    ? (isDark ? 'bg-blue-600/30 text-blue-300 font-semibold' : 'bg-blue-100 text-blue-900 font-semibold')
+                    : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                )}
+              >
+                <LucideIcons.FileCode className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                <span>Monaco Code IDE</span>
+              </button>
+
+              <button
+                onClick={() => gaw.navigation?.openSpreadsheet()}
+                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
+                  activeView === 'spreadsheet'
+                    ? (isDark ? 'bg-emerald-600/30 text-emerald-300 font-semibold' : 'bg-emerald-100 text-emerald-900 font-semibold')
+                    : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                )}
+              >
+                <LucideIcons.FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                <span>Spreadsheet Studio</span>
+              </button>
+
+              <button
+                onClick={() => gaw.navigation?.openAI()}
+                className={'w-full text-left px-2 py-1 rounded flex items-center gap-2 transition ' + (
+                  isDark ? 'hover:bg-slate-900 text-amber-400' : 'hover:bg-slate-200/70 text-amber-700'
+                )}
+              >
+                <LucideIcons.Sparkles className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 animate-pulse" />
+                <span>AI Spec Generator</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+`;
+
+export const DEFAULT_FOOTER_STATUS_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+
+export default function FooterStatusPlugin({ gaw }) {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const forceUpdate = () => setTick(t => t + 1);
+    const u1 = gaw.eventBus?.on('db_changed', forceUpdate);
+    const u2 = gaw.eventBus?.on('theme_changed', forceUpdate);
+    const u3 = gaw.eventBus?.on('storage_changed', forceUpdate);
+    return () => { u1?.(); u2?.(); u3?.(); };
+  }, [gaw.eventBus]);
+
+  const isDark = (gaw.theme || 'vs-dark') === 'vs-dark';
+  const meta = gaw.storage?.getMetadata() || { fileName: 'new_database.sqlite', fileSize: 0, syncStatus: 'clean', isAutoSyncEnabled: false, autoSyncIntervalSec: 0 };
+
+  const tableCount = gaw.workspace?.getTables()?.length || 0;
+  const pluginCount = gaw.plugins?.getAll()?.length || 0;
+
+  return (
+    <footer className={'w-full h-full flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono select-text overflow-hidden ' + (
+      isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-600'
+    )}>
+      {/* Left Diagnostics */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
+          <LucideIcons.Database className="w-3.5 h-3.5" />
+          <span>SQLite Wasm</span>
+        </div>
+
+        <div className="flex items-center gap-1 text-slate-300">
+          <LucideIcons.HardDrive className="w-3 h-3 text-slate-500" />
+          <span className="font-semibold text-white">{meta.fileName}</span>
+          <span className="text-slate-500">({(meta.fileSize / 1024).toFixed(1)} KB)</span>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-1 text-slate-400">
+          <span>{tableCount} tables</span>
+          <span>•</span>
+          <span>{pluginCount} plugins</span>
+        </div>
+      </div>
+
+      {/* Center: Full-Screen Monaco IDE Toggle */}
+      <button
+        onClick={() => gaw.navigation?.toggleVSCodeMode()}
+        className={'flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-sans font-medium transition border cursor-pointer active:scale-95 ' + (
+          gaw.navigation?.isVSCodeMode?.()
+            ? 'bg-blue-600 text-white border-blue-400 shadow-sm'
+            : (isDark ? 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700/80 hover:text-white' : 'bg-white hover:bg-slate-50 text-cyan-700 border-slate-300')
+        )}
+        title="Toggle between standard Gawkyy shell and full Monaco IDE layout"
+      >
+        <LucideIcons.Code2 className="w-3.5 h-3.5 text-cyan-400" />
+        <span>Open Monaco IDE</span>
+      </button>
+
+      {/* Right Sync Diagnostics */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => gaw.navigation?.openSettings()}
+          className="flex items-center gap-1 hover:text-white transition"
+          title="Click to configure Auto-Save interval"
+        >
+          <LucideIcons.Clock className="w-3 h-3 text-slate-500" />
+          <span>
+            {meta.isAutoSyncEnabled
+              ? 'Auto-Sync: ' + meta.autoSyncIntervalSec + 's'
+              : 'Auto-Sync: Off'}
+          </span>
+        </button>
+
+        <div className="flex items-center gap-1">
+          {meta.syncStatus === 'dirty' ? (
+            <span className="inline-flex items-center gap-1 text-amber-400 font-bold" title="Unsaved user modifications">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              Unsaved
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-slate-500 font-medium" title="Synced">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Synced
+            </span>
+          )}
+        </div>
+      </div>
+    </footer>
+  );
+}
+`;
+
 
