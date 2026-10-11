@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Table as TableIcon,
+  Eye,
   MoreVertical,
   Edit3,
   Trash2,
@@ -38,6 +39,7 @@ interface SidebarProps {
   onOpenIDE: (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string; code?: string }) => void;
   onNewReport: () => void;
   onNewTable?: () => void;
+  onNewView?: () => void;
   onNewQuery?: () => void;
   onEditReportVisual?: (report: SavedReport) => void;
   onDeleteObject: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
@@ -63,6 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenIDE,
   onNewReport,
   onNewTable,
+  onNewView,
   onNewQuery,
   onEditReportVisual,
   onDeleteObject,
@@ -81,6 +84,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     tables: false,
     tablesSystem: false,
     tablesUser: false,
+    views: false,
+    viewsSystem: false,
+    viewsUser: false,
     queries: false,
     reports: false,
   });
@@ -132,23 +138,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return { systemPlugins: sys, userPlugins: usr };
   }, [plugins, search, mode]);
 
-  const { systemTables, userTables } = useMemo(() => {
-    const sys: TableSchema[] = [];
-    const usr: TableSchema[] = [];
+  const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+  const isGawkyySystem = (t: TableSchema) => {
+    const lower = t.name.toLowerCase();
+    return GAWKYY_SYSTEM_TABLES.has(lower) || lower.startsWith('sqlite_');
+  };
+
+  const { systemTables, userTables, systemViews, userViews } = useMemo(() => {
+    const sysT: TableSchema[] = [];
+    const usrT: TableSchema[] = [];
+    const sysV: TableSchema[] = [];
+    const usrV: TableSchema[] = [];
     const query = search.toLowerCase();
 
     tables.forEach((t) => {
       if (query && !t.name.toLowerCase().includes(query)) return;
-      if (t.isSystem) {
-        if (mode !== 'app') {
-          sys.push(t);
+      if (t.type === 'view') {
+        if (isGawkyySystem(t)) {
+          if (mode !== 'app') sysV.push(t);
+        } else {
+          usrV.push(t);
         }
       } else {
-        usr.push(t);
+        if (isGawkyySystem(t)) {
+          if (mode !== 'app') sysT.push(t);
+        } else {
+          usrT.push(t);
+        }
       }
     });
 
-    return { systemTables: sys, userTables: usr };
+    return { systemTables: sysT, userTables: usrT, systemViews: sysV, userViews: usrV };
   }, [tables, search, mode]);
 
   const filteredQueries = useMemo(() => {
@@ -664,7 +684,224 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* 3. SAVED QUERIES */}
+        {/* 3. DATABASE VIEWS */}
+        <div>
+          <div
+            onClick={() => toggleSection('views')}
+            className={`flex items-center justify-between px-2 py-1 text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
+              isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsedSections.views ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              <span>Views ({systemViews.length + userViews.length})</span>
+            </div>
+            {mode !== 'app' && onNewView && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNewView();
+                }}
+                title="Add New View (Creates a pro-forma CREATE VIEW query)"
+                className={`p-1 rounded transition ${
+                  isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {!collapsedSections.views && (
+            <div className="mt-1 space-y-2">
+              {/* Folder: System Views */}
+              {systemViews.length > 0 && (
+                <div>
+                  <div
+                    onClick={() => toggleSection('viewsSystem')}
+                    className={`flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
+                      isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
+                    }`}
+                  >
+                    {collapsedSections.viewsSystem ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {collapsedSections.viewsSystem ? (
+                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-sky-300' : 'text-sky-500'}`} />
+                    ) : (
+                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-sky-300' : 'text-sky-500'}`} />
+                    )}
+                    <span>System ({systemViews.length})</span>
+                  </div>
+
+                  {!collapsedSections.viewsSystem && (
+                    <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+                      isDark ? 'border-sky-500/30' : 'border-sky-300'
+                    }`}>
+                      {systemViews.map((v) => {
+                        const isActive = activeView === `table:${v.name}`;
+                        return (
+                          <div key={v.name} className="relative group flex items-center">
+                            <button
+                              onClick={() => onSelectTable(v.name)}
+                              className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
+                                isActive
+                                  ? isDark
+                                    ? 'bg-sky-600 text-white font-semibold shadow-sm'
+                                    : 'bg-sky-500 text-white font-semibold shadow-sm'
+                                  : isDark
+                                  ? 'hover:bg-slate-900 text-sky-300 hover:text-white'
+                                  : 'hover:bg-sky-50 text-sky-600 hover:text-sky-700 font-medium'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <Eye className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                  isActive ? 'text-white' : isDark ? 'text-sky-300' : 'text-sky-500'
+                                }`} />
+                                <span className="truncate">{v.name}</span>
+                              </div>
+                              <span className={`text-[10px] font-mono ml-1 ${
+                                isActive ? 'text-white/80' : isDark ? 'text-sky-300/80' : 'text-sky-500/90 font-medium'
+                              }`}>
+                                VIEW
+                              </span>
+                            </button>
+
+                            <div
+                              className="p-1.5 text-slate-600 cursor-not-allowed"
+                              title="System view: Protected schema"
+                            >
+                              <Lock className={`w-3 h-3 ${isDark ? 'text-sky-300/70' : 'text-sky-500/70'}`} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Folder: User Views */}
+              <div>
+                <div
+                  onClick={() => toggleSection('viewsUser')}
+                  className={`flex items-center justify-between px-2 py-1 text-[11px] font-semibold cursor-pointer select-none transition ${
+                    isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    {collapsedSections.viewsUser ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    {collapsedSections.viewsUser ? (
+                      <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    ) : (
+                      <FolderOpen className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-300' : 'text-emerald-500'}`} />
+                    )}
+                    <span>User ({userViews.length})</span>
+                  </div>
+                  {mode !== 'app' && onNewView && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNewView();
+                      }}
+                      title="Add New View"
+                      className={`p-0.5 rounded transition ${
+                        isDark ? 'hover:bg-slate-800 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-emerald-950'
+                      }`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {!collapsedSections.viewsUser && (
+                  <div className={`pl-2 mt-0.5 space-y-0.5 border-l ml-3 ${
+                    isDark ? 'border-emerald-500/30' : 'border-emerald-300'
+                  }`}>
+                    {userViews.length === 0 && (
+                      <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user views</div>
+                    )}
+                    {userViews.map((v) => {
+                      const isActive = activeView === `table:${v.name}`;
+                      const isMenuOpen = activeMenu?.type === 'view' && activeMenu.id === v.name;
+                      return (
+                        <div key={v.name} className="relative group flex items-center">
+                          <button
+                            onClick={() => onSelectTable(v.name)}
+                            className={`flex-1 flex items-center justify-between px-2 py-1.5 rounded text-left transition ${
+                              isActive
+                                ? isDark
+                                  ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                                  : 'bg-emerald-500 text-white font-semibold shadow-sm'
+                                : isDark
+                                ? 'hover:bg-slate-900 text-emerald-300 hover:text-white'
+                                : 'hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 font-medium'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 truncate">
+                              <Eye className={`w-3.5 h-3.5 flex-shrink-0 ${
+                                isActive ? 'text-white' : isDark ? 'text-emerald-300' : 'text-emerald-500'
+                              }`} />
+                              <span className="truncate">{v.name}</span>
+                            </div>
+                            <span className={`text-[10px] font-mono ml-1 ${
+                              isActive ? 'text-white/80' : isDark ? 'text-emerald-300/80' : 'text-emerald-500/90 font-medium'
+                            }`}>
+                              VIEW
+                            </span>
+                          </button>
+
+                          {mode !== 'app' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenu(isMenuOpen ? null : { type: 'view', id: v.name });
+                              }}
+                              className={`p-1.5 rounded-r transition ${
+                                isActive
+                                  ? isDark ? 'bg-emerald-600 text-white' : 'bg-emerald-600 text-white'
+                                  : isDark ? 'text-emerald-400 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
+                              }`}
+                              title="View options"
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {mode !== 'app' && isMenuOpen && (
+                            <div className="absolute right-0 top-full mt-0.5 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-xs text-slate-200">
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onOpenIDE({ type: 'table', name: v.name });
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-emerald-600 hover:text-white transition"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Edit Definition in IDE</span>
+                              </button>
+                              <div className="h-px bg-slate-800 my-1" />
+                              <button
+                                onClick={() => {
+                                  setActiveMenu(null);
+                                  onDeleteObject('table', v.name, v.name);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-red-600 hover:text-white text-red-400 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete View...</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4. SAVED QUERIES */}
         <div>
           <div
             onClick={() => toggleSection('queries')}

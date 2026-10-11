@@ -1140,11 +1140,12 @@ export class SQLiteEngine {
       );
 
       const schemas: TableSchema[] = [];
+      const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
 
       for (const row of tablesResult.values) {
         const name = String(row[0]);
         const type = (row[1] === 'view' ? 'view' : 'table') as 'table' | 'view';
-        const isSystem = name.startsWith('t_');
+        const isSystem = GAWKYY_SYSTEM_TABLES.has(name.toLowerCase()) || name.startsWith('sqlite_');
 
         // Column info via PRAGMA
         const colRes = this.query(`PRAGMA table_info("${name}");`);
@@ -1203,6 +1204,7 @@ export class SQLiteEngine {
       this.activeDbName = dbName;
     }
     this.ensureSystemTables();
+    this.notifyDatabaseReset(this.activeDbName);
     this.notifyChange(false);
   }
 
@@ -1436,11 +1438,9 @@ export class SQLiteEngine {
   }
 
   public isSystemTable(tableName: string): boolean {
-    return (
-      tableName.startsWith('t_') ||
-      tableName.startsWith('sqlite_') ||
-      tableName.startsWith('_gaw_')
-    );
+    const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+    const lower = tableName.toLowerCase();
+    return GAWKYY_SYSTEM_TABLES.has(lower) || lower.startsWith('sqlite_');
   }
 
   public getTableDDL(tableName: string): string {
@@ -1459,10 +1459,12 @@ export class SQLiteEngine {
   public getRecreateTableSQL(tableName: string): string {
     if (!this.db) return `DROP TABLE IF EXISTS "${tableName}";\n\nCREATE TABLE "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);\n`;
     try {
-      const res = this.query("SELECT sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      const res = this.query("SELECT type, sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
       let createDdl = '';
-      if (res.values.length > 0 && res.values[0][0]) {
-        createDdl = String(res.values[0][0]).trim();
+      let isView = false;
+      if (res.values.length > 0 && res.values[0][1]) {
+        if (res.values[0][0] === 'view') isView = true;
+        createDdl = String(res.values[0][1]).trim();
       } else {
         const colRes = this.query(`PRAGMA table_info("${tableName}");`);
         if (colRes.values.length > 0) {
@@ -1482,7 +1484,7 @@ export class SQLiteEngine {
       if (!createDdl.endsWith(';')) {
         createDdl += ';';
       }
-      return `DROP TABLE IF EXISTS "${tableName}";\n\n${createDdl}\n`;
+      return `DROP ${isView ? 'VIEW' : 'TABLE'} IF EXISTS "${tableName}";\n\n${createDdl}\n`;
     } catch (e) {
       console.error('getRecreateTableSQL error:', e);
       return `DROP TABLE IF EXISTS "${tableName}";\n\nCREATE TABLE "${tableName}" (\n  "id" TEXT PRIMARY KEY\n);\n`;
@@ -1492,10 +1494,12 @@ export class SQLiteEngine {
   public getTableIDEScript(tableName: string): string {
     const isSystem = this.isSystemTable(tableName);
     let createSql = '';
+    let isView = false;
     try {
-      const res = this.query("SELECT sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
-      if (res.values.length > 0 && res.values[0][0]) {
-        createSql = String(res.values[0][0]).trim();
+      const res = this.query("SELECT type, sql FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      if (res.values.length > 0 && res.values[0][1]) {
+        if (res.values[0][0] === 'view') isView = true;
+        createSql = String(res.values[0][1]).trim();
       } else {
         const colRes = this.query(`PRAGMA table_info("${tableName}");`);
         if (colRes.values.length > 0) {
@@ -1526,48 +1530,64 @@ export class SQLiteEngine {
         .join('\n');
     };
 
+    const objectKind = isView ? 'VIEW' : 'TABLE';
     const header = [
       '-- ==============================================================================',
-      `-- TABLE SCHEMA DEFINITION: "${tableName}"`,
+      `-- ${objectKind} SCHEMA DEFINITION: "${tableName}"`,
       '-- ==============================================================================',
       '-- All SQL statements below are commented out by default with "-- " to prevent',
       '-- unintended modifications or execution.',
       '--',
       '-- How to use this editor:',
       '-- • Press Ctrl+/ to toggle comments ON or OFF for any selected lines.',
-      '-- • Press Ctrl+Shift+F to switch to the table data view without running any SQL.',
+      `-- • Press Ctrl+Shift+F to switch to the ${isView ? 'view' : 'table'} data view without running any SQL.`,
       '-- • Click the Save icon to save this SQL as a new user query in Queries.',
-      '-- • Note: The Run icon is disabled in Table view to protect your database.',
+      `-- • Note: The Run icon is disabled in ${isView ? 'View' : 'Table'} view to protect your database.`,
     ];
 
     if (isSystem) {
       header.push(
         '--',
-        `-- ⚠️ WARNING: "${tableName}" is an internal system table!`,
-        '-- Changing, dropping, or altering this table could cause the program to stop',
+        `-- ⚠️ WARNING: "${tableName}" is an internal system ${isView ? 'view' : 'table'}!`,
+        `-- Changing, dropping, or altering this ${isView ? 'view' : 'table'} could cause the program to stop`,
         '-- working or behave erratically!'
       );
     }
     header.push('-- ==============================================================================');
 
-    const dropStatement = `-- DROP TABLE IF EXISTS "${tableName}";`;
+    const dropStatement = `-- DROP ${isView ? 'VIEW' : 'TABLE'} IF EXISTS "${tableName}";`;
     const createStatement = commentLines(createSql);
-    const alterStatement = [
-      `-- ALTER TABLE "${tableName}" ADD COLUMN "new_column" TEXT;`,
-      '--',
-      `-- ALTER TABLE "${tableName}" RENAME TO "${tableName}_backup";`,
-    ].join('\n');
+    const alterStatement = isView
+      ? [
+          `-- To modify or recreate this view:`,
+          `-- DROP VIEW IF EXISTS "${tableName}";`,
+          `-- ${createSql}`,
+        ].join('\n')
+      : [
+          `-- ALTER TABLE "${tableName}" ADD COLUMN "new_column" TEXT;`,
+          '--',
+          `-- ALTER TABLE "${tableName}" RENAME TO "${tableName}_backup";`,
+        ].join('\n');
 
     return `${header.join('\n')}\n\n${dropStatement}\n\n${createStatement}\n\n${alterStatement}\n`;
   }
 
   public getTableDropScript(tableName: string): string {
+    let isView = false;
     const isSystem = this.isSystemTable(tableName);
+    try {
+      const res = this.query("SELECT type FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      if (res.values.length > 0 && res.values[0][0] === 'view') {
+        isView = true;
+      }
+    } catch (e) {}
+
+    const objectKind = isView ? 'VIEW' : 'TABLE';
     const header = [
       '-- ==============================================================================',
-      `-- TABLE DELETION TEMPLATE: "${tableName}"`,
+      `-- ${objectKind} DELETION TEMPLATE: "${tableName}"`,
       '-- ==============================================================================',
-      '-- To permanently delete/drop this table from the database:',
+      `-- To permanently delete/drop this ${isView ? 'view' : 'table'} from the database:`,
       '-- 1. Highlight all text below (or press Ctrl+A to select all).',
       '-- 2. Press Ctrl+/ to uncomment the DROP statement.',
       '-- 3. Click the Save icon to save this as a new query and move to it in Queries.',
@@ -1577,13 +1597,13 @@ export class SQLiteEngine {
     if (isSystem) {
       header.push(
         '--',
-        `-- ⚠️ WARNING: "${tableName}" is a protected system table!`,
-        '-- Dropping this table could cause the program to stop working or behave erratically!'
+        `-- ⚠️ WARNING: "${tableName}" is a protected system ${isView ? 'view' : 'table'}!`,
+        `-- Dropping this ${isView ? 'view' : 'table'} could cause the program to stop working or behave erratically!`
       );
     }
     header.push('-- ==============================================================================');
 
-    const dropStatement = `-- DROP TABLE IF EXISTS "${tableName}";`;
+    const dropStatement = `-- DROP ${isView ? 'VIEW' : 'TABLE'} IF EXISTS "${tableName}";`;
     return `${header.join('\n')}\n\n${dropStatement}\n`;
   }
 

@@ -5649,14 +5649,18 @@ export default function ComponentsListPlugin({ gaw }) {
     }
   }, [gaw.plugins]);
 
-  const isSystemTable = (name, isSys) => {
-    if (isSys) return true;
+  const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+  const isGawkyySystemItem = (name) => {
     if (!name) return false;
-    return name.startsWith('t_') || name.startsWith('sqlite_') || name.startsWith('_');
+    const lower = name.toLowerCase();
+    return GAWKYY_SYSTEM_TABLES.has(lower) || lower.startsWith('sqlite_');
   };
 
-  const userTables = useMemo(() => schemas.filter(t => !isSystemTable(t.name, t.isSystem)), [schemas]);
-  const systemTables = useMemo(() => schemas.filter(t => isSystemTable(t.name, t.isSystem)), [schemas]);
+  const userTables = useMemo(() => schemas.filter(t => t.type !== 'view' && !isGawkyySystemItem(t.name)), [schemas]);
+  const userViews = useMemo(() => schemas.filter(t => t.type === 'view' && !isGawkyySystemItem(t.name)), [schemas]);
+
+  const systemTables = useMemo(() => schemas.filter(t => t.type !== 'view' && isGawkyySystemItem(t.name)), [schemas]);
+  const systemViews = useMemo(() => schemas.filter(t => t.type === 'view' && isGawkyySystemItem(t.name)), [schemas]);
 
   const userPlugins = useMemo(() => plugins.filter(p => !p.is_system && !p.isSystem), [plugins]);
   const systemPlugins = useMemo(() => plugins.filter(p => p.is_system || p.isSystem), [plugins]);
@@ -5672,7 +5676,9 @@ export default function ComponentsListPlugin({ gaw }) {
   };
 
   const filteredUserTables = userTables.filter(filterSearch);
+  const filteredUserViews = userViews.filter(filterSearch);
   const filteredSystemTables = systemTables.filter(filterSearch);
+  const filteredSystemViews = systemViews.filter(filterSearch);
   const filteredQueries = queries.filter(filterSearch);
   const filteredReports = reports.filter(filterSearch);
   const filteredUserPlugins = userPlugins.filter(filterSearch);
@@ -5707,7 +5713,7 @@ export default function ComponentsListPlugin({ gaw }) {
 
       {/* Components List Container */}
       <div className="flex-1 overflow-y-auto p-2 space-y-3">
-        {/* Section 1: User Database Tables & Views (Green Color Scheme) */}
+        {/* Section 1: User Database Tables (Green Color Scheme) */}
         <div>
           <div
             onClick={() => toggleSection('tables')}
@@ -5717,7 +5723,7 @@ export default function ComponentsListPlugin({ gaw }) {
           >
             <div className="flex items-center gap-1.5">
               {collapsed.tables ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
-              <span>User Tables & Views ({filteredUserTables.length})</span>
+              <span>User Tables ({filteredUserTables.length})</span>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); gaw.workspace?.newTable(); }}
@@ -5730,11 +5736,10 @@ export default function ComponentsListPlugin({ gaw }) {
           {!collapsed.tables && (
             <div className="mt-1 space-y-0.5 pl-2">
               {filteredUserTables.length === 0 ? (
-                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user tables or views</div>
+                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user tables</div>
               ) : (
                 filteredUserTables.map((t) => {
                   const isActive = activeView === 'table:' + t.name;
-                  const isView = t.type === 'view';
                   return (
                     <button
                       key={t.name}
@@ -5746,16 +5751,12 @@ export default function ComponentsListPlugin({ gaw }) {
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        {isView ? (
-                          <LucideIcons.Eye className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        ) : (
-                          <LucideIcons.Table className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        )}
+                        <LucideIcons.Table className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
                         <span className="truncate">{t.name}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
-                          {isView ? 'VIEW' : 'USER'}
+                          USER
                         </span>
                         <span className="text-[10px] text-slate-400 font-mono">{t.columns?.length || 0}c</span>
                       </div>
@@ -5767,7 +5768,56 @@ export default function ComponentsListPlugin({ gaw }) {
           )}
         </div>
 
-        {/* Section 2: User Saved Queries (Green Color Scheme) */}
+        {/* Section 2: User Views (Green Color Scheme) */}
+        <div>
+          <div
+            onClick={() => toggleSection('views')}
+            className={'flex items-center justify-between px-2 py-1 rounded cursor-pointer font-bold uppercase text-[10px] tracking-wider transition ' + (
+              isDark ? 'text-emerald-400 hover:bg-slate-900' : 'text-emerald-700 hover:bg-slate-100'
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {collapsed.views ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
+              <span>User Views ({filteredUserViews.length})</span>
+            </div>
+          </div>
+
+          {!collapsed.views && (
+            <div className="mt-1 space-y-0.5 pl-2">
+              {filteredUserViews.length === 0 ? (
+                <div className="px-2 py-1 text-[11px] text-slate-500 italic">No user views</div>
+              ) : (
+                filteredUserViews.map((v) => {
+                  const isActive = activeView === 'table:' + v.name;
+                  return (
+                    <button
+                      key={v.name}
+                      onClick={() => gaw.navigation?.selectView('table:' + v.name)}
+                      className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                        isActive
+                          ? (isDark ? 'bg-emerald-900/40 text-emerald-300 font-semibold border border-emerald-700/50' : 'bg-emerald-100 text-emerald-900 font-semibold')
+                          : (isDark ? 'hover:bg-slate-900 text-slate-200' : 'hover:bg-emerald-50/70 text-slate-800')
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <LucideIcons.Eye className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                        <span className="truncate">{v.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] px-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-medium">
+                          VIEW
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{v.columns?.length || 0}c</span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 3: User Saved Queries (Green Color Scheme) */}
         <div>
           <div
             onClick={() => toggleSection('queries')}
@@ -5819,7 +5869,7 @@ export default function ComponentsListPlugin({ gaw }) {
           )}
         </div>
 
-        {/* Section 3: Custom Reports & Views (Green Color Scheme) */}
+        {/* Section 4: Custom Reports & Views (Green Color Scheme) */}
         {filteredReports.length > 0 && (
           <div>
             <div
@@ -5863,7 +5913,7 @@ export default function ComponentsListPlugin({ gaw }) {
           </div>
         )}
 
-        {/* Section 4: User Plugins (Green Color Scheme) */}
+        {/* Section 5: User Plugins (Green Color Scheme) */}
         {filteredUserPlugins.length > 0 && (
           <div>
             <div
@@ -5900,7 +5950,7 @@ export default function ComponentsListPlugin({ gaw }) {
           </div>
         )}
 
-        {/* Section 5: System Tables & Plugins (Blue Color Scheme) */}
+        {/* Section 6: System Tables, Views & Plugins (Blue Color Scheme) */}
         <div>
           <div
             onClick={() => toggleSection('plugins')}
@@ -5910,7 +5960,7 @@ export default function ComponentsListPlugin({ gaw }) {
           >
             <div className="flex items-center gap-1.5">
               {collapsed.plugins ? <LucideIcons.ChevronRight className="w-3 h-3" /> : <LucideIcons.ChevronDown className="w-3 h-3" />}
-              <span>System Items & Plugins ({filteredSystemPlugins.length + filteredSystemTables.length})</span>
+              <span>System Items & Plugins ({filteredSystemPlugins.length + filteredSystemTables.length + filteredSystemViews.length})</span>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); gaw.plugins?.openAddModal(); }}
@@ -5960,6 +6010,28 @@ export default function ComponentsListPlugin({ gaw }) {
                     <div className="flex items-center gap-2 min-w-0">
                       <LucideIcons.Table className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                       <span className="truncate">{t.name}</span>
+                    </div>
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">SYS</span>
+                  </button>
+                );
+              })}
+
+              {/* System Views */}
+              {filteredSystemViews.map((v) => {
+                const isActive = activeView === 'table:' + v.name;
+                return (
+                  <button
+                    key={v.name}
+                    onClick={() => gaw.navigation?.selectView('table:' + v.name)}
+                    className={'w-full text-left px-2 py-1 rounded flex items-center justify-between transition ' + (
+                      isActive
+                        ? (isDark ? 'bg-blue-600/30 text-blue-300 font-semibold border border-blue-500/30' : 'bg-blue-100 text-blue-900 font-semibold')
+                        : (isDark ? 'hover:bg-slate-900 text-slate-300' : 'hover:bg-slate-200/70 text-slate-700')
+                    )}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <LucideIcons.Eye className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                      <span className="truncate">{v.name}</span>
                     </div>
                     <span className="text-[9px] px-1 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">SYS</span>
                   </button>

@@ -1007,6 +1007,43 @@ export default function App() {
     toastApi.info(`Opened table creation query "${queryName}" in IDE. Review and click Run or press Ctrl+Shift+F to execute.`);
   }, [handleOpenInIDE, toastApi]);
 
+  // Add New View via pro-forma CREATE VIEW query
+  const handleNewView = useCallback(() => {
+    const engine = SQLiteEngine.getInstance();
+    const existingSchema = engine.getSchema().map((s) => s.name);
+    let baseName = 'new_view';
+    let counter = 1;
+    while (existingSchema.includes(baseName)) {
+      counter++;
+      baseName = `new_view_${counter}`;
+    }
+    const firstTable = engine.getSchema().find((t) => t.type !== 'view' && !t.isSystem && !engine.isSystemTable(t.name))?.name || 'customers';
+    const proFormaSql = `-- Pro-forma statement to create a new database view\nDROP VIEW IF EXISTS "${baseName}";\n\nCREATE VIEW "${baseName}" AS\n  SELECT * FROM "${firstTable}";\n`;
+
+    const newId = `q_create_view_${baseName}_${Date.now()}`;
+    const queryName = `Create ${baseName} View`;
+    const newQuery: SavedQuery = {
+      id: newId,
+      name: queryName,
+      description: `Pro-forma query to create view "${baseName}"`,
+      query: proFormaSql,
+      created_at: new Date().toISOString(),
+    };
+
+    engine.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
+    );
+    engine.notifyChange(true);
+    handleOpenInIDE({
+      type: 'query',
+      id: newId,
+      name: queryName,
+      code: proFormaSql,
+    });
+    toastApi.info(`Opened view creation query "${queryName}" in IDE. Review and click Run or press Ctrl+Shift+F to execute.`);
+  }, [handleOpenInIDE, toastApi]);
+
   // Add New Query
   const handleNewQuery = useCallback(() => {
     const engine = SQLiteEngine.getInstance();
@@ -1334,17 +1371,18 @@ export default function App() {
   // Global Shift+Ctrl+N shortcut: In Dev Mode, toggle Components List navigation pane (or IDE sidebar in IDE mode)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        e.shiftKey &&
-        (e.key === 'N' || e.key === 'n')
-      ) {
+      const isN = (e.key && e.key.toLowerCase() === 'n') || e.code === 'KeyN' || e.keyCode === 78;
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (isCtrlOrCmd && e.shiftKey && isN) {
         if (mode !== 'dev') {
           // Pass-through in App Mode to browser or user plugin
           return;
         }
         e.preventDefault();
         e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') {
+          e.stopImmediatePropagation();
+        }
         if (activeView === 'ide') {
           eventBusApi.emit('ide_toggle_sidebar');
         } else {
@@ -1353,7 +1391,11 @@ export default function App() {
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
   }, [mode, activeView, handleToggleSidebar, eventBusApi]);
 
   // Hash route parsing and synchronization
@@ -1665,6 +1707,7 @@ export default function App() {
         getReports: () => reports,
         getPlugins: () => plugins,
         newTable: handleNewTable,
+        newView: handleNewView,
         newQuery: handleNewQuery,
         newReport: () => {
           setReportToEdit(null);

@@ -161,6 +161,9 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       tables: true,
       tablesUser: true,
       tablesSystem: false,
+      views: true,
+      viewsUser: true,
+      viewsSystem: false,
       queries: true,
       reports: true,
     };
@@ -484,14 +487,23 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   );
 
   const userTables = useMemo(
-    () => schema.filter((t) => !t.isSystem && !engine.isSystemTable(t.name)),
+    () => schema.filter((t) => t.type !== 'view' && !t.isSystem && !engine.isSystemTable(t.name)),
     [schema, engine]
   );
   const systemTables = useMemo(
-    () => schema.filter((t) => t.isSystem || engine.isSystemTable(t.name)),
+    () => schema.filter((t) => t.type !== 'view' && (t.isSystem || engine.isSystemTable(t.name))),
+    [schema, engine]
+  );
+  const userViews = useMemo(
+    () => schema.filter((t) => t.type === 'view' && !t.isSystem && !engine.isSystemTable(t.name)),
+    [schema, engine]
+  );
+  const systemViews = useMemo(
+    () => schema.filter((t) => t.type === 'view' && (t.isSystem || engine.isSystemTable(t.name))),
     [schema, engine]
   );
   const allTables = useMemo(() => [...userTables, ...systemTables], [userTables, systemTables]);
+  const allViews = useMemo(() => [...userViews, ...systemViews], [userViews, systemViews]);
   const allQueries = useMemo(() => engine.getSavedQueries(), [engine, tabs, dbVersion]);
   const allReports = useMemo(() => engine.getSavedReports(), [engine, tabs, dbVersion]);
 
@@ -1575,6 +1587,36 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     });
     openOrActivateItem({ type: 'query', id: newId, name: queryName, code: proFormaSql });
     gawContext?.toast?.info?.(`Opened table creation query "${queryName}". Review and click Run or press Ctrl+Shift+F to execute.`);
+  }, [engine, gawContext, openOrActivateItem]);
+
+  // Handler: Add New View via pro-forma SQL query
+  const handleAddNewView = useCallback(() => {
+    const existingSchema = engine.getSchema().map((s) => s.name);
+    let baseName = 'new_view';
+    let counter = 1;
+    while (existingSchema.includes(baseName)) {
+      counter++;
+      baseName = `new_view_${counter}`;
+    }
+    const firstTable = engine.getSchema().find((t) => t.type !== 'view' && !t.isSystem && !engine.isSystemTable(t.name))?.name || 'customers';
+    const proFormaSql = `-- Pro-forma statement to create a new database view\nDROP VIEW IF EXISTS "${baseName}";\n\nCREATE VIEW "${baseName}" AS\n  SELECT * FROM "${firstTable}";\n`;
+
+    const newId = `q_create_view_${baseName}_${Date.now()}`;
+    const queryName = `Create ${baseName} View`;
+    const now = new Date().toISOString();
+
+    engine.run(
+      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      [newId, queryName, `Pro-forma query to create view "${baseName}"`, proFormaSql, '{}', '{}', now]
+    );
+    engine.notifyChange(true);
+    setExpandedFolders((prev) => {
+      const next = { ...prev, queries: true };
+      safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
+      return next;
+    });
+    openOrActivateItem({ type: 'query', id: newId, name: queryName, code: proFormaSql });
+    gawContext?.toast?.info?.(`Opened view creation query "${queryName}". Review and click Run or press Ctrl+Shift+F to execute.`);
   }, [engine, gawContext, openOrActivateItem]);
 
   // Handler: Add New Query
@@ -2855,6 +2897,259 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                                   ) : (
                                                     <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} />
                                                   )}
+                                                  <span className={`truncate font-mono text-[11px] font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                    {col.name}
+                                                  </span>
+                                                </div>
+                                                <span className={`text-[10px] font-mono flex-shrink-0 uppercase ${
+                                                  isDark ? 'text-slate-400' : 'text-slate-500'
+                                                }`}>
+                                                  {col.type || 'TEXT'}
+                                                </span>
+                                              </div>
+                                            ))
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Folder: VIEWS */}
+                  <div>
+                    <div
+                      onClick={() => toggleFolder('views')}
+                      className={`flex items-center justify-between px-2 py-1 font-bold cursor-pointer rounded transition group ${
+                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-extrabold hover:text-black hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {expandedFolders.views ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                        <Folder className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>views ({allViews.length})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddNewView();
+                        }}
+                        className={`p-0.5 rounded transition ${
+                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                        }`}
+                        title="Add New View (Creates pro-forma CREATE VIEW query)"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {expandedFolders.views && (
+                      <div className="pl-4 space-y-1.5 mt-0.5">
+                        {/* Subfolder: User Views */}
+                        <div>
+                          <div
+                            onClick={() => toggleFolder('viewsUser')}
+                            className={`flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                              isDark ? 'text-emerald-300 hover:text-emerald-200' : 'text-emerald-500 hover:text-emerald-600'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {expandedFolders.viewsUser ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Folder className={`w-3 h-3 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                              <span>User ({userViews.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddNewView();
+                              }}
+                              className={`p-0.5 rounded transition ${
+                                isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
+                              }`}
+                              title="Add New View (Creates pro-forma CREATE VIEW query)"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {expandedFolders.viewsUser && (
+                            <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-emerald-500/20">
+                              {userViews.length === 0 && (
+                                <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user views</div>
+                              )}
+                              {userViews.map((v) => {
+                                const isExpanded = !!expandedFolders[`view_${v.name}`];
+                                const cols = getTableColumns(v);
+                                return (
+                                  <div key={v.name} className="space-y-0.5">
+                                    <div
+                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
+                                        isDark
+                                          ? 'text-emerald-300 hover:text-white hover:bg-slate-800'
+                                          : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
+                                      }`}
+                                      title={`View: ${v.name} (Click name to view DDL, click arrow to view columns)`}
+                                    >
+                                      <div
+                                        className="flex items-center gap-1 min-w-0 flex-1 truncate"
+                                        onClick={() => openOrActivateItem({ type: 'table', name: v.name })}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleFolder(`view_${v.name}`);
+                                          }}
+                                          className={`p-0.5 -ml-0.5 rounded transition hover:bg-black/20 flex-shrink-0 ${
+                                            isDark ? 'text-emerald-400 hover:text-white' : 'text-emerald-600 hover:text-black'
+                                          }`}
+                                          title={isExpanded ? `Collapse ${v.name} columns` : `Expand ${v.name} columns`}
+                                        >
+                                          {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                        </button>
+                                        <Eye className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                                        <span className="truncate">{v.name}</span>
+                                      </div>
+                                      <span
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          toggleFolder(`view_${v.name}`);
+                                        }}
+                                        className={`text-[10px] font-mono px-1 rounded opacity-75 hover:opacity-100 flex-shrink-0 ${
+                                          isDark ? 'text-emerald-400/80 hover:bg-slate-700/50' : 'text-emerald-700/80 hover:bg-emerald-100'
+                                        }`}
+                                        title={`${cols.length} columns (Click to toggle)`}
+                                      >
+                                        {cols.length} cols
+                                      </span>
+                                    </div>
+
+                                    {/* Expanded Field Names and Types */}
+                                    {isExpanded && (
+                                      <div className="pl-3.5 space-y-0.5 mt-0.5 border-l ml-3 border-emerald-500/20">
+                                        {cols.length === 0 ? (
+                                          <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No columns found</div>
+                                        ) : (
+                                          cols.map((col) => (
+                                            <div
+                                              key={col.name}
+                                              className={`flex items-center justify-between gap-1.5 px-2 py-0.5 rounded text-[11px] select-text transition ${
+                                                isDark
+                                                  ? 'hover:bg-slate-800/60 text-slate-300'
+                                                  : 'hover:bg-emerald-50/70 text-slate-700'
+                                              }`}
+                                              title={`Field: ${col.name}\nType: ${col.type || 'TEXT'}`}
+                                            >
+                                              <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} />
+                                                <span className={`truncate font-mono text-[11px] font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                                                  {col.name}
+                                                </span>
+                                              </div>
+                                              <span className={`text-[10px] font-mono flex-shrink-0 uppercase ${
+                                                isDark ? 'text-slate-400' : 'text-slate-500'
+                                              }`}>
+                                                {col.type || 'TEXT'}
+                                              </span>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Subfolder: System Views */}
+                        {systemViews.length > 0 && (
+                          <div>
+                            <div
+                              onClick={() => toggleFolder('viewsSystem')}
+                              className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                                isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
+                              }`}
+                            >
+                              {expandedFolders.viewsSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                              <span>System ({systemViews.length})</span>
+                            </div>
+                            {expandedFolders.viewsSystem && (
+                              <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
+                                {systemViews.map((v) => {
+                                  const isExpanded = !!expandedFolders[`view_${v.name}`];
+                                  const cols = getTableColumns(v);
+                                  return (
+                                    <div key={v.name} className="space-y-0.5">
+                                      <div
+                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
+                                          isDark
+                                            ? 'text-sky-300 hover:text-white hover:bg-slate-800'
+                                            : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
+                                        }`}
+                                        title={`System View: ${v.name} (Click name to view DDL, click arrow to view columns)`}
+                                      >
+                                        <div
+                                          className="flex items-center gap-1 min-w-0 flex-1 truncate"
+                                          onClick={() => openOrActivateItem({ type: 'table', name: v.name })}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleFolder(`view_${v.name}`);
+                                            }}
+                                            className={`p-0.5 -ml-0.5 rounded transition hover:bg-black/20 flex-shrink-0 ${
+                                              isDark ? 'text-sky-400 hover:text-white' : 'text-sky-600 hover:text-black'
+                                            }`}
+                                            title={isExpanded ? `Collapse ${v.name} columns` : `Expand ${v.name} columns`}
+                                          >
+                                            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                          </button>
+                                          <Eye className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                          <span className="truncate">{v.name}</span>
+                                        </div>
+                                        <span
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleFolder(`view_${v.name}`);
+                                          }}
+                                          className={`text-[10px] font-mono px-1 rounded opacity-75 hover:opacity-100 flex-shrink-0 ${
+                                            isDark ? 'text-sky-400/80 hover:bg-slate-700/50' : 'text-sky-700/80 hover:bg-sky-100'
+                                          }`}
+                                          title={`${cols.length} columns (Click to toggle)`}
+                                        >
+                                          {cols.length} cols
+                                        </span>
+                                      </div>
+
+                                      {/* Expanded Field Names and Types */}
+                                      {isExpanded && (
+                                        <div className="pl-3.5 space-y-0.5 mt-0.5 border-l ml-3 border-sky-500/20">
+                                          {cols.length === 0 ? (
+                                            <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No columns found</div>
+                                          ) : (
+                                            cols.map((col) => (
+                                              <div
+                                                key={col.name}
+                                                className={`flex items-center justify-between gap-1.5 px-2 py-0.5 rounded text-[11px] select-text transition ${
+                                                  isDark
+                                                    ? 'hover:bg-slate-800/60 text-slate-300'
+                                                    : 'hover:bg-sky-50/70 text-slate-700'
+                                                }`}
+                                                title={`Field: ${col.name}\nType: ${col.type || 'TEXT'}`}
+                                              >
+                                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} />
                                                   <span className={`truncate font-mono text-[11px] font-medium ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
                                                     {col.name}
                                                   </span>
