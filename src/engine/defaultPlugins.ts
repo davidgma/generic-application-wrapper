@@ -5335,7 +5335,6 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
       )}
     </div>
-}
   );
 }
 `;
