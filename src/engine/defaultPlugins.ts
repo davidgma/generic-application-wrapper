@@ -5550,6 +5550,7 @@ export default function ComponentsListPlugin({ gaw }) {
     tables: false,
     queries: false,
     reports: false,
+    tools: false,
   });
 
   useEffect(() => {
@@ -5937,6 +5938,9 @@ export default function ComponentsListPlugin({ gaw }) {
                 );
               })}
             </div>
+          )}
+        </div>
+
         {/* Section 6: Tools & Workspace */}
         <div>
           <div
