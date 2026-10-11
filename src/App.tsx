@@ -284,10 +284,14 @@ export default function App() {
         ) {
           setActiveRoute('file');
           navigateTo('file', targetView);
-        } else if (targetView === 'file' || targetView === 'plugin:plugin_file_manager') {
+        } else if (
+          targetView === 'file' ||
+          targetView === 'plugin:plugin_file_manager' ||
+          targetView === 'plugin:plugin_local_storage'
+        ) {
           setActiveRoute('file');
-          setActiveView('plugin:plugin_file_manager');
-          navigateTo('file', 'plugin:plugin_file_manager');
+          setActiveView(targetView === 'file' ? 'plugin:plugin_file_manager' : targetView);
+          navigateTo('file', targetView === 'file' ? 'plugin:plugin_file_manager' : targetView);
         } else if (targetView === 'database') {
           setActiveRoute('database');
           navigateTo('database', 'database');
@@ -1395,7 +1399,15 @@ export default function App() {
         setActiveView(`report:${rId}`);
       } else if (hash.startsWith('plugin/')) {
         const pId = hash.replace('plugin/', '');
-        setActiveRoute('plugins');
+        if (pId === 'plugin_file_manager' || pId === 'plugin_local_storage') {
+          setActiveRoute('file');
+        } else if (pId === 'plugin_database_management') {
+          setActiveRoute('database');
+        } else if (pId === 'plugin_help') {
+          setActiveRoute('help');
+        } else {
+          setActiveRoute('plugins');
+        }
         setActiveView(`plugin:${pId}`);
       }
     };

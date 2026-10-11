@@ -2220,11 +2220,23 @@ export default function LocalStoragePlugin({ gaw }) {
               <span>File Name:</span>
               <span className={'font-mono font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{meta.fileName}</span>
             </div>
-            <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
-              <span>File Handle Path:</span>
-              <span className="font-mono text-emerald-500 truncate max-w-[220px]">
-                {meta.filePath || (meta.hasFileHandle ? 'Active OS File Handle' : 'In-Memory WebAssembly')}
-              </span>
+            <div className={'flex flex-col gap-1 py-1.5 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
+              <div className="flex justify-between items-center">
+                <span>File Path on Local Drive:</span>
+                <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
+                  meta.hasFileHandle
+                    ? isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : isDark ? 'bg-slate-900 text-slate-400 border border-slate-800' : 'bg-slate-100 text-slate-600 border border-slate-300'
+                )}>
+                  {meta.hasFileHandle ? 'Disk Handle Attached' : 'Local Drive Storage'}
+                </span>
+              </div>
+              <p className={'text-xs font-mono p-2 rounded border break-all flex items-center gap-1.5 ' + (
+                isDark ? 'bg-slate-900/90 border-slate-800 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-800'
+              )}>
+                <HardDrive className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+                <span>{meta.filePath || meta.fileName}</span>
+              </p>
             </div>
             <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
               <span>File Size on Disk:</span>
@@ -4675,8 +4687,9 @@ export default function FileManagerPlugin({ gaw }) {
                 <p className={'font-mono font-bold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
                   {dbName}
                 </p>
-                <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                  Changes file name locally and on Dropbox.
+                <p className={'text-[10px] font-mono mt-1 flex items-center gap-1.5 truncate ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                  <HardDrive className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                  <span className="text-emerald-400 font-semibold truncate">{storageMeta.filePath || dbName}</span>
                 </p>
               </div>
             )}
@@ -4806,7 +4819,13 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
 
         {/* Bottom Row: Stats Grid */}
-        <div className='grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-4 gap-3 text-xs pt-1 cq-stack'>
+        <div className='grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-5 gap-3 text-xs pt-1 cq-stack'>
+          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Local Disk Path</span>
+            <span className={'font-mono font-semibold text-xs mt-0.5 block truncate text-emerald-400'} title={storageMeta.filePath || dbName}>
+              {storageMeta.filePath || dbName}
+            </span>
+          </div>
           <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
             <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>File Size</span>
             <span className={'font-mono font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
@@ -5461,7 +5480,33 @@ export default function HeaderNavbarPlugin({ gaw }) {
         {navItems.map((item) => {
           const isActive = item.isView
             ? activeView === item.id
-            : activeRoute === item.id;
+            : (
+                item.id === 'file'
+                  ? (
+                      activeRoute === 'file' ||
+                      activeView === 'file' ||
+                      activeView === 'plugin:plugin_file_manager' ||
+                      activeView === 'plugin:plugin_local_storage' ||
+                      activeView.startsWith('table:') ||
+                      activeView.startsWith('query:') ||
+                      activeView.startsWith('report:') ||
+                      activeView === 'spreadsheet' ||
+                      activeView === 'ide'
+                    )
+                  : item.id === 'database'
+                  ? (activeRoute === 'database' || activeView === 'plugin:plugin_database_management')
+                  : item.id === 'help'
+                  ? (activeRoute === 'help' || activeView === 'plugin:plugin_help')
+                  : item.id === 'plugins'
+                  ? (
+                      activeRoute === 'plugins' &&
+                      activeView !== 'plugin:plugin_file_manager' &&
+                      activeView !== 'plugin:plugin_local_storage' &&
+                      activeView !== 'plugin:plugin_database_management' &&
+                      activeView !== 'plugin:plugin_help'
+                    )
+                  : activeRoute === item.id
+              );
           return (
             <button
               key={item.id}
