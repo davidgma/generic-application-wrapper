@@ -459,8 +459,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   // Schema state for autocompletion and explorer
   const schema = useMemo(() => engine.getSchema(), [engine, dbVersion]);
   const allPlugins = useMemo(() => engine.getPlugins(), [engine, tabs, dbVersion]);
-  const userPlugins = useMemo(() => allPlugins.filter((p) => !isSystemPlugin(p)), [allPlugins]);
-  const systemPlugins = useMemo(() => allPlugins.filter((p) => isSystemPlugin(p)), [allPlugins]);
+  const userPlugins = useMemo(() => allPlugins.filter((p) => !isSystemPlugin(p)).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [allPlugins]);
+  const systemPlugins = useMemo(() => allPlugins.filter((p) => isSystemPlugin(p)).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [allPlugins]);
 
   // Helper to retrieve columns for a table schema
   const getTableColumns = useCallback(

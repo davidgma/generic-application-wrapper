@@ -12,6 +12,7 @@ export const SYSTEM_PLUGIN_IDS = new Set<string>([
   'plugin_header_navbar',
   'plugin_components_list',
   'plugin_footer_status',
+  'plugin_settings',
 ]);
 
 export function isSystemPlugin(plugin: { id: string; is_system?: boolean; isSystem?: boolean; menu_category?: string }): boolean {

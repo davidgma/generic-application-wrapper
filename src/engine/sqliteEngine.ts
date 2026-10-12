@@ -16,6 +16,7 @@ import {
   DEFAULT_HEADER_NAVBAR_PLUGIN_CODE,
   DEFAULT_COMPONENTS_LIST_PLUGIN_CODE,
   DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
+  DEFAULT_SETTINGS_PLUGIN_CODE,
 } from './defaultPlugins';
 
 export class SQLiteEngine {
@@ -203,6 +204,23 @@ export class SQLiteEngine {
         isSystem: true,
         target_area: 'bottom',
         targetArea: 'bottom',
+      },
+      {
+        id: 'plugin_settings',
+        name: 'Application & System Settings',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Settings',
+        menu_category: 'System & Settings',
+        route: '/settings',
+        description: 'Configure database application parameters (app_name, app_description, initial_plugin in t_settings) and visual appearance theme.',
+        code: DEFAULT_SETTINGS_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
       },
     ];
     for (const p of defaults) {
@@ -1227,7 +1245,7 @@ export class SQLiteEngine {
       // System plugins are maintained in-memory as part of Gawkyy core.
       // Remove any previously stored system plugins from t_plugins to keep database clean.
       this.db.run(
-        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help');"
+        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings');"
       );
 
       // Ensure default settings exist

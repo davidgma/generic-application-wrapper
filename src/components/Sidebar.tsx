@@ -135,6 +135,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     });
 
+    sys.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    usr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
     return { systemPlugins: sys, userPlugins: usr };
   }, [plugins, search, mode]);
 

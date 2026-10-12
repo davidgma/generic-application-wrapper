@@ -5656,14 +5656,14 @@ export default function ComponentsListPlugin({ gaw }) {
     return GAWKYY_SYSTEM_TABLES.has(lower) || lower.startsWith('sqlite_');
   };
 
-  const userTables = useMemo(() => schemas.filter(t => t.type !== 'view' && !isGawkyySystemItem(t.name)), [schemas]);
-  const userViews = useMemo(() => schemas.filter(t => t.type === 'view' && !isGawkyySystemItem(t.name)), [schemas]);
+  const userTables = useMemo(() => [...schemas].filter(t => t.type !== 'view' && !isGawkyySystemItem(t.name)).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [schemas]);
+  const userViews = useMemo(() => [...schemas].filter(t => t.type === 'view' && !isGawkyySystemItem(t.name)).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [schemas]);
 
-  const systemTables = useMemo(() => schemas.filter(t => t.type !== 'view' && isGawkyySystemItem(t.name)), [schemas]);
-  const systemViews = useMemo(() => schemas.filter(t => t.type === 'view' && isGawkyySystemItem(t.name)), [schemas]);
+  const systemTables = useMemo(() => [...schemas].filter(t => t.type !== 'view' && isGawkyySystemItem(t.name)).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [schemas]);
+  const systemViews = useMemo(() => [...schemas].filter(t => t.type === 'view' && isGawkyySystemItem(t.name)).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [schemas]);
 
-  const userPlugins = useMemo(() => plugins.filter(p => !p.is_system && !p.isSystem), [plugins]);
-  const systemPlugins = useMemo(() => plugins.filter(p => p.is_system || p.isSystem), [plugins]);
+  const userPlugins = useMemo(() => [...plugins].filter(p => !p.is_system && !p.isSystem).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [plugins]);
+  const systemPlugins = useMemo(() => [...plugins].filter(p => p.is_system || p.isSystem).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [plugins]);
 
   const toggleSection = (sec) => {
     setCollapsed(prev => ({ ...prev, [sec]: !prev[sec] }));
@@ -6187,6 +6187,248 @@ export default function FooterStatusPlugin({ gaw }) {
         </div>
       </div>
     </footer>
+  );
+}
+`;
+
+export const DEFAULT_SETTINGS_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import { Settings, AppWindow, Check, Moon, Sun, Database } from 'lucide-react';
+
+export default function SettingsPlugin({ gaw }) {
+  const [appName, setAppName] = useState('');
+  const [appDescription, setAppDescription] = useState('');
+  const [initialPlugin, setInitialPlugin] = useState('main');
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const isDark = currentTheme === 'vs-dark';
+
+  const loadSettings = () => {
+    try {
+      const res = gaw.db?.queryObjects('SELECT key, value FROM t_settings;');
+      if (Array.isArray(res)) {
+        const map = {};
+        res.forEach(row => { map[row.key] = row.value; });
+        setAppName(map['app_name'] || 'New App');
+        setAppDescription(map['app_description'] || map['app_descripton'] || '');
+        setInitialPlugin(map['initial_plugin'] || 'main');
+      }
+    } catch (e) {
+      console.error('Failed to load settings in plugin:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadSettings();
+    const unsub = gaw.eventBus?.on('db_changed', loadSettings);
+    return () => { if (unsub) unsub(); };
+  }, []);
+
+  const handleSaveAppSettings = (e) => {
+    if (e) e.preventDefault();
+    try {
+      const now = new Date().toISOString();
+      const nameVal = appName.trim() || 'New App';
+      const descVal = appDescription.trim();
+      const initVal = initialPlugin.trim() || 'main';
+
+      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('app_name', ?, ?);", [nameVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('app_description', ?, ?);", [descVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('app_descripton', ?, ?);", [descVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('initial_plugin', ?, ?);", [initVal, now]);
+
+      setSavedSuccess(true);
+      gaw.toast?.success('Updated application settings in SQLite.');
+      gaw.eventBus?.emit('db_changed');
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      gaw.toast?.error('Failed to save settings: ' + err.message);
+    }
+  };
+
+  const handleThemeChange = (newTheme) => {
+    try {
+      setCurrentTheme(newTheme);
+      localStorage.setItem('gaw_theme', newTheme);
+      if (gaw.navigation?.toggleTheme) {
+        gaw.navigation.toggleTheme(newTheme);
+      }
+      gaw.eventBus?.emit('theme_changed', newTheme);
+      gaw.toast?.info(\`Theme switched to \${newTheme === 'vs-dark' ? 'Dark Mode' : 'Light Mode'}\`);
+    } catch (err) {
+      gaw.toast?.error('Failed to change theme: ' + err.message);
+    }
+  };
+
+  return (
+    <div className={'w-full h-full p-4 md:p-8 overflow-y-auto select-text font-sans text-xs ' + (
+      isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+    )}>
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header Banner */}
+        <div className={'p-6 rounded-2xl border shadow-xl flex items-center justify-between gap-4 ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center gap-3">
+            <div className={'w-12 h-12 rounded-xl border flex items-center justify-center ' + (
+              isDark ? 'bg-indigo-950/80 border-indigo-700/50 text-indigo-400' : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+            )}>
+              <Settings className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className={'text-lg font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                Application & System Settings
+              </h1>
+              <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                Manage database application parameters (t_settings) and visual editor appearance settings.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase">
+            SYSTEM PLUGIN
+          </span>
+        </div>
+
+        {/* Section 1: Application Settings (t_settings) */}
+        <div className={'p-6 rounded-2xl border shadow-xl space-y-5 ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
+            <div className="flex items-center gap-2">
+              <AppWindow className="w-4 h-4 text-emerald-500" />
+              <h2 className="text-sm font-bold text-emerald-500 uppercase tracking-wider">
+                Application Settings (<code className="font-mono text-xs">t_settings</code>)
+              </h2>
+            </div>
+            <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+              <Database className="w-3 h-3 text-emerald-400" /> SQLite Database
+            </span>
+          </div>
+
+          <form onSubmit={handleSaveAppSettings} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                App Name (<code className="font-mono text-[11px] text-emerald-400">app_name</code>)
+              </label>
+              <input
+                type="text"
+                value={appName}
+                onChange={(e) => setAppName(e.target.value)}
+                placeholder="New App"
+                className={'w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:border-indigo-500 transition ' + (
+                  isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                )}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                App Description (<code className="font-mono text-[11px] text-emerald-400">app_description</code>)
+              </label>
+              <textarea
+                value={appDescription}
+                onChange={(e) => setAppDescription(e.target.value)}
+                placeholder="Custom Application Description"
+                rows={2}
+                className={'w-full px-3 py-2 rounded-xl border text-xs focus:outline-none focus:border-indigo-500 transition ' + (
+                  isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                )}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                Initial Plugin (<code className="font-mono text-[11px] text-emerald-400">initial_plugin</code>)
+              </label>
+              <input
+                type="text"
+                value={initialPlugin}
+                onChange={(e) => setInitialPlugin(e.target.value)}
+                placeholder="main"
+                className={'w-full px-3 py-2 rounded-xl border text-xs font-mono focus:outline-none focus:border-indigo-500 transition ' + (
+                  isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+                )}
+              />
+              <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                Target plugin ID or name launched on startup in App Mode (default: main).
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center gap-3">
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition shadow-md flex items-center gap-2 active:scale-95 cursor-pointer"
+              >
+                {savedSuccess ? <Check className="w-4 h-4" /> : null}
+                <span>{savedSuccess ? 'Saved to SQLite!' : 'Save Application Settings'}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Section 2: Visual Appearance Theme */}
+        <div className={'p-6 rounded-2xl border shadow-xl space-y-4 ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
+            <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">
+              Visual Appearance (Browser Local Storage)
+            </h2>
+            <span className="text-[10px] font-mono text-slate-400">key: gaw_theme</span>
+          </div>
+
+          <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
+            Select your preferred color theme for the Monaco code editor, navigation panels, and application controls.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4 pt-1">
+            <button
+              type="button"
+              onClick={() => handleThemeChange('vs-dark')}
+              className={'p-4 rounded-xl border font-semibold text-xs transition flex flex-col items-center gap-2 cursor-pointer ' + (
+                currentTheme === 'vs-dark'
+                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg ring-2 ring-indigo-400/50'
+                  : isDark
+                  ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+              )}
+            >
+              <Moon className="w-5 h-5 text-indigo-300" />
+              <span>Dark Mode (vs-dark)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleThemeChange('vs-light')}
+              className={'p-4 rounded-xl border font-semibold text-xs transition flex flex-col items-center gap-2 cursor-pointer ' + (
+                currentTheme === 'vs-light'
+                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg ring-2 ring-indigo-400/50'
+                  : isDark
+                  ? 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+              )}
+            >
+              <Sun className="w-5 h-5 text-amber-400" />
+              <span>Light Mode (vs-light)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 `;

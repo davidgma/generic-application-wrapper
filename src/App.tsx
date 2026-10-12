@@ -1558,7 +1558,12 @@ export default function App() {
         },
         openIDE: (tab?: any) => handleOpenInIDE(tab),
         openAI: () => setShowAIModal(true),
-        openSettings: () => setShowSettingsModal(true),
+        openSettings: () => {
+          setActiveView('plugin:plugin_settings');
+          setActiveRoute('plugins');
+          navigateTo('plugins', 'plugin:plugin_settings');
+          eventBusApi.emit('view_changed', 'plugin:plugin_settings', 'plugins');
+        },
         toggleTheme: handleToggleTheme,
         setMode: (m: 'dev' | 'app') => handleToggleMode(m),
         toggleVSCodeMode: handleToggleVSCodeMode,
@@ -1962,7 +1967,7 @@ export default function App() {
           theme={theme}
           tables={tables}
           onOpenIDE={handleOpenInIDE}
-          onOpenSettings={() => setShowSettingsModal(true)}
+          onOpenSettings={() => gawContext.navigation?.openSettings?.()}
           onResetDefault={() => {
             SQLiteEngine.getInstance().createNorthwindDemoDatabase();
             toastApi.success('Loaded Northwind Modern Commerce template.');
