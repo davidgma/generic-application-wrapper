@@ -1604,6 +1604,15 @@ export default function App() {
           refreshDatabaseState();
         },
         onStatusChange: (listener) => storageEngine.onStatusChange(listener),
+        setFileName: (name: string) => {
+          SQLiteEngine.getInstance().activeDbName = name;
+          storageEngine.markDirty(true);
+          refreshDatabaseState();
+        },
+        markDirty: () => {
+          storageEngine.markDirty(true);
+          refreshDatabaseState();
+        },
       },
       dropbox: {
         getConfig: () => dropboxEngine.getConfig(),

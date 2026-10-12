@@ -4152,7 +4152,8 @@ import {
   FileSpreadsheet,
   Edit2,
   Building2,
-  Tag
+  Tag,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function FileManagerPlugin({ gaw }) {
@@ -4165,6 +4166,11 @@ export default function FileManagerPlugin({ gaw }) {
   const [dropboxFiles, setDropboxFiles] = useState([]);
   const [isLoadingDropbox, setIsLoadingDropbox] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [subTab, setSubTab] = useState('database');
+
+  const isDbActive = !!storageMeta && !!(storageMeta.fileName || storageMeta.filePath || (gaw.db?.getTables && gaw.db.getTables().length));
+  const hasLocalFile = !!storageMeta?.hasFileHandle;
+  const hasDropboxFile = !!dropboxConfig?.connected && !!dropboxConfig?.currentRemoteFile;
 
   // Active Database Information (Editable)
   const [appTitle, setAppTitle] = useState(() =>
@@ -4270,9 +4276,13 @@ export default function FileManagerPlugin({ gaw }) {
 
       if (gaw.storage.setFileName) {
         gaw.storage.setFileName(finalName);
+      } else if (gaw.storage.markDirty) {
+        gaw.storage.markDirty();
       }
       setDbName(finalName);
-      gaw.toast.success('Database file name changed to ' + finalName);
+      const meta = gaw.storage.getMetadata();
+      setStorageMeta(meta);
+      gaw.toast.success('Database file name changed to ' + finalName + '. Marked as unsaved/unsynced.');
     } else if (editingField === 'appTitle') {
       const titleVal = clean || 'New Application';
       if (gaw.workspace?.setSetting) {
@@ -4469,43 +4479,35 @@ export default function FileManagerPlugin({ gaw }) {
       <div className={'flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b ' + (
         isDark ? 'border-slate-800' : 'border-slate-200'
       )}>
-        <div>
-          <div className='flex items-center gap-3'>
-            <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
-              isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
+        <div className='flex items-center gap-3'>
+          <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
+            isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
+          )}>
+            <FolderOpen className='w-5 h-5' />
+          </div>
+          <div>
+            <h1 className={'text-xl font-bold tracking-tight flex items-center gap-2 ' + (
+              isDark ? 'text-white' : 'text-slate-900'
             )}>
-              <FolderOpen className='w-5 h-5' />
-            </div>
-            <div>
-              <h1 className={'text-xl font-bold tracking-tight flex items-center gap-2 ' + (
-                isDark ? 'text-white' : 'text-slate-900'
-              )}>
-                File & Workspace Manager
-              </h1>
-              <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                Create, open, and save SQLite databases, configure Dropbox cloud sync, manage recent files, or explore the Northwind demo.
-              </p>
-            </div>
+              File & Workspace Manager
+            </h1>
+            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+              Manage active SQLite databases, configure saving and cloud sync options, and review recent files.
+            </p>
           </div>
         </div>
 
         {/* Status Badges */}
         <div className='flex items-center gap-2 flex-wrap'>
-          {/* Dropbox Status Badge */}
           {dropboxConfig.connected ? (
             <div className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ' + (
               isDark ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'
             )}>
               <CheckCircle2 className='w-3.5 h-3.5 text-emerald-500' />
               <span>Dropbox Connected</span>
-              {dropboxConfig.accountName && (
-                <span className='opacity-80 font-mono text-[11px]'>
-                  ({dropboxConfig.accountName})
-                </span>
-              )}
               <button
                 onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className={'ml-1 text-[11px] underline ' + (isDark ? 'text-emerald-400 hover:text-emerald-200' : 'text-emerald-700 hover:text-emerald-900')}
+                className={'ml-1 text-[11px] underline cursor-pointer ' + (isDark ? 'text-emerald-400 hover:text-emerald-200' : 'text-emerald-700 hover:text-emerald-900')}
               >
                 Sync Settings
               </button>
@@ -4518,7 +4520,7 @@ export default function FileManagerPlugin({ gaw }) {
               <span>Dropbox Disconnected</span>
               <button
                 onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className={'ml-1 text-[11px] underline font-medium ' + (
+                className={'ml-1 text-[11px] underline font-medium cursor-pointer ' + (
                   isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800'
                 )}
               >
@@ -4527,7 +4529,6 @@ export default function FileManagerPlugin({ gaw }) {
             </div>
           )}
 
-          {/* Storage Target Badge */}
           <div className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (
             isDark ? 'bg-slate-800 border border-slate-700 text-slate-300' : 'bg-slate-100 border border-slate-300 text-slate-700'
           )}>
@@ -4537,685 +4538,868 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
       </div>
 
-      {/* Active Database Overview & Metadata Card */}
-      <div className={'rounded-2xl p-4 md:p-5 shadow-lg space-y-4 border ' + (
-        isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+      {/* Requirement 1: Sub-Navbar under File & Workspace Manager heading */}
+      <div className={'flex items-center gap-2 p-1.5 rounded-2xl border transition-colors ' + (
+        isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
       )}>
-        {/* Top Row: Title + Sync Status + Quick Actions */}
-        <div className={'flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-4 ' + (
-          isDark ? 'border-slate-800/80' : 'border-slate-100'
-        )}>
-          <div className='flex items-center gap-3'>
-            <div className={'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ' + (
-              isDark ? 'bg-blue-600/20 border border-blue-500/30 text-sky-400' : 'bg-blue-50 border border-blue-200 text-blue-700'
-            )}>
-              <Database className='w-5 h-5' />
-            </div>
-            <div>
-              <div className='flex items-center gap-2'>
-                <span className={'text-[10px] font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/80' : 'text-blue-700')}>
-                  Active Database Information
-                </span>
-                <span className={'px-2 py-0.5 rounded text-[10px] font-semibold ' + (
-                  storageMeta.syncStatus === 'dirty'
-                    ? isDark ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-amber-100 text-amber-800 border border-amber-300'
-                    : isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                )}>
-                  {storageMeta.syncStatus === 'dirty' ? 'Modified (Unsaved)' : 'Synchronized'}
-                </span>
-              </div>
-              <h2 className={'text-base md:text-lg font-bold font-mono mt-0.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                {dbName}
-              </h2>
-            </div>
-          </div>
+        <button
+          onClick={() => setSubTab('database')}
+          className={'flex-1 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ' + (
+            subTab === 'database'
+              ? (isDark ? 'bg-sky-600 text-white shadow-lg' : 'bg-white text-sky-700 shadow-md')
+              : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200')
+          )}
+        >
+          <Database className='w-4 h-4' />
+          <span>Database</span>
+        </button>
 
-          <div className='flex items-center gap-2 flex-wrap'>
-            <button
-              onClick={() => gaw.storage.save()}
-              className='px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow transition active:scale-95'
-              title='Save active database'
-            >
-              <Save className='w-3.5 h-3.5' />
-              <span>Save Database</span>
-            </button>
-            <button
-              onClick={() => gaw.storage.saveAs()}
-              className={'px-3 py-1.5 rounded-lg text-xs font-semibold transition active:scale-95 ' + (
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-sm'
-              )}
-              title='Save copy to new file'
-            >
-              Save As...
-            </button>
-            <button
-              onClick={() => gaw.navigation.openPlugin('plugin_local_storage')}
-              className={'px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 ' + (
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-emerald-700 border-slate-300'
-              )}
-              title='Open Local Storage & Disk Sync plugin'
-            >
-              <HardDrive className='w-3.5 h-3.5 text-emerald-500' />
-              <span>Local Storage & Sync</span>
-            </button>
-            <button
-              onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-              className={'px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 ' + (
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-sky-700 border-slate-300'
-              )}
-              title='Open Dropbox Cloud Sync plugin'
-            >
-              <Cloud className='w-3.5 h-3.5 text-sky-500' />
-              <span>Dropbox Cloud Sync</span>
-            </button>
-            <button
-              onClick={() => gaw.storage.exportDownload()}
-              className={'px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1 ' + (
-                isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300 shadow-sm'
-              )}
-              title='Download raw SQLite .db file directly'
-            >
-              <Download className='w-3.5 h-3.5' />
-              <span className='hidden sm:inline text-[11px]'>Export .db</span>
-            </button>
-            <button
-              onClick={handleCloseActiveDatabase}
-              className={'px-3 py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 active:scale-95 ' + (
-                isDark ? 'bg-red-950/40 hover:bg-red-900/60 border-red-800/40 text-red-300' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'
-              )}
-              title='Close active file and reset to blank database'
-            >
-              <X className='w-3.5 h-3.5 text-red-500' />
-              <span>Close Active Database</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Middle Row: Editable Details (Database Name, Application Title, Organization Name) */}
-        <div className='grid grid-cols-1 @[600px]:grid-cols-3 gap-3 py-2 border-b border-slate-800/40 cq-stack'>
-          {/* 1. Database File Name */}
-          <div className={'p-3 rounded-xl border transition ' + (
-            isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
-          )}>
-            <div className='flex items-center justify-between mb-1.5'>
-              <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
-                <Database className='w-3.5 h-3.5' />
-                <span>Database File Name</span>
-              </span>
-              {editingField !== 'dbName' && (
-                <button
-                  onClick={() => handleStartEdit('dbName')}
-                  className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition'
-                  title='Change database file name'
-                >
-                  <Edit2 className='w-3 h-3' />
-                </button>
-              )}
-            </div>
-
-            {editingField === 'dbName' ? (
-              <div className='space-y-2'>
-                <input
-                  type='text'
-                  value={tempValue}
-                  onChange={(e) => setTempValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                  placeholder='database_name.sqlite'
-                  className={'w-full px-2.5 py-1 rounded text-xs border font-mono font-semibold focus:outline-none focus:border-sky-500 ' + (
-                    isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  )}
-                  autoFocus
-                />
-                <div className='flex items-center gap-1.5'>
-                  <button
-                    onClick={handleSaveEdit}
-                    className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1'
-                  >
-                    <Check className='w-3 h-3' />
-                    <span>Save</span>
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px]'
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className={'font-mono font-bold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                  {dbName}
-                </p>
-                <p className={'text-[10px] font-mono mt-1 flex items-center gap-1.5 truncate ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                  <HardDrive className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-                  <span className="text-emerald-400 font-semibold truncate">{storageMeta.filePath || dbName}</span>
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* 2. Application Title */}
-          <div className={'p-3 rounded-xl border transition ' + (
-            isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
-          )}>
-            <div className='flex items-center justify-between mb-1.5'>
-              <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
-                <Tag className='w-3.5 h-3.5' />
-                <span>Application Title</span>
-              </span>
-              {editingField !== 'appTitle' && (
-                <button
-                  onClick={() => handleStartEdit('appTitle')}
-                  className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition'
-                  title='Change application title'
-                >
-                  <Edit2 className='w-3 h-3' />
-                </button>
-              )}
-            </div>
-
-            {editingField === 'appTitle' ? (
-              <div className='space-y-2'>
-                <input
-                  type='text'
-                  value={tempValue}
-                  onChange={(e) => setTempValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                  placeholder='Application Title'
-                  className={'w-full px-2.5 py-1 rounded text-xs border font-semibold focus:outline-none focus:border-sky-500 ' + (
-                    isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  )}
-                  autoFocus
-                />
-                <div className='flex items-center gap-1.5'>
-                  <button
-                    onClick={handleSaveEdit}
-                    className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1'
-                  >
-                    <Check className='w-3 h-3' />
-                    <span>Save</span>
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px]'
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className={'font-semibold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                  {appTitle}
-                </p>
-                <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                  Saved in database settings (app_title).
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Organization / Company Name */}
-          <div className={'p-3 rounded-xl border transition ' + (
-            isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
-          )}>
-            <div className='flex items-center justify-between mb-1.5'>
-              <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
-                <Building2 className='w-3.5 h-3.5' />
-                <span>Organization / Company</span>
-              </span>
-              {editingField !== 'companyName' && (
-                <button
-                  onClick={() => handleStartEdit('companyName')}
-                  className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition'
-                  title='Change organization name'
-                >
-                  <Edit2 className='w-3 h-3' />
-                </button>
-              )}
-            </div>
-
-            {editingField === 'companyName' ? (
-              <div className='space-y-2'>
-                <input
-                  type='text'
-                  value={tempValue}
-                  onChange={(e) => setTempValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
-                  placeholder='Organization Name'
-                  className={'w-full px-2.5 py-1 rounded text-xs border font-semibold focus:outline-none focus:border-sky-500 ' + (
-                    isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                  )}
-                  autoFocus
-                />
-                <div className='flex items-center gap-1.5'>
-                  <button
-                    onClick={handleSaveEdit}
-                    className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1'
-                  >
-                    <Check className='w-3 h-3' />
-                    <span>Save</span>
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px]'
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className={'font-semibold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                  {companyName}
-                </p>
-                <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                  Saved in database settings (company_name).
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Row: Stats Grid */}
-        <div className='grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-5 gap-3 text-xs pt-1 cq-stack'>
-          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
-            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Local Disk Path</span>
-            <span className={'font-mono font-semibold text-xs mt-0.5 block truncate text-emerald-400'} title={storageMeta.filePath || dbName}>
-              {storageMeta.filePath || dbName}
-            </span>
-          </div>
-          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
-            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>File Size</span>
-            <span className={'font-mono font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
-              {formatBytes(storageMeta.fileSize)}
-            </span>
-          </div>
-          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
-            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Storage Target</span>
-            <span className={'font-semibold mt-0.5 block capitalize ' + (isDark ? 'text-white' : 'text-slate-900')}>
-              {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}
-            </span>
-          </div>
-          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
-            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Last Saved</span>
-            <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
-              {storageMeta.lastSavedAt ? formatDate(storageMeta.lastSavedAt.toISOString()) : 'Not saved yet'}
-            </span>
-          </div>
-          <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
-            <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Database Tables</span>
-            <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
-              {gaw.db.getTables().length + ' tables'}
-            </span>
-          </div>
-        </div>
+        <button
+          onClick={() => setSubTab('saving')}
+          className={'flex-1 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ' + (
+            subTab === 'saving'
+              ? (isDark ? 'bg-sky-600 text-white shadow-lg' : 'bg-white text-sky-700 shadow-md')
+              : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200')
+          )}
+        >
+          <Save className='w-4 h-4' />
+          <span>Saving</span>
+        </button>
       </div>
 
-      {/* Main 4 Launch & Open Database Options */}
-      <div>
-        <h2 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
-          Launch & Open Databases
-        </h2>
-        <div className='grid grid-cols-1 @[550px]:grid-cols-2 @[900px]:grid-cols-4 gap-4 cq-stack'>
-          {/* Card 1: Create New Database */}
-          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
-            isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
+      {/* ROUTE 1: DATABASE */}
+      {subTab === 'database' && (
+        <div className="space-y-6">
+          {/* Active Database Overview & Metadata Card */}
+          <div className={'rounded-2xl p-4 md:p-5 shadow-lg space-y-4 border ' + (
+            isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
           )}>
-            <div className='space-y-3'>
-              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
-              )}>
-                <PlusCircle className='w-6 h-6' />
+            <div className={'flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-4 ' + (
+              isDark ? 'border-slate-800/80' : 'border-slate-100'
+            )}>
+              <div className='flex items-center gap-3'>
+                <div className={'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ' + (
+                  isDark ? 'bg-blue-600/20 border border-blue-500/30 text-sky-400' : 'bg-blue-50 border border-blue-200 text-blue-700'
+                )}>
+                  <Database className='w-5 h-5' />
+                </div>
+                <div>
+                  <div className='flex items-center gap-2'>
+                    <span className={'text-[10px] font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/80' : 'text-blue-700')}>
+                      Active Database Information
+                    </span>
+                  </div>
+                  <h2 className={'text-base md:text-lg font-bold font-mono mt-0.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                    {dbName}
+                  </h2>
+                </div>
               </div>
-              <div>
-                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Create New Database</h3>
-                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
-                  Creates a fresh database named "new_database.sqlite" with the minimal starting set. You can customize defaults and save locally or in Dropbox.
-                </p>
+
+              {/* Requirement 7 & 5 & 6: Action buttons in Active Database Information */}
+              <div className='flex items-center gap-2 flex-wrap'>
+                <button
+                  onClick={() => gaw.storage.exportDownload()}
+                  className={'px-3 py-1.5 rounded-lg text-xs font-semibold border transition active:scale-95 flex items-center gap-1.5 cursor-pointer ' + (
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
+                  )}
+                  title='Download raw SQLite .db file directly'
+                >
+                  <Download className='w-3.5 h-3.5' />
+                  <span>Export .db</span>
+                </button>
+                <button
+                  onClick={handleCloseActiveDatabase}
+                  className={'px-3 py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 active:scale-95 cursor-pointer ' + (
+                    isDark ? 'bg-red-950/40 hover:bg-red-900/60 border-red-800/40 text-red-300' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'
+                  )}
+                  title='Close active file and reset to blank database'
+                >
+                  <X className='w-3.5 h-3.5 text-red-500' />
+                  <span>Close Active Database</span>
+                </button>
               </div>
             </div>
-            <div className='pt-5'>
-              <button
-                onClick={handleNewDatabase}
-                className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-95'
-              >
-                <PlusCircle className='w-4 h-4' />
-                <span>Create New Database</span>
-              </button>
+
+            {/* Editable Details */}
+            <div className='grid grid-cols-1 @[600px]:grid-cols-3 gap-3 py-2 border-b border-slate-800/40 cq-stack'>
+              {/* 1. Database File Name */}
+              <div className={'p-3 rounded-xl border transition ' + (
+                isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              )}>
+                <div className='flex items-center justify-between mb-1.5'>
+                  <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
+                    <Database className='w-3.5 h-3.5' />
+                    <span>Database File Name</span>
+                  </span>
+                  {editingField !== 'dbName' && (
+                    <button
+                      onClick={() => handleStartEdit('dbName')}
+                      className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition cursor-pointer'
+                      title='Change database file name'
+                    >
+                      <Edit2 className='w-3 h-3' />
+                    </button>
+                  )}
+                </div>
+
+                {editingField === 'dbName' ? (
+                  <div className='space-y-2'>
+                    <input
+                      type='text'
+                      value={tempValue}
+                      onChange={(e) => setTempValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                      placeholder='database_name.sqlite'
+                      className={'w-full px-2.5 py-1 rounded text-xs border font-mono font-semibold focus:outline-none focus:border-sky-500 ' + (
+                        isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                      )}
+                      autoFocus
+                    />
+                    <div className='flex items-center gap-1.5'>
+                      <button
+                        onClick={handleSaveEdit}
+                        className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer'
+                      >
+                        <Check className='w-3 h-3' />
+                        <span>Save Name</span>
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] cursor-pointer'
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className={'font-mono font-bold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                      {dbName}
+                    </p>
+                    <p className={'text-[10px] font-mono mt-1 flex items-center gap-1.5 truncate ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                      <HardDrive className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                      <span className="text-emerald-400 font-semibold truncate">{storageMeta.filePath || dbName}</span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Requirement 6: Note on Database File Name card */}
+                <div className={'mt-2.5 p-2 rounded-lg text-[10px] leading-relaxed border ' + (
+                  isDark ? 'bg-amber-950/20 border-amber-800/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-900'
+                )}>
+                  <strong>Note:</strong> Renaming the database file marks the database as unsaved/unsynced. You will need to click 'Save' in the Saving tab for your storage mediums.
+                </div>
+              </div>
+
+              {/* 2. Application Title */}
+              <div className={'p-3 rounded-xl border transition ' + (
+                isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              )}>
+                <div className='flex items-center justify-between mb-1.5'>
+                  <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
+                    <Tag className='w-3.5 h-3.5' />
+                    <span>Application Title</span>
+                  </span>
+                  {editingField !== 'appTitle' && (
+                    <button
+                      onClick={() => handleStartEdit('appTitle')}
+                      className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition cursor-pointer'
+                      title='Change application title'
+                    >
+                      <Edit2 className='w-3 h-3' />
+                    </button>
+                  )}
+                </div>
+
+                {editingField === 'appTitle' ? (
+                  <div className='space-y-2'>
+                    <input
+                      type='text'
+                      value={tempValue}
+                      onChange={(e) => setTempValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                      placeholder='Application Title'
+                      className={'w-full px-2.5 py-1 rounded text-xs border font-semibold focus:outline-none focus:border-sky-500 ' + (
+                        isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                      )}
+                      autoFocus
+                    />
+                    <div className='flex items-center gap-1.5'>
+                      <button
+                        onClick={handleSaveEdit}
+                        className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer'
+                      >
+                        <Check className='w-3 h-3' />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] cursor-pointer'
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className={'font-semibold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                      {appTitle}
+                    </p>
+                    <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                      Saved in database settings (app_title).
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Organization / Company */}
+              <div className={'p-3 rounded-xl border transition ' + (
+                isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              )}>
+                <div className='flex items-center justify-between mb-1.5'>
+                  <span className='flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-400'>
+                    <Building2 className='w-3.5 h-3.5' />
+                    <span>Organization / Company</span>
+                  </span>
+                  {editingField !== 'companyName' && (
+                    <button
+                      onClick={() => handleStartEdit('companyName')}
+                      className='p-1 rounded hover:bg-sky-500/10 text-sky-400 transition cursor-pointer'
+                      title='Change organization name'
+                    >
+                      <Edit2 className='w-3 h-3' />
+                    </button>
+                  )}
+                </div>
+
+                {editingField === 'companyName' ? (
+                  <div className='space-y-2'>
+                    <input
+                      type='text'
+                      value={tempValue}
+                      onChange={(e) => setTempValue(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                      placeholder='Organization Name'
+                      className={'w-full px-2.5 py-1 rounded text-xs border font-semibold focus:outline-none focus:border-sky-500 ' + (
+                        isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                      )}
+                      autoFocus
+                    />
+                    <div className='flex items-center gap-1.5'>
+                      <button
+                        onClick={handleSaveEdit}
+                        className='px-2 py-0.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer'
+                      >
+                        <Check className='w-3 h-3' />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className='px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] cursor-pointer'
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className={'font-semibold text-xs md:text-sm truncate ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                      {companyName}
+                    </p>
+                    <p className={'text-[10px] mt-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                      Saved in database settings (company_name).
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Bottom Row: Stats Grid */}
+            <div className='grid grid-cols-1 @[400px]:grid-cols-2 @[650px]:grid-cols-4 gap-3 text-xs pt-1 cq-stack'>
+              <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+                <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Local File Path</span>
+                <span className={'font-mono font-semibold text-xs mt-0.5 block truncate text-emerald-400'} title={storageMeta.filePath || dbName}>
+                  {storageMeta.filePath || dbName}
+                </span>
+              </div>
+              <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+                <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>File Size</span>
+                <span className={'font-mono font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {formatBytes(storageMeta.fileSize)}
+                </span>
+              </div>
+              <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+                <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Storage Target</span>
+                <span className={'font-semibold mt-0.5 block capitalize ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}
+                </span>
+              </div>
+              <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
+                <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Database Tables</span>
+                <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {gaw.db.getTables().length + ' tables'}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Card 2: Open Local File */}
-          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
-            isDark ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-300 shadow-sm'
-          )}>
-            <div className='space-y-3'>
-              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-blue-600/20 border border-blue-500/30 text-sky-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
+          {/* Launch & Open Database Options */}
+          <div>
+            <h2 className={'text-xs font-bold uppercase tracking-wider mb-3 ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
+              Launch & Open Databases
+            </h2>
+            <div className='grid grid-cols-1 @[550px]:grid-cols-2 @[900px]:grid-cols-4 gap-4 cq-stack'>
+              {/* Card 1: Create New Database */}
+              <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+                isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
               )}>
-                <HardDrive className='w-6 h-6' />
+                <div className='space-y-3'>
+                  <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                    isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
+                  )}>
+                    <PlusCircle className='w-6 h-6' />
+                  </div>
+                  <div>
+                    <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Create New Database</h3>
+                    <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      Creates a fresh database named "new_database.sqlite" with the minimal starting set.
+                    </p>
+                  </div>
+                </div>
+                <div className='pt-5'>
+                  <button
+                    onClick={handleNewDatabase}
+                    className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-95 cursor-pointer'
+                  >
+                    <PlusCircle className='w-4 h-4' />
+                    <span>Create New Database</span>
+                  </button>
+                </div>
               </div>
-              <div>
-                <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Local File</h3>
-                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
-                  Open any SQLite database file (.db, .sqlite, .sqlite3) stored directly on your computer's local hard drive.
-                </p>
+
+              {/* Card 2: Open Local File */}
+              <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+                isDark ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-300 shadow-sm'
+              )}>
+                <div className='space-y-3'>
+                  <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                    isDark ? 'bg-blue-600/20 border border-blue-500/30 text-sky-400' : 'bg-blue-50 border border-blue-200 text-blue-600'
+                  )}>
+                    <HardDrive className='w-6 h-6' />
+                  </div>
+                  <div>
+                    <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Local File</h3>
+                    <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      Open any SQLite database file (.db, .sqlite, .sqlite3) stored directly on your computer.
+                    </p>
+                  </div>
+                </div>
+                <div className='pt-5'>
+                  <button
+                    onClick={handleOpenLocal}
+                    className='w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer'
+                  >
+                    <FolderOpen className='w-4 h-4' />
+                    <span>Choose Local File...</span>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className='pt-5'>
-              <button
-                onClick={handleOpenLocal}
-                className='w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
-              >
-                <FolderOpen className='w-4 h-4' />
-                <span>Choose Local File...</span>
-              </button>
+
+              {/* Card 3: Dropbox Cloud */}
+              <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+                isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
+              )}>
+                <div className='space-y-3'>
+                  <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                    isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
+                  )}>
+                    <Cloud className='w-6 h-6' />
+                  </div>
+                  <div>
+                    <div className='flex items-center gap-2'>
+                      <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open from Dropbox</h3>
+                      {dropboxConfig.connected && (
+                        <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
+                          isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        )}>
+                          Connected
+                        </span>
+                      )}
+                    </div>
+                    <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      {dropboxConfig.connected
+                        ? 'Browse database files in your connected Dropbox storage and open them directly.'
+                        : 'Connect your Dropbox account to browse, pull, and synchronize cloud databases.'}
+                    </p>
+                  </div>
+                </div>
+                <div className='pt-5 space-y-2'>
+                  {dropboxConfig.connected ? (
+                    <button
+                      onClick={handleOpenDropboxBrowser}
+                      className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer'
+                    >
+                      <Cloud className='w-4 h-4' />
+                      <span>Browse Dropbox Files...</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                      className={'w-full py-2.5 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98 border cursor-pointer ' + (
+                        isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-sky-700/40' : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200'
+                      )}
+                    >
+                      <ExternalLink className='w-4 h-4' />
+                      <span>Open Dropbox Cloud Sync</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Card 4: Northwind Demo */}
+              <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
+                isDark
+                  ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30 border-indigo-900/40 hover:border-indigo-600/50'
+                  : 'bg-gradient-to-br from-white via-white to-indigo-50/50 border-indigo-200 hover:border-indigo-300 shadow-sm'
+              )}>
+                <div className='space-y-3'>
+                  <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
+                    isDark ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border border-emerald-200 text-emerald-600'
+                  )}>
+                    <Sparkles className='w-6 h-6' />
+                  </div>
+                  <div>
+                    <div className='flex items-center gap-2'>
+                      <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Northwind Demo</h3>
+                      <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
+                        isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      )}>
+                        Demo Template
+                      </span>
+                    </div>
+                    <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                      Open the full Northwind Modern Commerce sample suite with orders, inventory, CRM, and reports.
+                    </p>
+                  </div>
+                </div>
+                <div className='pt-5'>
+                  <button
+                    onClick={handleOpenNorthwindDemo}
+                    className='w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer'
+                  >
+                    <Sparkles className='w-4 h-4' />
+                    <span>Open Northwind Demo</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Card 3: Dropbox Cloud */}
-          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
-            isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
+          {/* Recent Files Log Section */}
+          <div className={'rounded-2xl p-4 md:p-5 shadow-lg space-y-4 border ' + (
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
           )}>
-            <div className='space-y-3'>
-              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-sky-600/20 border border-sky-500/30 text-sky-400' : 'bg-sky-50 border border-sky-200 text-sky-600'
-              )}>
-                <Cloud className='w-6 h-6' />
-              </div>
+            <div className={'flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ' + (
+              isDark ? 'border-slate-800' : 'border-slate-100'
+            )}>
               <div>
                 <div className='flex items-center gap-2'>
-                  <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open from Dropbox</h3>
-                  {dropboxConfig.connected && (
-                    <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
-                      isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  <h2 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                    <Clock className='w-4 h-4 text-sky-500' />
+                    <span>Recent Files Log</span>
+                  </h2>
+                  <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + (
+                    isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'
+                  )}>
+                    {recentFiles.length + ' recorded'}
+                  </span>
+                </div>
+                <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                  Maintained in your browser's private local storage. Blank in new incognito browser windows.
+                </p>
+              </div>
+
+              {recentFiles.length > 0 && (
+                <button
+                  onClick={() => setShowClearConfirm(true)}
+                  className={'px-3 py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer ' + (
+                    isDark ? 'bg-slate-800 hover:bg-red-950/40 text-slate-300 hover:text-red-300 border-slate-700 hover:border-red-800/40' : 'bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border-slate-300 hover:border-red-200'
+                  )}
+                  title='Delete recent files log from local browser storage'
+                >
+                  <Trash2 className='w-3.5 h-3.5' />
+                  <span>Clear Recent Files Log</span>
+                </button>
+              )}
+            </div>
+
+            {recentFiles.length === 0 ? (
+              <div className={'py-12 flex flex-col items-center justify-center text-center space-y-3 rounded-xl border border-dashed ' + (
+                isDark ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-300'
+              )}>
+                <div className={'w-12 h-12 rounded-2xl flex items-center justify-center ' + (
+                  isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'
+                )}>
+                  <FolderOpen className='w-6 h-6' />
+                </div>
+                <div className='max-w-sm'>
+                  <h4 className={'text-sm font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>No Recent Files Recorded</h4>
+                  <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
+                    Open a local file, pull a database from Dropbox, or launch the Northwind Demo above to track files here.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className='overflow-x-auto'>
+                <table className='w-full text-left text-xs'>
+                  <thead>
+                    <tr className={'border-b uppercase tracking-wider text-[10px] font-semibold ' + (
+                      isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-slate-50/50'
                     )}>
-                      Connected
+                      <th className='py-2.5 px-3'>Database File</th>
+                      <th className='py-2.5 px-3'>Source</th>
+                      <th className='py-2.5 px-3'>Size</th>
+                      <th className='py-2.5 px-3'>Last Opened</th>
+                      <th className='py-2.5 px-3 text-right'>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60' : 'divide-slate-200')}>
+                    {recentFiles.map((file) => {
+                      const isDemo = file.source === 'demo';
+                      const isDropbox = file.source === 'dropbox';
+                      return (
+                        <tr
+                          key={file.id}
+                          className={'transition group cursor-pointer ' + (isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50')}
+                          onClick={() => handleOpenRecent(file)}
+                        >
+                          <td className='py-3 px-3'>
+                            <div className='flex items-center gap-2.5'>
+                              <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
+                                isDemo
+                                  ? isDark ? 'bg-emerald-600/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
+                                  : isDropbox
+                                  ? isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'
+                                  : isDark ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-600'
+                              )}>
+                                {isDemo ? (
+                                  <Sparkles className='w-3.5 h-3.5' />
+                                ) : isDropbox ? (
+                                  <Cloud className='w-3.5 h-3.5' />
+                                ) : (
+                                  <HardDrive className='w-3.5 h-3.5' />
+                                )}
+                              </div>
+                              <div>
+                                <span className={'font-semibold block transition ' + (
+                                  isDark ? 'text-white group-hover:text-indigo-300' : 'text-slate-900 group-hover:text-indigo-600'
+                                )}>
+                                  {file.name}
+                                </span>
+                                <span className={'text-[10px] font-mono ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
+                                  {file.path || (isDropbox ? 'Dropbox Cloud' : 'Local Disk')}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className='py-3 px-3'>
+                            <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ' + (
+                              isDemo
+                                ? isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                : isDropbox
+                                ? isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                : isDark ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                            )}>
+                              {isDemo ? 'Demo Template' : isDropbox ? 'Dropbox' : 'Local Disk'}
+                            </span>
+                          </td>
+
+                          <td className={'py-3 px-3 font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                            {file.size ? formatBytes(file.size) : '—'}
+                          </td>
+
+                          <td className={'py-3 px-3 whitespace-nowrap ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                            {formatDate(file.lastOpened)}
+                          </td>
+
+                          <td className='py-3 px-3 text-right'>
+                            <div className='flex items-center justify-end gap-1.5'>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenRecent(file);
+                                }}
+                                className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition shadow cursor-pointer"
+                              >
+                                Open
+                              </button>
+                              <button
+                                onClick={(e) => handleRemoveRecentFile(file.id, e)}
+                                className={'p-1 rounded transition cursor-pointer ' + (
+                                  isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-400 hover:text-red-600 hover:bg-slate-100'
+                                )}
+                                title='Remove from recent list'
+                              >
+                                <Trash2 className='w-3.5 h-3.5' />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ROUTE 2: SAVING */}
+      {subTab === 'saving' && (
+        <div className="space-y-6">
+          <div className={'p-4 rounded-2xl border flex items-center justify-between gap-3 ' + (
+            isDark ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+          )}>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-500" />
+              <div>
+                <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-500">
+                  Storage & Sync Medium Configuration
+                </h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Save active database files and configure background synchronization for Local Disk Storage and Dropbox Cloud Sync.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* CARD 1: LOCAL DISK STORAGE */}
+            <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between border transition ' + (
+              !isDbActive
+                ? (isDark ? 'bg-slate-900/40 border-slate-800/60 opacity-60' : 'bg-slate-100 border-slate-200 opacity-60')
+                : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')
+            )}>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-3 border-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
+                      isDark ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    )}>
+                      <HardDrive className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className={'font-bold text-sm ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                        Local Disk Storage
+                      </h3>
+                      <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        File System Access API & direct file export
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Requirement 4: Synchronized Notification / Status for Local Disk Medium */}
+                  {!isDbActive ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      No Database Loaded
+                    </span>
+                  ) : !hasLocalFile ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Configured
+                    </span>
+                  ) : storageMeta.syncStatus === 'dirty' ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Unsaved
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Synchronized
                     </span>
                   )}
                 </div>
-                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
-                  {dropboxConfig.connected
-                    ? 'Browse database files in your connected Dropbox storage and open them directly into Gawkyy.'
-                    : 'Connect your Dropbox account to browse, pull, and synchronize cloud databases anywhere.'}
-                </p>
+
+                {!isDbActive ? (
+                  <div className="py-4 text-center text-xs italic text-slate-500">
+                    No active database loaded in the application. Everything is disabled until a database is opened.
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Local File Path:
+                      </span>
+                      <span className={'font-mono font-semibold block truncate mt-0.5 ' + (hasLocalFile ? 'text-emerald-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
+                        {storageMeta.filePath || (hasLocalFile ? dbName : 'No local disk handle bound')}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Auto-Save Status:
+                      </span>
+                      <span className={'font-semibold block mt-0.5 ' + (isDark ? 'text-slate-200' : 'text-slate-800')}>
+                        {storageMeta.isAutoSyncEnabled
+                          ? 'Enabled (Interval: ' + storageMeta.autoSyncIntervalSec + 's)'
+                          : 'Disabled (Manual Save)'}
+                      </span>
+                    </div>
+
+                    {!hasLocalFile && (
+                      <p className="text-[11px] text-amber-400 italic">
+                        Local file saving is not configured for this active database. Click "Local Storage & Sync" below to configure or select a local destination file.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Requirement 5 & 7: Save button & plugin link for Local Disk Medium */}
+              <div className="pt-6 border-t border-slate-800/60 flex items-center gap-2">
+                <button
+                  disabled={!isDbActive || !hasLocalFile}
+                  onClick={() => gaw.storage.save()}
+                  className={'flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ' + (
+                    !isDbActive || !hasLocalFile
+                      ? (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-50' : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50')
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md active:scale-95 cursor-pointer'
+                  )}
+                  title={!hasLocalFile ? 'Not configured for local file' : 'Save active database to local file'}
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save</span>
+                </button>
+
+                <button
+                  onClick={() => gaw.navigation.openPlugin('plugin_local_storage')}
+                  className={'py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ' + (
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-emerald-700 border-slate-300'
+                  )}
+                  title='Open Local Storage & Disk Sync plugin'
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Local Storage & Sync</span>
+                </button>
               </div>
             </div>
-            <div className='pt-5 space-y-2'>
-              {dropboxConfig.connected ? (
+
+            {/* CARD 2: DROPBOX CLOUD SYNC */}
+            <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between border transition ' + (
+              !isDbActive
+                ? (isDark ? 'bg-slate-900/40 border-slate-800/60 opacity-60' : 'bg-slate-100 border-slate-200 opacity-60')
+                : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')
+            )}>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-3 border-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
+                      isDark ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'bg-sky-50 text-sky-700 border border-sky-200'
+                    )}>
+                      <Cloud className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className={'font-bold text-sm ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                        Dropbox Cloud Sync
+                      </h3>
+                      <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Cloud sync, automatic backup & multi-device push/pull
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Requirement 4: Synchronized Notification / Status for Dropbox Medium */}
+                  {!isDbActive ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      No Database Loaded
+                    </span>
+                  ) : !hasDropboxFile ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Configured
+                    </span>
+                  ) : storageMeta.syncStatus === 'dirty' ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Unsaved
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Synchronized
+                    </span>
+                  )}
+                </div>
+
+                {!isDbActive ? (
+                  <div className="py-4 text-center text-xs italic text-slate-500">
+                    No active database loaded in the application. Everything is disabled until a database is opened.
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Dropbox Cloud Account:
+                      </span>
+                      <span className={'font-semibold block mt-0.5 ' + (dropboxConfig.connected ? 'text-sky-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
+                        {dropboxConfig.connected
+                          ? 'Connected (' + (dropboxConfig.accountName || 'Active Account') + ')'
+                          : 'Disconnected'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Remote File Path:
+                      </span>
+                      <span className={'font-mono font-semibold block truncate mt-0.5 ' + (hasDropboxFile ? 'text-sky-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
+                        {dropboxConfig.currentRemoteFile?.path_display || (hasDropboxFile ? '/' + dbName : 'No Dropbox cloud destination file bound')}
+                      </span>
+                    </div>
+
+                    {!hasDropboxFile && (
+                      <p className="text-[11px] text-amber-400 italic">
+                        Dropbox Cloud Sync is not configured for this active database. Click "Dropbox Cloud Sync" below to link an account or upload a cloud database copy.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Requirement 5 & 7: Save button & plugin link for Dropbox Medium */}
+              <div className="pt-6 border-t border-slate-800/60 flex items-center gap-2">
                 <button
-                  onClick={handleOpenDropboxBrowser}
-                  className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
+                  disabled={!isDbActive || !hasDropboxFile}
+                  onClick={() => {
+                    if (gaw.dropbox?.save) {
+                      gaw.dropbox.save();
+                    } else {
+                      gaw.storage.save();
+                    }
+                  }}
+                  className={'flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ' + (
+                    !isDbActive || !hasDropboxFile
+                      ? (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-50' : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50')
+                      : 'bg-sky-600 hover:bg-sky-500 text-white shadow-md active:scale-95 cursor-pointer'
+                  )}
+                  title={!hasDropboxFile ? 'Not configured for Dropbox' : 'Save active database to Dropbox'}
                 >
-                  <Cloud className='w-4 h-4' />
-                  <span>Browse Dropbox Files...</span>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save</span>
                 </button>
-              ) : (
+
                 <button
                   onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                  className={'w-full py-2.5 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98 border ' + (
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-sky-700/40' : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200'
+                  className={'py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ' + (
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-sky-700 border-slate-300'
                   )}
+                  title='Open Dropbox Cloud Sync plugin'
                 >
-                  <ExternalLink className='w-4 h-4' />
-                  <span>Open Dropbox Cloud Sync</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Dropbox Cloud Sync</span>
                 </button>
-              )}
-            </div>
-          </div>
-
-          {/* Card 4: Northwind Demo */}
-          <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
-            isDark
-              ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30 border-indigo-900/40 hover:border-indigo-600/50'
-              : 'bg-gradient-to-br from-white via-white to-indigo-50/50 border-indigo-200 hover:border-indigo-300 shadow-sm'
-          )}>
-            <div className='space-y-3'>
-              <div className={'w-12 h-12 rounded-xl flex items-center justify-center group-hover:scale-105 transition ' + (
-                isDark ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border border-emerald-200 text-emerald-600'
-              )}>
-                <Sparkles className='w-6 h-6' />
-              </div>
-              <div>
-                <div className='flex items-center gap-2'>
-                  <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open Northwind Demo</h3>
-                  <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
-                    isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  )}>
-                    Demo Template
-                  </span>
-                </div>
-                <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
-                  Open the full Northwind Modern Commerce sample suite with orders, inventory, CRM, and interactive reports.
-                </p>
               </div>
             </div>
-            <div className='pt-5'>
-              <button
-                onClick={handleOpenNorthwindDemo}
-                className='w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98'
-              >
-                <Sparkles className='w-4 h-4' />
-                <span>Open Northwind Demo</span>
-              </button>
-            </div>
           </div>
         </div>
-      </div>
-
-      {/* Recent Files Log Section */}
-      <div className={'rounded-2xl p-4 md:p-5 shadow-lg space-y-4 border ' + (
-        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-      )}>
-        <div className={'flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3 ' + (
-          isDark ? 'border-slate-800' : 'border-slate-100'
-        )}>
-          <div>
-            <div className='flex items-center gap-2'>
-              <h2 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                <Clock className='w-4 h-4 text-sky-500' />
-                <span>Recent Files Log</span>
-              </h2>
-              <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold border ' + (
-                isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'
-              )}>
-                {recentFiles.length + ' recorded'}
-              </span>
-            </div>
-            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-              Maintained in your browser's private local storage. Blank in new incognito browser windows.
-            </p>
-          </div>
-
-          {recentFiles.length > 0 && (
-            <button
-              onClick={() => setShowClearConfirm(true)}
-              className={'px-3 py-1.5 rounded-lg border text-xs font-semibold transition flex items-center gap-1.5 self-start sm:self-auto ' + (
-                isDark ? 'bg-slate-800 hover:bg-red-950/40 text-slate-300 hover:text-red-300 border-slate-700 hover:border-red-800/40' : 'bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 border-slate-300 hover:border-red-200'
-              )}
-              title='Delete recent files log from local browser storage'
-            >
-              <Trash2 className='w-3.5 h-3.5' />
-              <span>Clear Recent Files Log</span>
-            </button>
-          )}
-        </div>
-
-        {recentFiles.length === 0 ? (
-          <div className={'py-12 flex flex-col items-center justify-center text-center space-y-3 rounded-xl border border-dashed ' + (
-            isDark ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-300'
-          )}>
-            <div className={'w-12 h-12 rounded-2xl flex items-center justify-center ' + (
-              isDark ? 'bg-slate-800 text-slate-500' : 'bg-slate-200 text-slate-400'
-            )}>
-              <FolderOpen className='w-6 h-6' />
-            </div>
-            <div className='max-w-sm'>
-              <h4 className={'text-sm font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>No Recent Files Recorded</h4>
-              <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
-                Open a local file, pull a database from Dropbox, or launch the Northwind Demo above to track files here.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className='overflow-x-auto'>
-            <table className='w-full text-left text-xs'>
-              <thead>
-                <tr className={'border-b uppercase tracking-wider text-[10px] font-semibold ' + (
-                  isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-slate-50/50'
-                )}>
-                  <th className='py-2.5 px-3'>Database File</th>
-                  <th className='py-2.5 px-3'>Source</th>
-                  <th className='py-2.5 px-3'>Size</th>
-                  <th className='py-2.5 px-3'>Last Opened</th>
-                  <th className='py-2.5 px-3 text-right'>Actions</th>
-                </tr>
-              </thead>
-              <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60' : 'divide-slate-200')}>
-                {recentFiles.map((file) => {
-                  const isDemo = file.source === 'demo';
-                  const isDropbox = file.source === 'dropbox';
-                  return (
-                    <tr
-                      key={file.id}
-                      className={'transition group cursor-pointer ' + (isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50')}
-                      onClick={() => handleOpenRecent(file)}
-                    >
-                      <td className='py-3 px-3'>
-                        <div className='flex items-center gap-2.5'>
-                          <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
-                            isDemo
-                              ? isDark ? 'bg-emerald-600/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-                              : isDropbox
-                              ? isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'
-                              : isDark ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-600'
-                          )}>
-                            {isDemo ? (
-                              <Sparkles className='w-3.5 h-3.5' />
-                            ) : isDropbox ? (
-                              <Cloud className='w-3.5 h-3.5' />
-                            ) : (
-                              <HardDrive className='w-3.5 h-3.5' />
-                            )}
-                          </div>
-                          <div>
-                            <span className={'font-semibold block transition ' + (
-                              isDark ? 'text-white group-hover:text-indigo-300' : 'text-slate-900 group-hover:text-indigo-600'
-                            )}>
-                              {file.name}
-                            </span>
-                            <span className={'text-[10px] font-mono ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
-                              {file.path || (isDropbox ? 'Dropbox Cloud' : 'Local Disk')}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className='py-3 px-3'>
-                        <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ' + (
-                          isDemo
-                            ? isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : isDropbox
-                            ? isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                            : isDark ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
-                        )}>
-                          {isDemo ? 'Demo Template' : isDropbox ? 'Dropbox' : 'Local Disk'}
-                        </span>
-                      </td>
-
-                      <td className={'py-3 px-3 font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        {file.size ? formatBytes(file.size) : '—'}
-                      </td>
-
-                      <td className={'py-3 px-3 whitespace-nowrap ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        {formatDate(file.lastOpened)}
-                      </td>
-
-                      <td className='py-3 px-3 text-right'>
-                        <div className='flex items-center justify-end gap-1.5'>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenRecent(file);
-                            }}
-                            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition shadow"
-                          >
-                            Open
-                          </button>
-                          <button
-                            onClick={(e) => handleRemoveRecentFile(file.id, e)}
-                            className={'p-1 rounded transition ' + (
-                              isDark ? 'text-slate-500 hover:text-red-400 hover:bg-slate-800' : 'text-slate-400 hover:text-red-600 hover:bg-slate-100'
-                            )}
-                            title='Remove from recent list'
-                          >
-                            <Trash2 className='w-3.5 h-3.5' />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Option Bar: Toggle Side Panel */}
-      <div className={'rounded-2xl p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ' + (
-        isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
-      )}>
-        <div className='flex items-center gap-3'>
-          <div className={'w-9 h-9 rounded-xl border flex items-center justify-center ' + (
-            isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
-          )}>
-            {sidebarOpen ? (
-              <PanelLeftClose className='w-5 h-5 text-indigo-500' />
-            ) : (
-              <PanelLeftOpen className='w-5 h-5 text-slate-400' />
-            )}
-          </div>
-          <div>
-            <div className='flex items-center gap-2'>
-              <span className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                Workspace Side Navigation Pane
-              </span>
-              <span className={'px-1.5 py-0.2 rounded text-[10px] font-semibold ' + (
-                sidebarOpen
-                  ? isDark ? 'bg-indigo-500/20 text-indigo-300' : 'bg-indigo-50 border border-indigo-200 text-indigo-700'
-                  : isDark ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 border border-slate-200 text-slate-600'
-              )}>
-                {sidebarOpen ? 'Visible' : 'Hidden'}
-              </span>
-            </div>
-            <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-              {sidebarOpen
-                ? 'The side navigation panel is visible. You can browse tables, queries, reports, and plugins.'
-                : 'The side navigation panel is hidden for a clean, focused initial view.'}
-            </p>
-          </div>
-        </div>
-
-        <button
-          onClick={handleToggleSidebar}
-          className='px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-95 flex-shrink-0'
-        >
-          {sidebarOpen ? (
-            <>
-              <PanelLeftClose className='w-4 h-4' />
-              <span>Hide Side Panel</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className='w-4 h-4' />
-              <span>Show Side Panel</span>
-            </>
-          )}
-        </button>
-      </div>
+      )}
 
       {/* Confirmation Modal: Delete Recent Files Log */}
       {showClearConfirm && (
@@ -5242,15 +5426,12 @@ export default function FileManagerPlugin({ gaw }) {
               <p className='leading-relaxed'>
                 Clearing the log removes only your session history from this browser's local storage.
               </p>
-              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                Your actual database files on local disk or Dropbox will <strong>NOT</strong> be deleted or modified.
-              </p>
             </div>
 
             <div className='flex items-center justify-end gap-2 pt-2'>
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className={'px-4 py-2 rounded-lg text-xs font-semibold transition ' + (
+                className={'px-4 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ' + (
                   isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
                 )}
               >
@@ -5258,7 +5439,7 @@ export default function FileManagerPlugin({ gaw }) {
               </button>
               <button
                 onClick={handleClearRecentFiles}
-                className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow transition active:scale-95'
+                className='px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow transition active:scale-95 cursor-pointer'
               >
                 Clear Log
               </button>
@@ -5287,7 +5468,7 @@ export default function FileManagerPlugin({ gaw }) {
               </div>
               <button
                 onClick={() => setShowDropboxPicker(false)}
-                className={'p-1 rounded transition ' + (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100')}
+                className={'p-1 rounded transition cursor-pointer ' + (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100')}
               >
                 <X className='w-4 h-4' />
               </button>
@@ -5306,7 +5487,7 @@ export default function FileManagerPlugin({ gaw }) {
                     setShowDropboxPicker(false);
                     gaw.navigation.openPlugin('plugin_dropbox_sync');
                   }}
-                  className={'text-xs underline ' + (isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800')}
+                  className={'text-xs underline cursor-pointer ' + (isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800')}
                 >
                   Open Dropbox Cloud Sync to push the active database
                 </button>
@@ -5317,7 +5498,7 @@ export default function FileManagerPlugin({ gaw }) {
                   <button
                     key={file.id || file.path_display}
                     onClick={() => handleSelectDropboxFile(file)}
-                    className={'w-full text-left py-2.5 px-3 rounded-lg flex items-center justify-between group transition ' + (
+                    className={'w-full text-left py-2.5 px-3 rounded-lg flex items-center justify-between group transition cursor-pointer ' + (
                       isDark ? 'hover:bg-slate-800/60' : 'hover:bg-slate-50'
                     )}
                   >
@@ -5340,16 +5521,6 @@ export default function FileManagerPlugin({ gaw }) {
               </div>
             )}
 
-            <div className={'flex items-center justify-end pt-2 border-t ' + (isDark ? 'border-slate-800' : 'border-slate-100')}>
-              <button
-                onClick={() => setShowDropboxPicker(false)}
-                className={'px-4 py-2 rounded-lg text-xs font-semibold transition ' + (
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
-                )}
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -6192,13 +6363,14 @@ export default function FooterStatusPlugin({ gaw }) {
 `;
 
 export const DEFAULT_SETTINGS_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
-import { Settings, AppWindow, Check, Moon, Sun, Database } from 'lucide-react';
+import { Settings, AppWindow, Check, Moon, Sun, Database, PanelLeft } from 'lucide-react';
 
 export default function SettingsPlugin({ gaw }) {
   const [appName, setAppName] = useState('');
   const [appDescription, setAppDescription] = useState('');
   const [initialPlugin, setInitialPlugin] = useState('main');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => (gaw.workspace?.isSidebarOpen ? gaw.workspace.isSidebarOpen() : true));
 
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -6268,7 +6440,7 @@ export default function SettingsPlugin({ gaw }) {
         gaw.navigation.toggleTheme(newTheme);
       }
       gaw.eventBus?.emit('theme_changed', newTheme);
-      gaw.toast?.info(\`Theme switched to \${newTheme === 'vs-dark' ? 'Dark Mode' : 'Light Mode'}\`);
+      gaw.toast?.info('Theme switched to ' + (newTheme === 'vs-dark' ? 'Dark Mode' : 'Light Mode'));
     } catch (err) {
       gaw.toast?.error('Failed to change theme: ' + err.message);
     }
@@ -6425,6 +6597,62 @@ export default function SettingsPlugin({ gaw }) {
               <Sun className="w-5 h-5 text-amber-400" />
               <span>Light Mode (vs-light)</span>
             </button>
+          </div>
+        </div>
+
+        {/* Section 3: Workspace Side Navigation Pane */}
+        <div className={'p-6 rounded-2xl border shadow-xl space-y-4 ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
+            <div className="flex items-center gap-2">
+              <PanelLeft className="w-4 h-4 text-sky-400" />
+              <h2 className="text-sm font-bold text-sky-400 uppercase tracking-wider">
+                Workspace Side Navigation Pane
+              </h2>
+            </div>
+            <span className="text-[10px] font-mono text-slate-400">
+              Shortcut: Shift+Ctrl+D
+            </span>
+          </div>
+
+          <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
+            Control visibility of the left workspace navigation pane for components, database tables, and system views.
+          </p>
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <span className={'text-xs font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>
+                Side Navigation Pane:
+              </span>
+              <span className={'px-2 py-0.5 rounded text-xs font-mono font-bold ' + (
+                sidebarOpen
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              )}>
+                {sidebarOpen ? 'Visible (Expanded)' : 'Hidden (Collapsed)'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (gaw.workspace?.toggleSidebar) {
+                  gaw.workspace.toggleSidebar();
+                  setSidebarOpen(!sidebarOpen);
+                }
+              }}
+              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <PanelLeft className="w-4 h-4" />
+              <span>{sidebarOpen ? 'Collapse Side Pane' : 'Expand Side Pane'}</span>
+            </button>
+          </div>
+
+          <div className={'p-3 rounded-xl border text-[11px] leading-relaxed ' + (
+            isDark ? 'bg-sky-950/30 border-sky-800/40 text-sky-300' : 'bg-sky-50 border-sky-200 text-sky-900'
+          )}>
+            <strong>Shortcut Note:</strong> The Workspace Side Navigation Pane can also be toggled anytime using the keyboard shortcut <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Shift+Ctrl+D</kbd> (or <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Ctrl+Shift+D</kbd>).
           </div>
         </div>
       </div>
