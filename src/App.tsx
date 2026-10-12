@@ -1403,61 +1403,81 @@ export default function App() {
     const parseHash = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').trim();
       if (!hash || hash === 'file' || hash === 'plugin/plugin_file_manager' || hash === 'view' || hash === 'app_hub') {
-        setActiveRoute('file');
-        setActiveView('plugin:plugin_file_manager');
+        if (activeView !== 'plugin:plugin_file_manager' || activeRoute !== 'file') {
+          setActiveRoute('file');
+          setActiveView('plugin:plugin_file_manager');
+        }
         if (!window.location.hash || window.location.hash === '#') {
           window.location.hash = '#file';
         }
       } else if (hash === 'database' || hash === 'plugin/plugin_database_management') {
-        setActiveRoute('database');
-        setActiveView('plugin:plugin_database_management');
+        if (activeView !== 'plugin:plugin_database_management' || activeRoute !== 'database') {
+          setActiveRoute('database');
+          setActiveView('plugin:plugin_database_management');
+        }
       } else if (hash === 'plugins' || hash === 'plugin/plugin_manager') {
-        setActiveRoute('plugins');
-        setActiveView('plugin:plugin_manager');
+        if (activeView !== 'plugin:plugin_manager' || activeRoute !== 'plugins') {
+          setActiveRoute('plugins');
+          setActiveView('plugin:plugin_manager');
+        }
       } else if (hash === 'help' || hash === 'plugin/plugin_help') {
-        setActiveRoute('help');
-        setActiveView('plugin:plugin_help');
+        if (activeView !== 'plugin:plugin_help' || activeRoute !== 'help') {
+          setActiveRoute('help');
+          setActiveView('plugin:plugin_help');
+        }
       } else if (hash === 'spreadsheet') {
-        setActiveRoute('file');
-        setActiveView('spreadsheet');
+        if (activeView !== 'spreadsheet' || activeRoute !== 'file') {
+          setActiveRoute('file');
+          setActiveView('spreadsheet');
+        }
       } else if (hash.startsWith('ide')) {
-        setActiveRoute('file');
-        setActiveView('ide');
+        if (activeView !== 'ide' || activeRoute !== 'file') {
+          setActiveRoute('file');
+          setActiveView('ide');
+        }
       } else if (hash.startsWith('table/')) {
         const tName = hash.replace('table/', '');
-        handleSelectTable(tName, false);
+        if (activeView !== `table:${tName}`) {
+          handleSelectTable(tName, false);
+        }
       } else if (hash.startsWith('query/')) {
         const qId = hash.replace('query/', '');
-        const q = queries.find((item) => item.id === qId);
-        if (q) {
-          handleSelectQuery(q, false);
-        } else {
-          setActiveRoute('file');
-          setActiveView(`query:${qId}`);
+        if (activeView !== `query:${qId}`) {
+          const q = queries.find((item) => item.id === qId);
+          if (q) {
+            handleSelectQuery(q, false);
+          } else {
+            setActiveRoute('file');
+            setActiveView(`query:${qId}`);
+          }
         }
       } else if (hash.startsWith('report/')) {
         const rId = hash.replace('report/', '');
-        setActiveRoute('file');
-        setActiveView(`report:${rId}`);
+        if (activeView !== `report:${rId}` || activeRoute !== 'file') {
+          setActiveRoute('file');
+          setActiveView(`report:${rId}`);
+        }
       } else if (hash.startsWith('plugin/')) {
         const pId = hash.replace('plugin/', '');
-        if (pId === 'plugin_file_manager' || pId === 'plugin_local_storage') {
-          setActiveRoute('file');
-        } else if (pId === 'plugin_database_management') {
-          setActiveRoute('database');
-        } else if (pId === 'plugin_help') {
-          setActiveRoute('help');
-        } else {
-          setActiveRoute('plugins');
+        const targetRoute =
+          pId === 'plugin_file_manager' || pId === 'plugin_local_storage'
+            ? 'file'
+            : pId === 'plugin_database_management'
+            ? 'database'
+            : pId === 'plugin_help'
+            ? 'help'
+            : 'plugins';
+        if (activeView !== `plugin:${pId}` || activeRoute !== targetRoute) {
+          setActiveRoute(targetRoute as any);
+          setActiveView(`plugin:${pId}`);
         }
-        setActiveView(`plugin:${pId}`);
       }
     };
 
     parseHash();
     window.addEventListener('hashchange', parseHash);
     return () => window.removeEventListener('hashchange', parseHash);
-  }, [queries, tables, handleSelectTable, handleSelectQuery]);
+  }, [queries, tables, handleSelectTable, handleSelectQuery, activeView, activeRoute]);
 
   // Build GAW Context passed to dynamic plugins
   const gawContext: GAWContext = useMemo(() => {

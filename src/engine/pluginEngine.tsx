@@ -87,9 +87,23 @@ export class PluginEngine {
       const factory = new Function(...scopeArgs, jsCode);
       factory(...scopeValues);
 
-      const FinalComponent: any = moduleObj.exports?.default || moduleObj.exports || exportsObj.default;
+      let FinalComponent: any = moduleObj.exports?.default || moduleObj.exports || exportsObj.default;
 
-      if (!FinalComponent || (typeof FinalComponent !== 'function' && typeof FinalComponent !== 'object')) {
+      // Unwrap nested .default if FinalComponent is an ES module object wrapper and NOT a direct React component (e.g., React.memo or React.forwardRef)
+      while (
+        FinalComponent &&
+        typeof FinalComponent === 'object' &&
+        !FinalComponent.$$typeof &&
+        FinalComponent.default
+      ) {
+        FinalComponent = FinalComponent.default;
+      }
+
+      const isValidReactComponent =
+        typeof FinalComponent === 'function' ||
+        (FinalComponent && typeof FinalComponent === 'object' && Boolean(FinalComponent.$$typeof));
+
+      if (!isValidReactComponent) {
         return {
           success: false,
           error: 'Plugin must export a default React component (e.g. export default function MyPlugin({ gaw }) { ... })',
