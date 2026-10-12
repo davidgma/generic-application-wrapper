@@ -19,6 +19,103 @@ import {
   DEFAULT_SETTINGS_PLUGIN_CODE,
 } from './defaultPlugins';
 
+const WASM_IDB_NAME = 'gaw_sqlite_cache';
+const WASM_STORE_NAME = 'binaries';
+const WASM_KEY = 'sql_wasm_binary_v1';
+
+async function getCachedWasmBinary(): Promise<ArrayBuffer | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return null;
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(WASM_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(WASM_STORE_NAME);
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(WASM_STORE_NAME, 'readonly');
+        const getReq = tx.objectStore(WASM_STORE_NAME).get(WASM_KEY);
+        getReq.onsuccess = () => resolve(getReq.result || null);
+        getReq.onerror = () => resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function setCachedWasmBinary(buffer: ArrayBuffer): Promise<void> {
+  if (typeof window === 'undefined' || !window.indexedDB) return;
+  try {
+    const req = indexedDB.open(WASM_IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(WASM_STORE_NAME);
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      const tx = db.transaction(WASM_STORE_NAME, 'readwrite');
+      tx.objectStore(WASM_STORE_NAME).put(buffer, WASM_KEY);
+    };
+  } catch {
+    // Ignore cache persistence errors
+  }
+}
+
+async function fetchWasmBinary(): Promise<ArrayBuffer> {
+  // 1. Fast path: IndexedDB cache (instant 0ms network latency on reload)
+  try {
+    const cached = await getCachedWasmBinary();
+    if (cached && cached.byteLength > 100000) {
+      return cached;
+    }
+  } catch {
+    // Continue to network fetch
+  }
+
+  // 2. Network candidates for root, base, and relative paths
+  const base = typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : './';
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  const candidates = [
+    '/sql-wasm.wasm',
+    `${cleanBase}sql-wasm.wasm`,
+    './sql-wasm.wasm',
+  ];
+
+  let lastError: any = null;
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const buffer = await res.arrayBuffer();
+        if (buffer && buffer.byteLength > 100000) {
+          // Asynchronously persist to cache
+          setCachedWasmBinary(buffer);
+          return buffer;
+        }
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw new Error(`Failed to load sql-wasm.wasm: ${lastError?.message || lastError}`);
+}
+
+// Eagerly initiate WASM binary loading the moment this module is imported in browser
+const eagerSqlJsPromise: Promise<SqlJsStatic> = (async () => {
+  if (typeof window === 'undefined') return Promise.reject('SSR');
+  try {
+    const wasmBinary = await fetchWasmBinary();
+    return await initSqlJs({ wasmBinary });
+  } catch (err) {
+    console.warn('Direct wasmBinary load failed, falling back to locateFile:', err);
+    return await initSqlJs({
+      locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
+    });
+  }
+})();
+
 export class SQLiteEngine {
   private static instance: SQLiteEngine | null = null;
   private sqlJs: SqlJsStatic | null = null;
@@ -253,14 +350,16 @@ export class SQLiteEngine {
     this.isInitializing = (async () => {
       if (!this.sqlJs) {
         if (!SQLiteEngine.sqlJsPromise) {
-          SQLiteEngine.sqlJsPromise = initSqlJs({
-            locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
-          }).catch((err) => {
-            console.warn('Standard locateFile init failed, attempting fallback fetch:', err);
-            SQLiteEngine.sqlJsPromise = null;
-            return fetch('/sql-wasm.wasm')
-              .then((res) => res.arrayBuffer())
-              .then((wasmBinary) => initSqlJs({ wasmBinary }));
+          SQLiteEngine.sqlJsPromise = eagerSqlJsPromise.catch((err) => {
+            console.warn('eagerSqlJsPromise failed in init, retrying fallback fetch:', err);
+            return fetchWasmBinary()
+              .then((wasmBinary) => initSqlJs({ wasmBinary }))
+              .catch((fetchErr) => {
+                console.warn('WASM binary direct fetch failed, using locateFile fallback:', fetchErr);
+                return initSqlJs({
+                  locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
+                });
+              });
           });
         }
         this.sqlJs = await SQLiteEngine.sqlJsPromise;
