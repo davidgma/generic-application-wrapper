@@ -14,6 +14,7 @@ import {
   DEFAULT_COMPONENTS_LIST_PLUGIN_CODE,
   DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
   DEFAULT_SETTINGS_PLUGIN_CODE,
+  DEFAULT_DEBUGGING_PLUGIN_CODE,
 } from '../engine/defaultPlugins';
 
 const DEFAULT_PLUGIN_REGISTRY: Record<string, string> = {
@@ -28,6 +29,7 @@ const DEFAULT_PLUGIN_REGISTRY: Record<string, string> = {
   plugin_components_list: DEFAULT_COMPONENTS_LIST_PLUGIN_CODE,
   plugin_footer_status: DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
   plugin_settings: DEFAULT_SETTINGS_PLUGIN_CODE,
+  plugin_debugging: DEFAULT_DEBUGGING_PLUGIN_CODE,
 };
 
 interface PluginHostProps {

@@ -6363,7 +6363,7 @@ export default function FooterStatusPlugin({ gaw }) {
 `;
 
 export const DEFAULT_SETTINGS_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
-import { Settings, AppWindow, Check, Moon, Sun, Database, PanelLeft } from 'lucide-react';
+import { Settings, AppWindow, Check, Moon, Sun, Database, PanelLeft, Bug } from 'lucide-react';
 
 export default function SettingsPlugin({ gaw }) {
   const [appName, setAppName] = useState('');
@@ -6371,6 +6371,26 @@ export default function SettingsPlugin({ gaw }) {
   const [initialPlugin, setInitialPlugin] = useState('main');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => (gaw.workspace?.isSidebarOpen ? gaw.workspace.isSidebarOpen() : true));
+
+  const [isDebugEnabled, setIsDebugEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const val = localStorage.getItem('gaw_debugging_enabled');
+      if (val === null) return true;
+      return val === 'true';
+    }
+    return true;
+  });
+
+  const handleToggleDebugging = (enabled) => {
+    setIsDebugEnabled(enabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_debugging_enabled', String(enabled));
+      if (window.__GAW_SET_DEBUGGING_ENABLED__) {
+        window.__GAW_SET_DEBUGGING_ENABLED__(enabled);
+      }
+    }
+    gaw.toast?.info?.(enabled ? 'Startup performance debugging enabled.' : 'Startup debugging disabled.');
+  };
 
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -6655,10 +6675,370 @@ export default function SettingsPlugin({ gaw }) {
             <strong>Shortcut Note:</strong> The Workspace Side Navigation Pane can also be toggled anytime using the keyboard shortcut <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Shift+Ctrl+D</kbd> (or <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Ctrl+Shift+D</kbd>).
           </div>
         </div>
+
+        {/* Section 4: Application Startup Debugging & Diagnostics */}
+        <div className={'p-6 rounded-2xl border shadow-xl space-y-4 ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
+            <div className="flex items-center gap-2">
+              <Bug className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+                Application Startup Debugging & Diagnostics
+              </h2>
+            </div>
+            <span className="text-[10px] font-mono text-slate-400">key: gaw_debugging_enabled</span>
+          </div>
+
+          <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
+            Measure and log the exact execution duration of each startup milestone (SQLite WebAssembly load, schema creation, plugin compilation) to the nearest tenth of a second (0.1s).
+          </p>
+
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center gap-2">
+              <span className={'text-xs font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>
+                Startup Diagnostics Logging:
+              </span>
+              <span className={'px-2 py-0.5 rounded text-xs font-mono font-bold ' + (
+                isDebugEnabled
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-800 text-slate-400 border border-slate-700'
+              )}>
+                {isDebugEnabled ? 'Enabled (Active)' : 'Disabled'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleToggleDebugging(!isDebugEnabled)}
+              className={'px-4 py-2 rounded-xl text-xs font-semibold transition shadow-md flex items-center gap-2 cursor-pointer active:scale-95 ' + (
+                isDebugEnabled
+                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              )}
+            >
+              <Bug className="w-4 h-4" />
+              <span>{isDebugEnabled ? 'Disable Startup Debugging' : 'Enable Startup Debugging'}</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 `;
+
+export const DEFAULT_DEBUGGING_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+import { Bug, Activity, Clock, Zap, RotateCcw, Copy, Check, Trash2, Sliders, Shield, FileText, CheckCircle2 } from 'lucide-react';
+
+export default function DebuggingPlugin({ gaw }) {
+  const [isDebugEnabled, setIsDebugEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const val = localStorage.getItem('gaw_debugging_enabled');
+      if (val === null) return true;
+      return val === 'true';
+    }
+    return true;
+  });
+
+  const [logs, setLogs] = useState([]);
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [copied, setCopied] = useState(false);
+
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('gaw_theme');
+      if (stored === 'vs-light' || stored === 'vs-dark') return stored;
+    }
+    return gaw.theme || 'vs-dark';
+  });
+
+  const isDark = currentTheme === 'vs-dark';
+
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw.eventBus]);
+
+  const loadLogs = () => {
+    if (typeof window !== 'undefined' && window.__GAW_DEBUG_LOGS__) {
+      setLogs([...window.__GAW_DEBUG_LOGS__]);
+    }
+  };
+
+  useEffect(() => {
+    loadLogs();
+    const interval = setInterval(loadLogs, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleToggleDebug = (enabled) => {
+    setIsDebugEnabled(enabled);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gaw_debugging_enabled', String(enabled));
+      if (window.__GAW_SET_DEBUGGING_ENABLED__) {
+        window.__GAW_SET_DEBUGGING_ENABLED__(enabled);
+      }
+    }
+    gaw.toast?.info?.(enabled ? 'Startup performance debugging enabled.' : 'Startup debugging disabled.');
+  };
+
+  const handleClearLogs = () => {
+    if (typeof window !== 'undefined') {
+      if (window.__GAW_CLEAR_DEBUG_LOGS__) {
+        window.__GAW_CLEAR_DEBUG_LOGS__();
+      } else {
+        window.__GAW_DEBUG_LOGS__ = [];
+      }
+    }
+    setLogs([]);
+    gaw.toast?.success?.('Debug logs cleared.');
+  };
+
+  const handleCopyLogs = () => {
+    const summaryText = logs.map(l => \`[\${l.durationSecFormatted}] \${l.stage} (\${l.durationMs}ms) - \${l.details || 'N/A'}\`).join('\\n');
+    navigator.clipboard.writeText(\`Gawkyy Startup Performance Diagnostics Log:\\n\${summaryText}\`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    gaw.toast?.success?.('Performance log copied to clipboard!');
+  };
+
+  const filteredLogs = logs.filter(l => filterCategory === 'all' || l.category === filterCategory);
+
+  const totalDurationMs = logs.length > 0 ? Math.max(...logs.map(l => l.endTimeMs)) : 0;
+  const totalDurationSec = (totalDurationMs / 1000).toFixed(1) + 's';
+  const wasmLog = logs.find(l => l.stage.includes('WASM') || l.category === 'wasm');
+  const wasmSec = wasmLog ? wasmLog.durationSecFormatted : 'N/A';
+
+  return (
+    <div className={'w-full h-full min-h-0 overflow-y-auto p-6 transition-colors font-sans select-text ' + (
+      isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+    )}>
+      <div className="max-w-5xl mx-auto space-y-6">
+        
+        {/* Header Title Banner */}
+        <div className={'p-6 rounded-2xl border shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <Bug className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">Startup Performance Debugging & Subsystem Timings</h1>
+              <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                Real-time diagnostic timing measurements for each subsystem during application startup (measured to nearest 0.1s).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className={'px-3 py-1 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 ' + (
+              isDebugEnabled
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-400 border border-slate-700'
+            )}>
+              <span className={'w-2 h-2 rounded-full ' + (isDebugEnabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500')} />
+              {isDebugEnabled ? 'Debugging Active' : 'Debugging Inactive'}
+            </span>
+          </div>
+        </div>
+
+        {/* Debugging Setting Switcher Card */}
+        <div className={'p-5 rounded-2xl border shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ' + (
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+              <Sliders className="w-4 h-4" />
+              <span>Startup Diagnostics Setting</span>
+            </div>
+            <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+              Controls whether startup timing logs are collected. Setting is saved in browser local storage (<code className="font-mono text-amber-300">gaw_debugging_enabled</code>).
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleToggleDebug(!isDebugEnabled)}
+              className={'px-4 py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2 cursor-pointer active:scale-95 ' + (
+                isDebugEnabled
+                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+              )}
+            >
+              <Bug className="w-4 h-4" />
+              <span>{isDebugEnabled ? 'Startup Debugging: ON' : 'Startup Debugging: OFF'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Highlights KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className={'p-4 rounded-2xl border shadow-md space-y-1 ' + (
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          )}>
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>Total App Startup Time</span>
+              <Clock className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="text-2xl font-extrabold text-blue-400 font-mono">
+              {totalDurationSec}
+            </div>
+            <div className="text-[10px] text-slate-500">From DOM load to isEngineReady = true</div>
+          </div>
+
+          <div className={'p-4 rounded-2xl border shadow-md space-y-1 ' + (
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          )}>
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>SQLite WASM Load Time</span>
+              <Zap className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-extrabold text-amber-400 font-mono">
+              {wasmSec}
+            </div>
+            <div className="text-[10px] text-slate-500">sql.js WebAssembly binary fetch & compile</div>
+          </div>
+
+          <div className={'p-4 rounded-2xl border shadow-md space-y-1 ' + (
+            isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          )}>
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span>Logged Startup Milestones</span>
+              <Activity className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-2xl font-extrabold text-emerald-400 font-mono">
+              {logs.length} stages
+            </div>
+            <div className="text-[10px] text-slate-500">Subsystem stages captured</div>
+          </div>
+        </div>
+
+        {/* Toolbar Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {['all', 'wasm', 'database', 'app', 'plugins', 'storage', 'system'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setFilterCategory(cat)}
+                className={'px-3 py-1 rounded-lg text-xs font-semibold capitalize transition cursor-pointer ' + (
+                  filterCategory === cat
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : isDark
+                    ? 'bg-slate-900 hover:bg-slate-800 text-slate-400'
+                    : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                )}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Log Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyLogs}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+              <span>{copied ? 'Copied!' : 'Copy Summary'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearLogs}
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/80 text-rose-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer active:scale-95 border border-rose-900/30"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Clear Log</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Detailed Timings Table */}
+        <div className={'rounded-2xl border shadow-xl overflow-hidden ' + (
+          isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+        )}>
+          <div className="p-4 border-b border-slate-800/40 flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Startup Stage Timing Logs (Nearest 0.1s)
+            </h3>
+            <span className="text-[10px] text-slate-500 font-mono">
+              Timings measured relative to DOM load start
+            </span>
+          </div>
+
+          {filteredLogs.length === 0 ? (
+            <div className="p-12 text-center text-slate-500 space-y-2">
+              <Bug className="w-8 h-8 mx-auto text-slate-600 mb-2" />
+              <p className="text-xs font-semibold">No startup timing logs recorded yet.</p>
+              <p className="text-[11px] text-slate-600">Ensure startup debugging is enabled and reload the app to record subsystem timing logs.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-800/40">
+              {filteredLogs.map((log, idx) => (
+                <div key={log.id || idx} className="p-4 hover:bg-slate-800/20 transition space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className={'px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ' + (
+                        log.category === 'wasm' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                        log.category === 'database' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                        log.category === 'plugins' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' :
+                        log.category === 'app' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                        'bg-slate-800 text-slate-400 border border-slate-700'
+                      )}>
+                        {log.category}
+                      </span>
+                      <span className="text-xs font-bold text-slate-100">{log.stage}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        {log.durationSecFormatted}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500">
+                        ({Math.round(log.durationMs)}ms)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Relative timeline visual bar */}
+                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800/80">
+                    <div
+                      className={'h-full rounded-full transition-all duration-500 ' + (
+                        log.category === 'wasm' ? 'bg-amber-500' :
+                        log.category === 'database' ? 'bg-emerald-500' :
+                        log.category === 'plugins' ? 'bg-purple-500' :
+                        'bg-blue-500'
+                      )}
+                      style={{
+                        width: \`\${Math.min(100, Math.max(2, (log.durationMs / (totalDurationMs || 1)) * 100))}\%\`
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{log.details || 'Subsystem execution complete'}</span>
+                    <span className="font-mono">Start: +{(log.startTimeMs / 1000).toFixed(1)}s</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
+`;
+
 
 

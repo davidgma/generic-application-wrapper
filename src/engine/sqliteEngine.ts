@@ -2,6 +2,7 @@ import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { ColumnInfo, QueryResult, TableSchema, SavedQuery } from '../types/sqlite';
 import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../types/plugin';
 import { SavedReport } from '../types/report';
+import { logDebugStage } from '../utils/debugLogger';
 import {
   DEFAULT_CRM_PLUGIN_CODE,
   DEFAULT_INVENTORY_PLUGIN_CODE,
@@ -17,6 +18,7 @@ import {
   DEFAULT_COMPONENTS_LIST_PLUGIN_CODE,
   DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
   DEFAULT_SETTINGS_PLUGIN_CODE,
+  DEFAULT_DEBUGGING_PLUGIN_CODE,
 } from './defaultPlugins';
 
 const WASM_IDB_NAME = 'gaw_sqlite_cache';
@@ -103,16 +105,23 @@ async function fetchWasmBinary(): Promise<ArrayBuffer> {
 }
 
 // Eagerly initiate WASM binary loading the moment this module is imported in browser
+const eagerWasmStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 const eagerSqlJsPromise: Promise<SqlJsStatic> = (async () => {
   if (typeof window === 'undefined') return Promise.reject('SSR');
   try {
     const wasmBinary = await fetchWasmBinary();
-    return await initSqlJs({ wasmBinary });
+    const sqlInstance = await initSqlJs({ wasmBinary });
+    const eagerWasmEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    logDebugStage('SQLite WASM Binary Load & Instantiation', eagerWasmStartMs, eagerWasmEndMs, 'wasm', 'sql.js WebAssembly runtime ready');
+    return sqlInstance;
   } catch (err) {
     console.warn('Direct wasmBinary load failed, falling back to locateFile:', err);
-    return await initSqlJs({
+    const sqlInstance = await initSqlJs({
       locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
     });
+    const eagerWasmEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    logDebugStage('SQLite WASM Binary Load & Instantiation (Fallback)', eagerWasmStartMs, eagerWasmEndMs, 'wasm', 'sql.js locateFile fallback runtime ready');
+    return sqlInstance;
   }
 })();
 
@@ -319,6 +328,23 @@ export class SQLiteEngine {
         target_area: 'middle',
         targetArea: 'middle',
       },
+      {
+        id: 'plugin_debugging',
+        name: 'Startup Performance & Diagnostics',
+        version: '1.0.0',
+        enabled: 1,
+        icon: 'Bug',
+        menu_category: 'System & Diagnostics',
+        route: '/debugging',
+        description: 'Application startup performance logger and diagnostic tool. Tracks WASM load time, schema initialization, and subsystem timings to the nearest 0.1s.',
+        code: DEFAULT_DEBUGGING_PLUGIN_CODE,
+        created_at: now,
+        updated_at: now,
+        is_system: true,
+        isSystem: true,
+        target_area: 'middle',
+        targetArea: 'middle',
+      },
     ];
     for (const p of defaults) {
       this.systemPlugins.set(p.id, p);
@@ -348,6 +374,7 @@ export class SQLiteEngine {
     }
 
     this.isInitializing = (async () => {
+      const dbInitStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
       if (!this.sqlJs) {
         if (!SQLiteEngine.sqlJsPromise) {
           SQLiteEngine.sqlJsPromise = eagerSqlJsPromise.catch((err) => {
@@ -371,6 +398,9 @@ export class SQLiteEngine {
         this.createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
       }
       this.ensureSystemTables();
+
+      const dbInitEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      logDebugStage('SQLite Engine Initialization & System Schema', dbInitStartMs, dbInitEndMs, 'database', `Active DB: "${this.activeDbName}"`);
     })();
 
     await this.isInitializing;
@@ -1359,7 +1389,7 @@ export class SQLiteEngine {
       // System plugins are maintained in-memory as part of Gawkyy core.
       // Remove any previously stored system plugins from t_plugins to keep database clean.
       this.db.run(
-        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings', 'plugin_header_navbar', 'plugin_components_list', 'plugin_footer_status');"
+        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings', 'plugin_header_navbar', 'plugin_components_list', 'plugin_footer_status', 'plugin_debugging');"
       );
 
       // Ensure default settings exist

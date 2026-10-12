@@ -3,6 +3,7 @@ import { transform } from 'sucrase';
 import * as LucideIcons from 'lucide-react';
 import * as Motion from 'motion/react';
 import { GAWContext, GAWPluginComponent } from '../types/plugin';
+import { logDebugStage } from '../utils/debugLogger';
 
 export interface CompilationResult {
   success: boolean;
@@ -21,6 +22,8 @@ export class PluginEngine {
     if (cached && cached.code === tsxCode) {
       return cached.result;
     }
+
+    const compileStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     try {
       // 1. Transform TSX + TypeScript + ES Modules to standard executable JavaScript
@@ -138,6 +141,8 @@ export class PluginEngine {
 
       const res: CompilationResult = { success: true, component: FinalComponent };
       this.componentCache.set(pluginId, { code: tsxCode, result: res });
+      const compileEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      logDebugStage(`Plugin compilation (${pluginId})`, compileStartMs, compileEndMs, 'plugins', `${tsxCode.length} bytes compiled`);
       return res;
     } catch (err: any) {
       console.error('Plugin compilation error:', err);

@@ -20,6 +20,7 @@
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="preload" href="/sql-wasm.wasm" as="fetch" type="application/wasm" crossorigin="anonymous" />
     <script>
+      window.__GAW_START_TIME__ = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
       (function() {
         try {
           if (window.opener && window.location.search && window.location.search.includes('code=')) {

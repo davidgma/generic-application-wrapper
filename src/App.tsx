@@ -9,6 +9,7 @@ import { SavedReport } from './types/report';
 import { ConflictDetails, StorageMetadata } from './types/storage';
 import { RecentFilesManager } from './engine/recentFiles';
 import { safeStorage } from './utils/storage';
+import { logDebugStage, APP_START_TIME, isDebuggingEnabled, setDebuggingEnabled } from './utils/debugLogger';
 
 import { QueryGrid } from './components/QueryGrid';
 import { MultiQueryResultsView } from './components/MultiQueryResultsView';
@@ -458,17 +459,27 @@ export default function App() {
     eventBusApi.emit('theme_changed', next);
   }, [theme, eventBusApi]);
 
-  // Initialize SQLite Engine
+  // Initialize SQLite Engine & Record Startup Milestones
   useEffect(() => {
     let mounted = true;
+    const reactMountMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    logDebugStage('App Component Initial Mount', APP_START_TIME, reactMountMs, 'app', 'React DOM content mounted');
+
     (async () => {
       try {
         const engine = SQLiteEngine.getInstance();
+        const initStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
         await engine.init();
         if (mounted) {
+          const initEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('App Engine Ready State', initStartMs, initEndMs, 'app', 'isEngineReady set to true');
+
           storageEngine.markSaved();
           setIsEngineReady(true);
           refreshDatabaseState();
+
+          const fullReadyMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('Total App Startup Duration', APP_START_TIME, fullReadyMs, 'system', 'Full application loaded and interactive');
 
           // If the initial URL hash points to a table or query, execute now that SQLite is ready
           const hash = window.location.hash.replace(/^#\/?/, '').trim();
