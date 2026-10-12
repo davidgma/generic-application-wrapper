@@ -316,12 +316,17 @@ export class DropboxSyncEngine {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+
       const res = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.config.accessToken}`,
         },
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         if (this.config.refreshToken) {

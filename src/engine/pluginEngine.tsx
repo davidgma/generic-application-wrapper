@@ -11,12 +11,17 @@ export interface CompilationResult {
 }
 
 export class PluginEngine {
-  private static componentCache: Map<string, GAWPluginComponent> = new Map();
+  private static componentCache: Map<string, { code: string; result: CompilationResult }> = new Map();
 
   /**
    * Compiles TSX code using Sucrase and binds React and icons.
    */
   public static compile(tsxCode: string, pluginId: string): CompilationResult {
+    const cached = this.componentCache.get(pluginId);
+    if (cached && cached.code === tsxCode) {
+      return cached.result;
+    }
+
     try {
       // 1. Transform TSX + TypeScript + ES Modules to standard executable JavaScript
       const transformed = transform(tsxCode, {
@@ -91,8 +96,9 @@ export class PluginEngine {
         };
       }
 
-      this.componentCache.set(pluginId, FinalComponent);
-      return { success: true, component: FinalComponent };
+      const res: CompilationResult = { success: true, component: FinalComponent };
+      this.componentCache.set(pluginId, { code: tsxCode, result: res });
+      return res;
     } catch (err: any) {
       console.error('Plugin compilation error:', err);
       return {

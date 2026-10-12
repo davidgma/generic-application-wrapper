@@ -246,9 +246,24 @@ export class SQLiteEngine {
 
     this.isInitializing = (async () => {
       if (!this.sqlJs) {
-        this.sqlJs = await initSqlJs({
-          locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
-        });
+        try {
+          const wasmUrl = typeof window !== 'undefined'
+            ? new URL('sql-wasm.wasm', document.baseURI || window.location.href).href
+            : '/sql-wasm.wasm';
+          const res = await fetch(wasmUrl);
+          if (res.ok) {
+            const wasmBinary = await res.arrayBuffer();
+            this.sqlJs = await initSqlJs({ wasmBinary });
+          }
+        } catch (e) {
+          console.warn('Direct WASM prefetch failed, falling back to locateFile:', e);
+        }
+
+        if (!this.sqlJs) {
+          this.sqlJs = await initSqlJs({
+            locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
+          });
+        }
       }
 
       if (binaryData) {
