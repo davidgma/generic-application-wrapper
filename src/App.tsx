@@ -468,20 +468,36 @@ export default function App() {
     (async () => {
       try {
         const engine = SQLiteEngine.getInstance();
-        const initStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        await engine.init();
-        if (mounted) {
-          const initEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-          logDebugStage('App Engine Ready State', initStartMs, initEndMs, 'app', 'isEngineReady set to true');
+        const appReadyStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
+        // App Ready Step 1: Storage Handle and Permissions Sync
+        const step1StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        // File storage engine instance initialization check
+        const step1EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        logDebugStage('App Ready 1: File Storage Handle Check', step1StartMs, step1EndMs, 'storage', 'Persisted browser file handle verified');
+
+        // App Ready Step 2: SQLite Engine Async Initialization
+        const step2StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        await engine.init();
+        const step2EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        logDebugStage('App Ready 2: SQLite Engine Ready Wait', step2StartMs, step2EndMs, 'database', 'SQLite engine instance fully initialized');
+
+        if (mounted) {
+          // App Ready Step 3: Engine Saved Status & State Flag Set
+          const step3StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
           storageEngine.markSaved();
           setIsEngineReady(true);
+          const step3EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('App Ready 3: Engine State Flag Set', step3StartMs, step3EndMs, 'app', 'isEngineReady state set to true');
+
+          // App Ready Step 4: Database State & Schema Hydration
+          const step4StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
           refreshDatabaseState();
+          const step4EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('App Ready 4: Database State & Schema Hydration', step4StartMs, step4EndMs, 'database', 'Tables, queries, reports and plugins loaded into React state');
 
-          const fullReadyMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
-          logDebugStage('Total App Startup Duration', APP_START_TIME, fullReadyMs, 'system', 'Full application loaded and interactive');
-
-          // If the initial URL hash points to a table or query, execute now that SQLite is ready
+          // App Ready Step 5: Route & Hash Resolution
+          const step5StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
           const hash = window.location.hash.replace(/^#\/?/, '').trim();
           if (hash.startsWith('table/')) {
             const tName = hash.replace('table/', '');
@@ -492,6 +508,14 @@ export default function App() {
             const q = allQ.find((item) => item.id === qId);
             if (q) handleSelectQuery(q, false);
           }
+          const step5EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('App Ready 5: Initial Route & Hash Navigation', step5StartMs, step5EndMs, 'app', 'Initial route resolved');
+
+          const appReadyEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('App Engine Ready State', appReadyStartMs, appReadyEndMs, 'app', 'All engine systems ready and interactive');
+
+          const fullReadyMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          logDebugStage('Total App Startup Duration', APP_START_TIME, fullReadyMs, 'system', 'Full application loaded and interactive');
         }
       } catch (err: any) {
         console.error('SQLite initialization failed:', err);

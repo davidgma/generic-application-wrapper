@@ -75,33 +75,50 @@ async function fetchWasmBinary(): Promise<ArrayBuffer> {
     // Continue to network fetch
   }
 
-  // 2. Network candidates for root, base, and relative paths
+  // 2. Parallel network candidate retrieval with instant winner cancellation
   const base = typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : './';
   const cleanBase = base.endsWith('/') ? base : `${base}/`;
-  const candidates = [
+  const rawCandidates = [
     '/sql-wasm.wasm',
     `${cleanBase}sql-wasm.wasm`,
     './sql-wasm.wasm',
   ];
+  const candidates = Array.from(new Set(rawCandidates));
 
-  let lastError: any = null;
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const buffer = await res.arrayBuffer();
-        if (buffer && buffer.byteLength > 100000) {
-          // Asynchronously persist to cache
-          setCachedWasmBinary(buffer);
-          return buffer;
-        }
-      }
-    } catch (err) {
-      lastError = err;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+
+  const fetchCandidate = async (url: string): Promise<ArrayBuffer> => {
+    const res = await fetch(url, controller ? { signal: controller.signal } : undefined);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} for ${url}`);
     }
-  }
+    const buffer = await res.arrayBuffer();
+    if (!buffer || buffer.byteLength < 100000) {
+      throw new Error(`Invalid binary length for ${url}`);
+    }
+    return buffer;
+  };
 
-  throw new Error(`Failed to load sql-wasm.wasm: ${lastError?.message || lastError}`);
+  try {
+    // Fire all candidate requests simultaneously in parallel.
+    // Promise.any resolves as soon as the VERY FIRST request succeeds!
+    const winningBuffer = await Promise.any(candidates.map((url) => fetchCandidate(url)));
+
+    // Immediately abort/cancel all other slower or pending candidate network calls
+    if (controller) {
+      controller.abort();
+    }
+
+    // Persist the winning WASM binary buffer to IndexedDB cache
+    setCachedWasmBinary(winningBuffer);
+
+    return winningBuffer;
+  } catch (err: any) {
+    if (controller) {
+      controller.abort();
+    }
+    throw new Error(`Failed to load sql-wasm.wasm from candidates: ${err?.message || err}`);
+  }
 }
 
 // Eagerly initiate WASM binary loading the moment this module is imported in browser
@@ -375,6 +392,9 @@ export class SQLiteEngine {
 
     this.isInitializing = (async () => {
       const dbInitStartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+      // Granular Sub-Stage 1: SQL.js WASM Instance Verification
+      const step1StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
       if (!this.sqlJs) {
         if (!SQLiteEngine.sqlJsPromise) {
           SQLiteEngine.sqlJsPromise = eagerSqlJsPromise.catch((err) => {
@@ -391,13 +411,30 @@ export class SQLiteEngine {
         }
         this.sqlJs = await SQLiteEngine.sqlJsPromise;
       }
+      const step1EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      logDebugStage('SQLite Init 1: Await SQL.js Engine Promise', step1StartMs, step1EndMs, 'wasm', 'SQL.js WebAssembly engine instance verified');
 
+      // Granular Sub-Stage 2: Database Instance Creation or Binary Load
+      const step2StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
       if (binaryData) {
         this.loadBinary(binaryData, dbName);
       } else if (!this.db) {
         this.createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
       }
+      const step2EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      logDebugStage('SQLite Init 2: Database Creation & Memory Allocation', step2StartMs, step2EndMs, 'database', `Database instance ready (${this.activeDbName})`);
+
+      // Granular Sub-Stage 3: System DDL Schema Verification
+      const step3StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
       this.ensureSystemTables();
+      const step3EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      logDebugStage('SQLite Init 3: System DDL Schema Verification', step3StartMs, step3EndMs, 'database', 'System tables t_settings, t_plugins, t_sql_queries, t_reports checked');
+
+      // Granular Sub-Stage 4: In-Memory System Plugins Registration
+      const step4StartMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      this.resetSystemPlugins();
+      const step4EndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      logDebugStage('SQLite Init 4: Core System Plugins Registration', step4StartMs, step4EndMs, 'plugins', `${this.systemPlugins.size} system plugins registered`);
 
       const dbInitEndMs = typeof performance !== 'undefined' ? performance.now() : Date.now();
       logDebugStage('SQLite Engine Initialization & System Schema', dbInitStartMs, dbInitEndMs, 'database', `Active DB: "${this.activeDbName}"`);
