@@ -668,17 +668,20 @@ export class FileStorageEngine {
   private startAutoSync(): void {
     if (this.autoSyncTimer) clearInterval(this.autoSyncTimer);
 
-    // Poll every 3 seconds if local fileHandle exists or autoSync is enabled
-    const intervalSec = this.fileHandle ? Math.min(3, this.autoSyncIntervalSec) : this.autoSyncIntervalSec;
-    if (intervalSec <= 0) return;
+    // Auto-sync only runs when enabled by user preference
+    if (!this.isAutoSyncEnabled) return;
 
+    const intervalSec = this.autoSyncIntervalSec > 0 ? this.autoSyncIntervalSec : 30;
     this.autoSyncTimer = setInterval(async () => {
       await this.checkAndReconcileLocal();
     }, intervalSec * 1000);
   }
 
   public async checkAndReconcileLocal(): Promise<void> {
-    if (!this.fileHandle || this.syncStatus === 'saving' || this.syncStatus === 'conflict') {
+    if (!this.fileHandle || !this.isAutoSyncEnabled || this.syncStatus === 'saving' || this.syncStatus === 'conflict') {
+      return;
+    }
+    if (!SQLiteEngine.getInstance().isReady()) {
       return;
     }
 

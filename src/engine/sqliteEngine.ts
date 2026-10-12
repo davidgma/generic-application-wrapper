@@ -235,7 +235,11 @@ export class SQLiteEngine {
     return SQLiteEngine.instance;
   }
 
-  private static cachedWasmBinary: ArrayBuffer | null = null;
+  private static sqlJsPromise: Promise<any> | null = null;
+
+  public isReady(): boolean {
+    return Boolean(this.sqlJs && this.db);
+  }
 
   public async init(binaryData?: Uint8Array, dbName?: string): Promise<void> {
     if (this.isInitializing) {
@@ -248,36 +252,18 @@ export class SQLiteEngine {
 
     this.isInitializing = (async () => {
       if (!this.sqlJs) {
-        if (SQLiteEngine.cachedWasmBinary) {
-          try {
-            this.sqlJs = await initSqlJs({ wasmBinary: SQLiteEngine.cachedWasmBinary });
-          } catch (e) {
-            console.warn('Init with cached WASM binary failed, refetching:', e);
-            SQLiteEngine.cachedWasmBinary = null;
-          }
-        }
-
-        if (!this.sqlJs) {
-          try {
-            const wasmUrl = typeof window !== 'undefined'
-              ? new URL('sql-wasm.wasm', document.baseURI || window.location.href).href
-              : '/sql-wasm.wasm';
-            const res = await fetch(wasmUrl);
-            if (res.ok) {
-              const wasmBinary = await res.arrayBuffer();
-              SQLiteEngine.cachedWasmBinary = wasmBinary;
-              this.sqlJs = await initSqlJs({ wasmBinary });
-            }
-          } catch (e) {
-            console.warn('Direct WASM prefetch failed, falling back to locateFile:', e);
-          }
-        }
-
-        if (!this.sqlJs) {
-          this.sqlJs = await initSqlJs({
+        if (!SQLiteEngine.sqlJsPromise) {
+          SQLiteEngine.sqlJsPromise = initSqlJs({
             locateFile: (file) => (file.endsWith('.wasm') ? '/sql-wasm.wasm' : file),
+          }).catch((err) => {
+            console.warn('Standard locateFile init failed, attempting fallback fetch:', err);
+            SQLiteEngine.sqlJsPromise = null;
+            return fetch('/sql-wasm.wasm')
+              .then((res) => res.arrayBuffer())
+              .then((wasmBinary) => initSqlJs({ wasmBinary }));
           });
         }
+        this.sqlJs = await SQLiteEngine.sqlJsPromise;
       }
 
       if (binaryData) {
@@ -1274,7 +1260,7 @@ export class SQLiteEngine {
       // System plugins are maintained in-memory as part of Gawkyy core.
       // Remove any previously stored system plugins from t_plugins to keep database clean.
       this.db.run(
-        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings');"
+        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings', 'plugin_header_navbar', 'plugin_components_list', 'plugin_footer_status');"
       );
 
       // Ensure default settings exist

@@ -91,7 +91,14 @@ export const PluginHost: React.FC<PluginHostProps> = ({
     }
   };
 
-  if (!success || !Component) {
+  const isComponentValid =
+    success &&
+    Component &&
+    (typeof Component === 'function' ||
+      React.isValidElement(Component) ||
+      (typeof Component === 'object' && Boolean((Component as any).$$typeof)));
+
+  if (!isComponentValid) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 bg-slate-900 text-slate-100">
         <div className="max-w-md w-full bg-slate-950 border border-amber-500/40 rounded-xl p-6 shadow-2xl">
@@ -100,7 +107,7 @@ export const PluginHost: React.FC<PluginHostProps> = ({
             The TypeScript / TSX source code for <strong>{pluginName}</strong> contains syntax errors.
           </p>
           <pre className="bg-slate-900 p-3 rounded text-red-400 font-mono text-xs overflow-auto max-h-40 border border-slate-800">
-            {error || 'Unknown syntax error'}
+            {error || 'Plugin must export a default React component function'}
           </pre>
           <div className="flex flex-col gap-2 mt-4">
             {DEFAULT_PLUGIN_REGISTRY[pluginId] && (
@@ -128,7 +135,11 @@ export const PluginHost: React.FC<PluginHostProps> = ({
   return (
     <PluginErrorBoundary pluginName={pluginName} onOpenInIDE={onOpenInIDE}>
       <div className={`@container plugin-container w-full h-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
-        <Component gaw={gawContext} />
+        {React.isValidElement(Component) ? (
+          Component
+        ) : typeof Component === 'function' || typeof Component === 'object' ? (
+          <Component gaw={gawContext} />
+        ) : null}
       </div>
     </PluginErrorBoundary>
   );

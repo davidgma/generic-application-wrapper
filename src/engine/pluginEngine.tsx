@@ -89,19 +89,45 @@ export class PluginEngine {
 
       let FinalComponent: any = moduleObj.exports?.default || moduleObj.exports || exportsObj.default;
 
-      // Unwrap nested .default if FinalComponent is an ES module object wrapper and NOT a direct React component (e.g., React.memo or React.forwardRef)
+      // 1. Unwrap nested .default if FinalComponent is an ES module object wrapper
       while (
         FinalComponent &&
         typeof FinalComponent === 'object' &&
-        !FinalComponent.$$typeof &&
+        !React.isValidElement(FinalComponent) &&
         FinalComponent.default
       ) {
         FinalComponent = FinalComponent.default;
       }
 
+      // 2. If FinalComponent is a module object with named exports, look for any component function
+      if (
+        FinalComponent &&
+        typeof FinalComponent === 'object' &&
+        !React.isValidElement(FinalComponent) &&
+        typeof FinalComponent !== 'function' &&
+        !FinalComponent.$$typeof
+      ) {
+        const candidate = Object.values(FinalComponent).find(
+          (v: any) => typeof v === 'function' || React.isValidElement(v)
+        );
+        if (candidate) {
+          FinalComponent = candidate;
+        }
+      }
+
+      // 3. If a JSX element was exported instead of a component function (e.g. export default <div>...</div>)
+      if (React.isValidElement(FinalComponent)) {
+        const renderedElement = FinalComponent;
+        FinalComponent = () => renderedElement;
+      }
+
+      // 4. Strict check for a valid React component: function or valid exotic component type (forwardRef, memo, etc.)
       const isValidReactComponent =
         typeof FinalComponent === 'function' ||
-        (FinalComponent && typeof FinalComponent === 'object' && Boolean(FinalComponent.$$typeof));
+        (FinalComponent &&
+          typeof FinalComponent === 'object' &&
+          !React.isValidElement(FinalComponent) &&
+          Boolean(FinalComponent.$$typeof));
 
       if (!isValidReactComponent) {
         return {

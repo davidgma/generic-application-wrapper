@@ -469,6 +469,18 @@ export default function App() {
           storageEngine.markSaved();
           setIsEngineReady(true);
           refreshDatabaseState();
+
+          // If the initial URL hash points to a table or query, execute now that SQLite is ready
+          const hash = window.location.hash.replace(/^#\/?/, '').trim();
+          if (hash.startsWith('table/')) {
+            const tName = hash.replace('table/', '');
+            handleSelectTable(tName, false);
+          } else if (hash.startsWith('query/')) {
+            const qId = hash.replace('query/', '');
+            const allQ = engine.getSavedQueries();
+            const q = allQ.find((item) => item.id === qId);
+            if (q) handleSelectQuery(q, false);
+          }
         }
       } catch (err: any) {
         console.error('SQLite initialization failed:', err);
@@ -1398,65 +1410,65 @@ export default function App() {
     };
   }, [mode, activeView, handleToggleSidebar, eventBusApi]);
 
+  const isEngineReadyRef = useRef(isEngineReady);
+  useEffect(() => {
+    isEngineReadyRef.current = isEngineReady;
+  }, [isEngineReady]);
+
+  const queriesRef = useRef(queries);
+  useEffect(() => {
+    queriesRef.current = queries;
+  }, [queries]);
+
   // Hash route parsing and synchronization
   useEffect(() => {
     const parseHash = () => {
       const hash = window.location.hash.replace(/^#\/?/, '').trim();
-      if (!hash || hash === 'file' || hash === 'plugin/plugin_file_manager' || hash === 'view' || hash === 'app_hub') {
-        if (activeView !== 'plugin:plugin_file_manager' || activeRoute !== 'file') {
-          setActiveRoute('file');
-          setActiveView('plugin:plugin_file_manager');
-        }
+      if (!hash || hash === 'file' || hash === 'plugin/plugin_file_manager') {
+        setActiveRoute('file');
+        setActiveView('plugin:plugin_file_manager');
         if (!window.location.hash || window.location.hash === '#') {
           window.location.hash = '#file';
         }
       } else if (hash === 'database' || hash === 'plugin/plugin_database_management') {
-        if (activeView !== 'plugin:plugin_database_management' || activeRoute !== 'database') {
-          setActiveRoute('database');
-          setActiveView('plugin:plugin_database_management');
-        }
+        setActiveRoute('database');
+        setActiveView('plugin:plugin_database_management');
       } else if (hash === 'plugins' || hash === 'plugin/plugin_manager') {
-        if (activeView !== 'plugin:plugin_manager' || activeRoute !== 'plugins') {
-          setActiveRoute('plugins');
-          setActiveView('plugin:plugin_manager');
-        }
+        setActiveRoute('plugins');
+        setActiveView('plugin:plugin_manager');
       } else if (hash === 'help' || hash === 'plugin/plugin_help') {
-        if (activeView !== 'plugin:plugin_help' || activeRoute !== 'help') {
-          setActiveRoute('help');
-          setActiveView('plugin:plugin_help');
-        }
+        setActiveRoute('help');
+        setActiveView('plugin:plugin_help');
       } else if (hash === 'spreadsheet') {
-        if (activeView !== 'spreadsheet' || activeRoute !== 'file') {
-          setActiveRoute('file');
-          setActiveView('spreadsheet');
-        }
+        setActiveRoute('file');
+        setActiveView('spreadsheet');
       } else if (hash.startsWith('ide')) {
-        if (activeView !== 'ide' || activeRoute !== 'file') {
-          setActiveRoute('file');
-          setActiveView('ide');
-        }
+        setActiveRoute('file');
+        setActiveView('ide');
+      } else if (hash === 'app_hub') {
+        setActiveRoute('plugins');
+        setActiveView('app_hub');
       } else if (hash.startsWith('table/')) {
         const tName = hash.replace('table/', '');
-        if (activeView !== `table:${tName}`) {
+        setActiveRoute('file');
+        setActiveView(`table:${tName}`);
+        if (isEngineReadyRef.current) {
           handleSelectTable(tName, false);
         }
       } else if (hash.startsWith('query/')) {
         const qId = hash.replace('query/', '');
-        if (activeView !== `query:${qId}`) {
-          const q = queries.find((item) => item.id === qId);
+        setActiveRoute('file');
+        setActiveView(`query:${qId}`);
+        if (isEngineReadyRef.current) {
+          const q = queriesRef.current.find((item) => item.id === qId);
           if (q) {
             handleSelectQuery(q, false);
-          } else {
-            setActiveRoute('file');
-            setActiveView(`query:${qId}`);
           }
         }
       } else if (hash.startsWith('report/')) {
         const rId = hash.replace('report/', '');
-        if (activeView !== `report:${rId}` || activeRoute !== 'file') {
-          setActiveRoute('file');
-          setActiveView(`report:${rId}`);
-        }
+        setActiveRoute('file');
+        setActiveView(`report:${rId}`);
       } else if (hash.startsWith('plugin/')) {
         const pId = hash.replace('plugin/', '');
         const targetRoute =
@@ -1467,17 +1479,15 @@ export default function App() {
             : pId === 'plugin_help'
             ? 'help'
             : 'plugins';
-        if (activeView !== `plugin:${pId}` || activeRoute !== targetRoute) {
-          setActiveRoute(targetRoute as any);
-          setActiveView(`plugin:${pId}`);
-        }
+        setActiveRoute(targetRoute as any);
+        setActiveView(`plugin:${pId}`);
       }
     };
 
     parseHash();
     window.addEventListener('hashchange', parseHash);
     return () => window.removeEventListener('hashchange', parseHash);
-  }, [queries, tables, handleSelectTable, handleSelectQuery, activeView, activeRoute]);
+  }, [handleSelectTable, handleSelectQuery]);
 
   // Build GAW Context passed to dynamic plugins
   const gawContext: GAWContext = useMemo(() => {
@@ -1549,15 +1559,26 @@ export default function App() {
 
           setActiveView(v);
           if (v.startsWith('plugin:')) {
-            setActiveRoute('plugins');
-            navigateTo('plugins', v);
+            const pId = v.replace('plugin:', '');
+            const targetRoute =
+              pId === 'plugin_file_manager' || pId === 'plugin_local_storage'
+                ? 'file'
+                : pId === 'plugin_database_management'
+                ? 'database'
+                : pId === 'plugin_help'
+                ? 'help'
+                : 'plugins';
+            setActiveRoute(targetRoute as any);
+            navigateTo(targetRoute, v);
+            eventBusApi.emit('view_changed', v, targetRoute);
           } else if (v === 'app_hub') {
             setActiveRoute('plugins');
             navigateTo('plugins', 'app_hub');
+            eventBusApi.emit('view_changed', v, 'plugins');
           } else {
             navigateTo(activeRoute, v);
+            eventBusApi.emit('view_changed', v, activeRoute);
           }
-          eventBusApi.emit('view_changed', v, activeRoute);
         },
         openQuery: (sql: string) => {
           setActiveView('ide');
