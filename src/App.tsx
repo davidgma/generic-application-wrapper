@@ -1368,12 +1368,12 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [activeView, currentIdeTarget, handleExitIDE, handleEnterIDEFromCurrentView, handleOpenDefinitionFromSpreadsheet]);
 
-  // Global Shift+Ctrl+N shortcut: In Dev Mode, toggle Components List navigation pane (or IDE sidebar in IDE mode)
+  // Global Shift+Ctrl+D shortcut: In Dev Mode, toggle Components List navigation pane (or IDE sidebar in IDE mode)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isN = (e.key && e.key.toLowerCase() === 'n') || e.code === 'KeyN' || e.keyCode === 78;
+      const isD = (e.key && e.key.toLowerCase() === 'd') || e.code === 'KeyD' || e.keyCode === 68;
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-      if (isCtrlOrCmd && e.shiftKey && isN) {
+      if (isCtrlOrCmd && e.shiftKey && isD) {
         if (mode !== 'dev') {
           // Pass-through in App Mode to browser or user plugin
           return;

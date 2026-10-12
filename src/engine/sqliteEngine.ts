@@ -1611,7 +1611,19 @@ export class SQLiteEngine {
     if (this.isSystemTable(tableName)) {
       throw new Error(`Cannot delete system table: ${tableName}`);
     }
-    this.run(`DROP TABLE IF EXISTS "${tableName}";`);
+    let isView = false;
+    try {
+      const res = this.query("SELECT type FROM sqlite_master WHERE (type='table' OR type='view') AND name = ?;", [tableName]);
+      if (res.values.length > 0 && res.values[0][0] === 'view') {
+        isView = true;
+      }
+    } catch (e) {}
+
+    if (isView) {
+      this.run(`DROP VIEW IF EXISTS "${tableName}";`);
+    } else {
+      this.run(`DROP TABLE IF EXISTS "${tableName}";`);
+    }
     this.notifyChange(true);
   }
 
