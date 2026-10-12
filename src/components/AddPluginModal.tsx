@@ -338,13 +338,14 @@ export default function ${name.replace(/[^a-zA-Z0-9]/g, '') || 'CustomPlugin'}({
         </div>
 
         {/* Tab Navigator */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-5 pt-2 gap-2 text-xs">
+        <div className="flex border-b border-slate-800 bg-slate-950/60 px-5 pt-3 gap-2 text-xs flex-wrap">
           <button
+            type="button"
             onClick={() => setActiveTab('local')}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl border-2 font-bold transition cursor-pointer ${
               activeTab === 'local'
-                ? 'border-indigo-500 text-white'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-indigo-600 text-white border-indigo-500 border-b-indigo-600 shadow-md'
+                : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
             }`}
           >
             <Folder className="w-3.5 h-3.5 text-amber-400" />
@@ -352,11 +353,12 @@ export default function ${name.replace(/[^a-zA-Z0-9]/g, '') || 'CustomPlugin'}({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('dropbox')}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl border-2 font-bold transition cursor-pointer ${
               activeTab === 'dropbox'
-                ? 'border-indigo-500 text-white'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-indigo-600 text-white border-indigo-500 border-b-indigo-600 shadow-md'
+                : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
             }`}
           >
             <Cloud className="w-3.5 h-3.5 text-indigo-400" />
@@ -364,11 +366,12 @@ export default function ${name.replace(/[^a-zA-Z0-9]/g, '') || 'CustomPlugin'}({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('blank')}
-            className={`flex items-center gap-1.5 px-3 py-2 border-b-2 font-semibold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl border-2 font-bold transition cursor-pointer ${
               activeTab === 'blank'
-                ? 'border-indigo-500 text-white'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'bg-indigo-600 text-white border-indigo-500 border-b-indigo-600 shadow-md'
+                : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
             }`}
           >
             <FileCode className="w-3.5 h-3.5 text-emerald-400" />

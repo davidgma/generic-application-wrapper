@@ -1637,39 +1637,42 @@ export default function DropboxSyncPlugin({ gaw }) {
       </div>
 
       {/* Navigation Tabs */}
-      <div className={'flex items-center gap-2 border-b pb-2 text-xs ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
+      <div className={'flex items-center gap-2.5 border-b pb-3 text-xs flex-wrap ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
         <button
+          type="button"
           onClick={() => setActiveTab('sync')}
-          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (
+          className={'px-4 py-2 rounded-xl font-bold transition flex items-center gap-2 border-2 cursor-pointer active:scale-95 ' + (
             activeTab === 'sync'
-              ? 'bg-blue-600 text-white shadow-sm'
+              ? 'bg-blue-600 text-white border-blue-500 shadow-md'
               : isDark
-              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
+              : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
           )}
         >
           Database Sync & Telemetry
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('browser')}
-          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (
+          className={'px-4 py-2 rounded-xl font-bold transition flex items-center gap-2 border-2 cursor-pointer active:scale-95 ' + (
             activeTab === 'browser'
-              ? 'bg-blue-600 text-white shadow-sm'
+              ? 'bg-blue-600 text-white border-blue-500 shadow-md'
               : isDark
-              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
+              : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
           )}
         >
           Dropbox File Browser ({remoteFiles.length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('settings')}
-          className={'px-3 py-1.5 rounded-lg font-semibold transition ' + (
+          className={'px-4 py-2 rounded-xl font-bold transition flex items-center gap-2 border-2 cursor-pointer active:scale-95 ' + (
             activeTab === 'settings'
-              ? 'bg-blue-600 text-white shadow-sm'
+              ? 'bg-blue-600 text-white border-blue-500 shadow-md'
               : isDark
-              ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
+              : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
           )}
         >
           Connection & API Keys
@@ -2726,7 +2729,7 @@ export default function HelpPlugin({ gaw }) {
         </div>
 
         {/* Navigation Tabs */}
-        <div className={'flex items-center gap-2 border-b pb-2 text-xs overflow-x-auto ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
+        <div className={'flex items-center gap-2.5 border-b pb-3 text-xs overflow-x-auto ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
           {[
             { id: 'overview', label: 'Overview & Tools', icon: Info },
             { id: 'tech', label: 'Technology Stack (' + technologies.length + ')', icon: Cpu },
@@ -2734,17 +2737,18 @@ export default function HelpPlugin({ gaw }) {
             { id: 'guide', label: 'Application User Guide', icon: BookOpen },
           ].map((tab) => (
             <button
+              type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={'flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-semibold transition whitespace-nowrap active:scale-95 ' + (
+              className={'flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition border-2 whitespace-nowrap active:scale-95 cursor-pointer ' + (
                 activeTab === tab.id
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
                   : isDark
-                  ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
+                  : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
               )}
             >
-              <tab.icon className="w-3.5 h-3.5" />
+              <tab.icon className="w-4 h-4" />
               <span>{tab.label}</span>
             </button>
           ))}
@@ -4498,30 +4502,32 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
 
         {/* Status Badges */}
-        <div className='flex items-center gap-2 flex-wrap'>
+        <div className='flex items-center justify-center md:justify-end gap-2 flex-wrap'>
           {dropboxConfig.connected ? (
-            <div className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ' + (
-              isDark ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300' : 'bg-emerald-50 border border-emerald-300 text-emerald-700'
+            <div className={'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs border-2 font-semibold shadow-sm ' + (
+              isDark ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-emerald-100 border-emerald-400 text-emerald-900'
             )}>
               <CheckCircle2 className='w-3.5 h-3.5 text-emerald-500' />
               <span>Dropbox Connected</span>
               <button
+                type="button"
                 onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className={'ml-1 text-[11px] underline cursor-pointer ' + (isDark ? 'text-emerald-400 hover:text-emerald-200' : 'text-emerald-700 hover:text-emerald-900')}
+                className={'ml-1 text-[11px] underline font-bold cursor-pointer ' + (isDark ? 'text-emerald-300 hover:text-white' : 'text-emerald-900 hover:text-black')}
               >
                 Sync Settings
               </button>
             </div>
           ) : (
-            <div className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs ' + (
-              isDark ? 'bg-slate-800/80 border border-slate-700 text-slate-400' : 'bg-slate-100 border border-slate-300 text-slate-600'
+            <div className={'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs border-2 font-semibold shadow-sm ' + (
+              isDark ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-200/90 border-slate-300 text-slate-800'
             )}>
-              <Cloud className='w-3.5 h-3.5 opacity-70' />
+              <Cloud className='w-3.5 h-3.5 text-indigo-400' />
               <span>Dropbox Disconnected</span>
               <button
+                type="button"
                 onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className={'ml-1 text-[11px] underline font-medium cursor-pointer ' + (
-                  isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800'
+                className={'ml-1 text-[11px] underline font-bold cursor-pointer ' + (
+                  isDark ? 'text-indigo-300 hover:text-white' : 'text-indigo-700 hover:text-indigo-950'
                 )}
               >
                 Connect Cloud Sync
@@ -4529,8 +4535,8 @@ export default function FileManagerPlugin({ gaw }) {
             </div>
           )}
 
-          <div className={'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs ' + (
-            isDark ? 'bg-slate-800 border border-slate-700 text-slate-300' : 'bg-slate-100 border border-slate-300 text-slate-700'
+          <div className={'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs border-2 font-semibold shadow-sm ' + (
+            isDark ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-200/90 border-slate-300 text-slate-800'
           )}>
             <HardDrive className={'w-3.5 h-3.5 ' + (isDark ? 'text-indigo-400' : 'text-indigo-600')} />
             <span>Target: {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}</span>
@@ -4538,33 +4544,37 @@ export default function FileManagerPlugin({ gaw }) {
         </div>
       </div>
 
-      {/* Requirement 1: Sub-Navbar under File & Workspace Manager heading */}
-      <div className={'flex items-center gap-2 p-1.5 rounded-2xl border transition-colors ' + (
-        isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
-      )}>
-        <button
-          onClick={() => setSubTab('database')}
-          className={'flex-1 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ' + (
-            subTab === 'database'
-              ? (isDark ? 'bg-sky-600 text-white shadow-lg' : 'bg-white text-sky-700 shadow-md')
-              : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200')
-          )}
-        >
-          <Database className='w-4 h-4' />
-          <span>Database</span>
-        </button>
+      {/* Centered Sub-Navbar under File & Workspace Manager heading */}
+      <div className="flex justify-center items-center my-3 w-full">
+        <div className={'inline-flex items-center gap-3 p-1.5 rounded-2xl border-2 transition-colors shadow-md ' + (
+          isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-slate-100 border-slate-300'
+        )}>
+          <button
+            type="button"
+            onClick={() => setSubTab('database')}
+            className={'py-2 px-6 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border-2 active:scale-95 ' + (
+              subTab === 'database'
+                ? (isDark ? 'bg-sky-600 text-white border-sky-500 shadow-lg' : 'bg-sky-600 text-white border-sky-500 shadow-md')
+                : (isDark ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white' : 'bg-slate-200/90 text-slate-800 border-slate-300/90 hover:bg-slate-300 hover:border-slate-400 hover:text-black')
+            )}
+          >
+            <Database className='w-4 h-4' />
+            <span>Database</span>
+          </button>
 
-        <button
-          onClick={() => setSubTab('saving')}
-          className={'flex-1 py-2 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ' + (
-            subTab === 'saving'
-              ? (isDark ? 'bg-sky-600 text-white shadow-lg' : 'bg-white text-sky-700 shadow-md')
-              : (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200')
-          )}
-        >
-          <Save className='w-4 h-4' />
-          <span>Saving</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('saving')}
+            className={'py-2 px-6 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border-2 active:scale-95 ' + (
+              subTab === 'saving'
+                ? (isDark ? 'bg-sky-600 text-white border-sky-500 shadow-lg' : 'bg-sky-600 text-white border-sky-500 shadow-md')
+                : (isDark ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white' : 'bg-slate-200/90 text-slate-800 border-slate-300/90 hover:bg-slate-300 hover:border-slate-400 hover:text-black')
+            )}
+          >
+            <Save className='w-4 h-4' />
+            <span>Saving</span>
+          </button>
+        </div>
       </div>
 
       {/* ROUTE 1: DATABASE */}
@@ -6921,18 +6931,18 @@ export default function DebuggingPlugin({ gaw }) {
         {/* Toolbar Controls */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
           {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
             {['all', 'wasm', 'database', 'app', 'plugins', 'storage', 'system'].map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setFilterCategory(cat)}
-                className={'px-3 py-1 rounded-lg text-xs font-semibold capitalize transition cursor-pointer ' + (
+                className={'px-3.5 py-1.5 rounded-xl text-xs font-bold capitalize transition border-2 cursor-pointer active:scale-95 ' + (
                   filterCategory === cat
-                    ? 'bg-indigo-600 text-white shadow-sm'
+                    ? 'bg-indigo-600 text-white border-indigo-500 shadow-md'
                     : isDark
-                    ? 'bg-slate-900 hover:bg-slate-800 text-slate-400'
-                    : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                    ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
+                    : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
                 )}
               >
                 {cat}
