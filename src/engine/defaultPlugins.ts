@@ -6693,7 +6693,7 @@ export default function SettingsPlugin({ gaw }) {
           <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
             <div className="flex items-center gap-2">
               <Bug className="w-4 h-4 text-emerald-400" />
-              <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-emerald-400">
                 Application Startup Debugging & Diagnostics
               </h2>
             </div>
@@ -6861,7 +6861,7 @@ export default function DebuggingPlugin({ gaw }) {
           isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'
         )}>
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
               <Sliders className="w-4 h-4" />
               <span>Startup Diagnostics Setting</span>
             </div>
