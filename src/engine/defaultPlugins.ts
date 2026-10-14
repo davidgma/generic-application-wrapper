@@ -6512,7 +6512,7 @@ export default function SettingsPlugin({ gaw }) {
           <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
             <div className="flex items-center gap-2">
               <AppWindow className="w-4 h-4 text-emerald-500" />
-              <h2 className="text-sm font-bold text-emerald-500 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-emerald-500 tracking-wide">
                 Application Settings (<code className="font-mono text-xs">t_settings</code>)
               </h2>
             </div>
@@ -6587,7 +6587,7 @@ export default function SettingsPlugin({ gaw }) {
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
         )}>
           <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
-            <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">
+            <h2 className="text-sm font-bold text-indigo-400 tracking-wide">
               Visual Appearance (Browser Local Storage)
             </h2>
             <span className="text-[10px] font-mono text-slate-400">key: gaw_theme</span>
@@ -6637,7 +6637,7 @@ export default function SettingsPlugin({ gaw }) {
           <div className="flex items-center justify-between border-b pb-3 border-slate-800/40">
             <div className="flex items-center gap-2">
               <PanelLeft className="w-4 h-4 text-sky-400" />
-              <h2 className="text-sm font-bold text-sky-400 uppercase tracking-wider">
+              <h2 className="text-sm font-bold text-sky-400 tracking-wide">
                 Workspace Side Navigation Pane
               </h2>
             </div>
@@ -6977,7 +6977,7 @@ export default function DebuggingPlugin({ gaw }) {
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
         )}>
           <div className="p-4 border-b border-slate-800/40 flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            <h3 className="text-xs font-bold tracking-wide text-slate-400">
               Startup Stage Timing Logs (Nearest 0.1s)
             </h3>
             <span className="text-[10px] text-slate-500 font-mono">
