@@ -41,7 +41,15 @@ import {
   Key,
   Trash2,
   Copy,
+  Pencil,
 } from 'lucide-react';
+
+const SaveAsIcon: React.FC<{ className?: string }> = ({ className = 'w-3.5 h-3.5' }) => (
+  <span className="relative inline-flex items-center justify-center flex-shrink-0">
+    <Save className={className} />
+    <Pencil className="w-2 h-2 absolute -bottom-0.5 -right-0.5 text-amber-400 stroke-[2.5] bg-slate-900 rounded-full p-[0.5px]" />
+  </span>
+);
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
 import { QueryResult, SavedQuery, TableSchema } from '../../types/sqlite';
@@ -149,6 +157,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const handleToggleViewInIDERef = useRef<() => void>(() => {});
   const handleOpenSaveAsRef = useRef<() => void>(() => {});
   const savedCursorPosRef = useRef<Record<string, { lineNumber: number; column: number }>>({});
+  const sqlCompletionProviderRef = useRef<any>(null);
+  const deletedQueriesUndoStackRef = useRef<
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      query: string;
+      params?: string;
+      layout?: string;
+      created_at?: string;
+    }>
+  >([]);
 
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return safeStorage.getItem('gaw_format_on_save') !== 'false';
@@ -1097,8 +1117,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions);
 
-    // 2. Schema-aware SQL Autocomplete
-    monaco.languages.registerCompletionItemProvider('sql', {
+    // 2. Schema-aware SQL Autocomplete (dispose previous provider to prevent duplicates)
+    if (sqlCompletionProviderRef.current) {
+      try {
+        sqlCompletionProviderRef.current.dispose();
+      } catch (e) {}
+    }
+
+    sqlCompletionProviderRef.current = monaco.languages.registerCompletionItemProvider('sql', {
       provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
         const range = {
@@ -1109,24 +1135,32 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         };
 
         const suggestions: any[] = [];
+        const seenLabels = new Set<string>();
 
         schema.forEach((t) => {
-          suggestions.push({
-            label: t.name,
-            kind: monaco.languages.CompletionItemKind.Class,
-            insertText: t.name,
-            detail: `Table (${t.rowCount} rows)`,
-            range,
-          });
-
-          t.columns.forEach((col) => {
+          if (!seenLabels.has(`table:${t.name}`)) {
+            seenLabels.add(`table:${t.name}`);
             suggestions.push({
-              label: col.name,
-              kind: monaco.languages.CompletionItemKind.Field,
-              insertText: col.name,
-              detail: `${t.name}.${col.name} (${col.type})`,
+              label: t.name,
+              kind: monaco.languages.CompletionItemKind.Class,
+              insertText: t.name,
+              detail: `Table (${t.rowCount || 0} rows)`,
               range,
             });
+          }
+
+          t.columns.forEach((col) => {
+            const colKey = `field:${t.name}.${col.name}`;
+            if (!seenLabels.has(colKey)) {
+              seenLabels.add(colKey);
+              suggestions.push({
+                label: col.name,
+                kind: monaco.languages.CompletionItemKind.Field,
+                insertText: col.name,
+                detail: `${t.name}.${col.name} (${col.type || 'TEXT'})`,
+                range,
+              });
+            }
           });
         });
 
@@ -1136,12 +1170,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           'CREATE INDEX', 'DROP TABLE', 'COUNT', 'SUM', 'AVG', 'ROUND', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         ];
         keywords.forEach((kw) => {
-          suggestions.push({
-            label: kw,
-            kind: monaco.languages.CompletionItemKind.Keyword,
-            insertText: kw,
-            range,
-          });
+          if (!seenLabels.has(`kw:${kw}`)) {
+            seenLabels.add(`kw:${kw}`);
+            suggestions.push({
+              label: kw,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: kw,
+              range,
+            });
+          }
         });
 
         return { suggestions };
@@ -1507,7 +1544,44 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   }, [tabs, activeTabId, activeTab, engine, gawContext, onRunAndExitToNonIDE, onExitIDE, handleExitIDE]);
 
-  // Delete active item (query, table, plugin, report)
+  // Handle Undo (Restores deleted query if available, otherwise editor undo)
+  const handleUndo = useCallback(() => {
+    if (deletedQueriesUndoStackRef.current.length > 0) {
+      const lastDeleted = deletedQueriesUndoStackRef.current.pop()!;
+      try {
+        engine.run(
+          'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+          [
+            lastDeleted.id,
+            lastDeleted.name,
+            lastDeleted.description || `Query ${lastDeleted.name}`,
+            lastDeleted.query,
+            lastDeleted.params || '{}',
+            lastDeleted.layout || '{}',
+            lastDeleted.created_at || new Date().toISOString(),
+          ]
+        );
+        engine.notifyChange(true);
+        setDbVersion((v) => v + 1);
+        openOrActivateItem({
+          type: 'query',
+          id: lastDeleted.id,
+          name: lastDeleted.name,
+          code: lastDeleted.query,
+        });
+        gawContext?.toast?.success?.(`Restored query "${lastDeleted.name}"`);
+        return;
+      } catch (err: any) {
+        gawContext?.toast?.error?.(`Failed to restore query: ${err.message}`);
+      }
+    }
+    if (editorRef.current) {
+      editorRef.current.trigger('keyboard', 'undo', null);
+      editorRef.current.focus();
+    }
+  }, [engine, openOrActivateItem, gawContext]);
+
+  // Delete active item (query, table, plugin, report) without modal warnings for queries
   const handleDeleteActiveItem = useCallback(() => {
     const currentTab = tabs.find((t) => t.id === activeTabId) || activeTab;
     if (!currentTab) return;
@@ -1518,14 +1592,19 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       const existingQueries = engine.getSavedQueries();
       const existing = existingQueries.find((q) => q.id === currentTab.queryId || q.name === cleanTitle);
       if (existing) {
-        if (onDeleteObject) {
-          onDeleteObject('query', existing.id, existing.name);
-        } else {
-          engine.deleteQuery(existing.id);
-          closeTab(currentTab.id);
-          setDbVersion((v) => v + 1);
-          gawContext?.toast?.success?.(`Deleted query "${existing.name}"`);
-        }
+        deletedQueriesUndoStackRef.current.push({
+          id: existing.id,
+          name: existing.name,
+          description: existing.description || '',
+          query: existing.query,
+          params: existing.params,
+          layout: existing.layout,
+          created_at: existing.created_at,
+        });
+        engine.deleteQuery(existing.id);
+        closeTab(currentTab.id);
+        setDbVersion((v) => v + 1);
+        gawContext?.toast?.info?.(`Deleted query "${existing.name}". Press Ctrl+Z or Edit -> Undo to restore.`);
       } else {
         closeTab(currentTab.id);
         gawContext?.toast?.info?.(`Closed unsaved query tab "${cleanTitle}"`);
@@ -1569,17 +1648,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   }, [tabs, activeTabId, activeTab, engine, onDeleteObject, closeTab, gawContext]);
 
-  // Save As Handler
+  // Save As Handler - Prefills query name so user can edit/rename query directly
   const handleOpenSaveAs = useCallback((targetItem?: TargetTabInfo | TabItem | null) => {
     const target = targetItem || activeTab;
     setSaveAsTarget(target);
     const rawName = target ? (target as any).name || (target as any).title || 'Query' : 'Query';
     const cleanName = rawName.replace(/\.(sql|tsx|json)$/i, '');
-    const defaultName = cleanName.toLowerCase().includes('query') || cleanName.toLowerCase().includes('table') || cleanName.toLowerCase().includes('plugin')
-      ? `${cleanName}_copy`
-      : cleanName;
-    setSaveAsName(defaultName);
-    setSaveAsDescription((target as any)?.description || `Saved copy of ${cleanName}`);
+    setSaveAsName(cleanName);
+    setSaveAsDescription((target as any)?.description || `Query ${cleanName}`);
     setShowSaveAsModal(true);
   }, [activeTab]);
 
@@ -1597,53 +1673,119 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     const type = currentTabToSave.type;
 
     if (type === 'plugin') {
-      const pluginId = `plugin_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
-      engine.run(
-        'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          pluginId,
+      const pId = (currentTabToSave as TabItem).pluginId || (currentTabToSave as TargetTabInfo).id;
+      if (pId) {
+        engine.run('UPDATE t_gaw_plugins SET name = ?, description = ?, code = ?, updated_at = ? WHERE id = ?;', [
           cleanName,
-          '1.0.0',
-          1,
-          'Boxes',
-          'Custom',
-          `/${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-          saveAsDescription.trim() || `Custom plugin ${cleanName}`,
+          saveAsDescription.trim() || `Plugin ${cleanName}`,
           editorVal,
           now,
-          now,
-        ]
-      );
+          pId,
+        ]);
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.pluginId === pId || t.id === (currentTabToSave as TabItem).id
+              ? { ...t, title: `${cleanName}.tsx`, content: editorVal, savedContent: editorVal, isDirty: false }
+              : t
+          )
+        );
+      } else {
+        const pluginId = `plugin_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
+        engine.run(
+          'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            pluginId,
+            cleanName,
+            '1.0.0',
+            1,
+            'Boxes',
+            'Custom',
+            `/${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+            saveAsDescription.trim() || `Custom plugin ${cleanName}`,
+            editorVal,
+            now,
+            now,
+          ]
+        );
+        openOrActivateItem({ type: 'plugin', id: pluginId, name: cleanName });
+      }
       engine.notifyChange(true);
       setDbVersion((v) => v + 1);
-      openOrActivateItem({ type: 'plugin', id: pluginId, name: cleanName });
-      gawContext?.toast?.success?.(`Saved as new plugin "${cleanName}.tsx"`);
+      gawContext?.toast?.success?.(`Saved plugin "${cleanName}.tsx"`);
     } else if (type === 'report') {
-      const reportId = `r_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
-      engine.saveReport({
-        id: reportId,
-        name: cleanName,
-        description: saveAsDescription.trim() || `Report ${cleanName}`,
-        query_id: '',
-        custom_sql: 'SELECT * FROM customers LIMIT 25;',
-        config: typeof editorVal === 'string' ? editorVal : JSON.stringify(editorVal || {}),
-        created_at: now,
-      });
+      const rId = (currentTabToSave as TabItem).reportId || (currentTabToSave as TargetTabInfo).id;
+      if (rId) {
+        engine.saveReport({
+          id: rId,
+          name: cleanName,
+          description: saveAsDescription.trim() || `Report ${cleanName}`,
+          query_id: '',
+          custom_sql: '',
+          config: typeof editorVal === 'string' ? editorVal : JSON.stringify(editorVal || {}),
+          created_at: now,
+        });
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.reportId === rId || t.id === (currentTabToSave as TabItem).id
+              ? { ...t, title: `${cleanName}.json`, content: editorVal, savedContent: editorVal, isDirty: false }
+              : t
+          )
+        );
+      } else {
+        const reportId = `r_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
+        engine.saveReport({
+          id: reportId,
+          name: cleanName,
+          description: saveAsDescription.trim() || `Report ${cleanName}`,
+          query_id: '',
+          custom_sql: 'SELECT * FROM customers LIMIT 25;',
+          config: typeof editorVal === 'string' ? editorVal : JSON.stringify(editorVal || {}),
+          created_at: now,
+        });
+        openOrActivateItem({ type: 'report', id: reportId, name: cleanName });
+      }
       engine.notifyChange(true);
       setDbVersion((v) => v + 1);
-      openOrActivateItem({ type: 'report', id: reportId, name: cleanName });
-      gawContext?.toast?.success?.(`Saved as new report "${cleanName}.json"`);
+      gawContext?.toast?.success?.(`Saved report "${cleanName}.json"`);
     } else {
-      // Query / SQL / Table
-      const queryId = `q_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
-      engine.run(
-        'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-        [queryId, cleanName, saveAsDescription.trim() || `Saved query ${cleanName}`, editorVal, '{}', '{}', now]
+      // Query / SQL / Table: Update existing query name or insert new if unsaved
+      const existingQueries = engine.getSavedQueries();
+      const targetQueryId = (currentTabToSave as TabItem).queryId || (currentTabToSave as TargetTabInfo).id;
+      const existing = existingQueries.find(
+        (q) => q.id === targetQueryId || q.name === (currentTabToSave as any).name || q.name === (currentTabToSave as any).title
       );
+
+      if (existing) {
+        engine.run(
+          'UPDATE t_gaw_sql_queries SET name = ?, description = ?, query = ? WHERE id = ?;',
+          [cleanName, saveAsDescription.trim() || existing.description || `Query ${cleanName}`, editorVal, existing.id]
+        );
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.queryId === existing.id || t.id === (currentTabToSave as TabItem).id
+              ? { ...t, title: cleanName, content: editorVal, savedContent: editorVal, isDirty: false }
+              : t
+          )
+        );
+        gawContext?.toast?.success?.(`Renamed query to "${cleanName}"`);
+      } else {
+        const queryId = targetQueryId || `q_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
+        engine.run(
+          'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+          [queryId, cleanName, saveAsDescription.trim() || `Saved query ${cleanName}`, editorVal, '{}', '{}', now]
+        );
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.id === (currentTabToSave as TabItem).id
+              ? { ...t, title: cleanName, content: editorVal, savedContent: editorVal, isDirty: false, queryId }
+              : t
+          )
+        );
+        openOrActivateItem({ type: 'query', id: queryId, name: cleanName, code: editorVal });
+        gawContext?.toast?.success?.(`Saved query as "${cleanName}"`);
+      }
       engine.notifyChange(true);
       setDbVersion((v) => v + 1);
-      openOrActivateItem({ type: 'query', id: queryId, name: cleanName, code: editorVal });
-      gawContext?.toast?.success?.(`Saved as new query "${cleanName}"`);
     }
 
     setShowSaveAsModal(false);
@@ -1961,10 +2103,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         id: 'cmd_undo',
         title: 'Edit: Undo',
         shortcut: 'Ctrl+Z',
-        action: () => {
-          editorRef.current?.trigger('commandPalette', 'undo', null);
-          editorRef.current?.focus();
-        },
+        action: () => handleUndo(),
       },
       {
         id: 'cmd_redo',
@@ -2034,7 +2173,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         title: 'Help: Open Help & System Guide',
         shortcut: '',
         action: () => {
-          gawContext?.navigation?.navigate?.('help', 'help');
+          openOrActivateItem({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' });
         },
       },
       {
@@ -2196,10 +2335,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       {
         label: 'Undo',
         shortcut: 'Ctrl+Z',
-        action: () => {
-          editorRef.current?.trigger('menu', 'undo', null);
-          editorRef.current?.focus();
-        },
+        action: () => handleUndo(),
       },
       {
         label: 'Redo',
@@ -2454,7 +2590,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       {
         label: 'Help & System Guide',
         action: () => {
-          gawContext?.navigation?.navigate?.('help', 'help');
+          openOrActivateItem({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' });
         },
       },
       {
@@ -3442,7 +3578,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                               }`}
                               title="Save As..."
                             >
-                              <Copy className="w-3 h-3" />
+                              <SaveAsIcon className="w-3 h-3" />
                             </button>
                           </div>
                         ))}
@@ -3763,7 +3899,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                       : 'hover:bg-slate-200 text-slate-700 hover:text-black'
                   }`}
                 >
-                  <Copy className="w-3.5 h-3.5" />
+                  <SaveAsIcon className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
@@ -4490,13 +4626,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             }`}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
-                <Copy className="w-5 h-5" />
+              <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                <SaveAsIcon className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold">Save As...</h3>
+                <h3 className="text-base font-bold">Save As / Rename</h3>
                 <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                  Save a copy or rename query in database
+                  Update name or save changes in database
                 </p>
               </div>
             </div>

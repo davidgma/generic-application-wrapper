@@ -841,6 +841,20 @@ export default function App() {
         toastApi.warning(`"${name}" is a core system plugin and cannot be removed to maintain application operation.`);
         return;
       }
+      if (type === 'query') {
+        const engine = SQLiteEngine.getInstance();
+        try {
+          engine.deleteQuery(id);
+          toastApi.info(`Deleted query "${name}". Press Ctrl+Z or Edit -> Undo to restore.`);
+          refreshDatabaseState();
+          if (activeView === `query:${id}`) {
+            setActiveView('plugin:plugin_crm');
+          }
+        } catch (err: any) {
+          toastApi.error(`Failed to delete query: ${err.message}`);
+        }
+        return;
+      }
       setDeleteTarget({
         stage: 1,
         type,
@@ -848,7 +862,7 @@ export default function App() {
         name,
       });
     },
-    [toastApi]
+    [toastApi, refreshDatabaseState, activeView]
   );
 
   // Execute confirmed deletion
