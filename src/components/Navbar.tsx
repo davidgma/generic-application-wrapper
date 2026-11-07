@@ -50,20 +50,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   const brandSubtitle = mode === 'app' ? (appDescription || '') : 'Generic Application Wrapper';
 
   // Navigation Items according to mode:
-  // Dev mode: File, View, Database, Plugins, Help
-  // App mode: File/Workspace, plus actual application panes (user plugins) and/or All Panes hub
+  // Dev mode: View
+  // App mode: actual application panes (user plugins) and/or All Panes hub
   const devNavItems = [
-    { id: 'file', label: 'File', icon: FolderOpen },
     { id: 'view', label: 'View', icon: LayoutGrid },
-    { id: 'database', label: 'Database', icon: Database },
-    { id: 'plugins', label: 'Plugins', icon: Puzzle },
-    { id: 'help', label: 'Help', icon: HelpCircle },
   ];
 
   const appNavItems = React.useMemo(() => {
-    const items: Array<{ id: string; label: string; icon: any; isView?: boolean }> = [
-      { id: 'file', label: 'Files', icon: FolderOpen },
-    ];
+    const items: Array<{ id: string; label: string; icon: any; isView?: boolean }> = [];
 
     if (userPlugins.length === 1) {
       items.push({

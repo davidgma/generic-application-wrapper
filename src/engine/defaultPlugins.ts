@@ -5576,15 +5576,10 @@ export default function HeaderNavbarPlugin({ gaw }) {
     }
   }, [gaw.plugins, gaw.plugins?.getAll]);
 
-  const devNavItems = [
-    { id: 'file', label: 'File', icon: 'FolderOpen', isView: false },
-    { id: 'database', label: 'Database', icon: 'Database', isView: false },
-    { id: 'plugins', label: 'Plugins', icon: 'Puzzle', isView: false },
-    { id: 'help', label: 'Help', icon: 'HelpCircle', isView: false },
-  ];
+  const devNavItems = [];
 
   const appNavItems = useMemo(() => {
-    const items = [{ id: 'file', label: 'Files', icon: 'FolderOpen', isView: false }];
+    const items = [];
     if (userPlugins.length === 1) {
       items.push({ id: 'plugin:' + userPlugins[0].id, label: userPlugins[0].name, icon: 'Sparkles', isView: true });
     } else if (userPlugins.length > 1) {

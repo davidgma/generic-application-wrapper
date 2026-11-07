@@ -2021,6 +2021,19 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     gawContext?.toast?.success?.(`Created new report "${baseName}.json"`);
   }, [engine, gawContext, openOrActivateItem]);
 
+  // Open plugin tab and immediately toggle view to rendered plugin host
+  const openAndTogglePlugin = useCallback(
+    (pluginId: string, name: string) => {
+      openOrActivateItem({ type: 'plugin', id: pluginId, name });
+      const tabId = `tab_plugin_${pluginId}`;
+      setToggledTabIds((prev) => ({
+        ...prev,
+        [tabId]: true,
+      }));
+    },
+    [openOrActivateItem]
+  );
+
   // Add new SQL tab
   const addSqlTab = () => {
     const id = `tab_sql_${Date.now()}`;
@@ -2169,12 +2182,16 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => setShowAboutModal(true),
       },
       {
+        id: 'cmd_file_manager',
+        title: 'File: Open File & Workspace Manager',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
+      },
+      {
         id: 'cmd_help',
         title: 'Help: Open Help & System Guide',
         shortcut: '',
-        action: () => {
-          openOrActivateItem({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' });
-        },
+        action: () => openAndTogglePlugin('plugin_help', 'Help & System Guide'),
       },
       {
         id: 'cmd_open_types',
@@ -2265,6 +2282,11 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
     ],
     File: [
+      {
+        label: 'File Manager',
+        action: () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
+        divider: true,
+      },
       {
         label: 'New SQL Query Tab',
         shortcut: 'Alt+N',
@@ -2589,9 +2611,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     Help: [
       {
         label: 'Help & System Guide',
-        action: () => {
-          openOrActivateItem({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' });
-        },
+        action: () => openAndTogglePlugin('plugin_help', 'Help & System Guide'),
       },
       {
         label: 'Keyboard Shortcuts Reference',
