@@ -1221,8 +1221,9 @@ export class SQLiteEngine {
 
       const startTime = performance.now();
       try {
-        // Test if this is a SELECT or PRAGMA that returns rows
-        const isQuery = /^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(trimmed);
+        // Test if this is a SELECT or PRAGMA that returns rows (strip SQL comments first)
+        const cleanForCheck = trimmed.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+        const isQuery = /^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(cleanForCheck);
 
         if (isQuery) {
           const { columns, values } = this.query(trimmed);

@@ -40,6 +40,7 @@ import {
   HelpCircle,
   Key,
   Trash2,
+  Copy,
 } from 'lucide-react';
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
@@ -146,6 +147,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const handleDeleteActiveItemRef = useRef<() => void>(() => {});
   const handleToggleCommentsRef = useRef<() => void>(() => {});
   const handleToggleViewInIDERef = useRef<() => void>(() => {});
+  const handleOpenSaveAsRef = useRef<() => void>(() => {});
+  const savedCursorPosRef = useRef<Record<string, { lineNumber: number; column: number }>>({});
 
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return safeStorage.getItem('gaw_format_on_save') !== 'false';
@@ -499,25 +502,17 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       return [];
     }
     try {
-      const statements = activeTab.content.split(';').map((s) => s.trim()).filter(Boolean);
-      const res: QueryResult[] = [];
-      for (const stmt of statements) {
-        if (/^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(stmt)) {
-          const qRes = engine.query(stmt);
-          res.push({ columns: qRes.columns, values: qRes.values, sqlQuery: stmt });
-        } else {
-          res.push({
-            columns: ['info'],
-            values: [['Statement requires execution. Click Run (Ctrl+Enter) or Ctrl+Shift+F to execute.']],
-            sqlQuery: stmt,
-          });
-        }
-      }
-      return res.length > 0 ? res : [{ columns: [], values: [] }];
+      return engine.exec(activeTab.content);
     } catch (err: any) {
       return [{ columns: ['Error'], values: [[err.message || String(err)]], error: err.message }];
     }
   }, [isViewToggled, activeTab?.type, activeTab?.content, queryResults, dbVersion, engine]);
+
+  // Save As Modal State
+  const [showSaveAsModal, setShowSaveAsModal] = useState(false);
+  const [saveAsName, setSaveAsName] = useState('');
+  const [saveAsDescription, setSaveAsDescription] = useState('');
+  const [saveAsTarget, setSaveAsTarget] = useState<TargetTabInfo | TabItem | null>(null);
 
   // Schema state for autocompletion and explorer
   const schema = useMemo(() => engine.getSchema(), [engine, dbVersion]);
@@ -788,6 +783,13 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           setTimeout(() => editorRef.current?.focus(), 10);
           return;
         }
+        if (showSaveAsModal) {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowSaveAsModal(false);
+          setTimeout(() => editorRef.current?.focus(), 10);
+          return;
+        }
       }
 
       // Ctrl+Shift+P / F1 for Command Palette
@@ -801,6 +803,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         e.preventDefault();
         e.stopPropagation();
         setShowCommandPalette(true);
+        return;
+      }
+
+      // Ctrl+Shift+S / Cmd+Shift+S: Save As...
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleOpenSaveAsRef.current?.();
         return;
       }
 
@@ -989,10 +999,30 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       // ignore
     }
 
-    // Track Cursor Position for VS Code Status Bar
+    // Track Cursor Position for VS Code Status Bar and store in ref
     editor.onDidChangeCursorPosition((e) => {
       setCursorPos({ line: e.position.lineNumber, col: e.position.column });
+      if (activeTabId) {
+        savedCursorPosRef.current[activeTabId] = {
+          lineNumber: e.position.lineNumber,
+          column: e.position.column,
+        };
+      }
     });
+
+    // Restore saved cursor position when returning to Code View
+    if (activeTabId && savedCursorPosRef.current[activeTabId]) {
+      const savedPos = savedCursorPosRef.current[activeTabId];
+      setTimeout(() => {
+        try {
+          editor.setPosition(savedPos);
+          editor.revealPositionInCenter(savedPos);
+          editor.focus();
+        } catch (e) {
+          // ignore
+        }
+      }, 30);
+    }
 
     // Track Diagnostic Markers (Errors & Warnings)
     try {
@@ -1011,6 +1041,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     // Keybinding: Ctrl+Shift+K to toggle view inside IDE
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyK, () => {
       handleToggleViewInIDERef.current?.();
+    });
+
+    // Keybinding: Ctrl+Shift+S to Save As
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS, () => {
+      handleOpenSaveAsRef.current?.();
     });
 
     // Keybinding: Ctrl+/ to toggle comments
@@ -1534,10 +1569,91 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   }, [tabs, activeTabId, activeTab, engine, onDeleteObject, closeTab, gawContext]);
 
+  // Save As Handler
+  const handleOpenSaveAs = useCallback((targetItem?: TargetTabInfo | TabItem | null) => {
+    const target = targetItem || activeTab;
+    setSaveAsTarget(target);
+    const rawName = target ? (target as any).name || (target as any).title || 'Query' : 'Query';
+    const cleanName = rawName.replace(/\.(sql|tsx|json)$/i, '');
+    const defaultName = cleanName.toLowerCase().includes('query') || cleanName.toLowerCase().includes('table') || cleanName.toLowerCase().includes('plugin')
+      ? `${cleanName}_copy`
+      : cleanName;
+    setSaveAsName(defaultName);
+    setSaveAsDescription((target as any)?.description || `Saved copy of ${cleanName}`);
+    setShowSaveAsModal(true);
+  }, [activeTab]);
+
+  const handleConfirmSaveAs = useCallback(() => {
+    if (!saveAsName.trim()) return;
+    const cleanName = saveAsName.trim().replace(/\.(sql|tsx|json)$/i, '');
+    const currentTabToSave = saveAsTarget || activeTab;
+    if (!currentTabToSave) return;
+
+    const editorVal = editorRef.current && (currentTabToSave as TabItem).id === activeTabId
+      ? editorRef.current.getValue()
+      : ((currentTabToSave as TabItem).content || (currentTabToSave as TargetTabInfo).code || '');
+
+    const now = new Date().toISOString();
+    const type = currentTabToSave.type;
+
+    if (type === 'plugin') {
+      const pluginId = `plugin_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
+      engine.run(
+        'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          pluginId,
+          cleanName,
+          '1.0.0',
+          1,
+          'Boxes',
+          'Custom',
+          `/${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          saveAsDescription.trim() || `Custom plugin ${cleanName}`,
+          editorVal,
+          now,
+          now,
+        ]
+      );
+      engine.notifyChange(true);
+      setDbVersion((v) => v + 1);
+      openOrActivateItem({ type: 'plugin', id: pluginId, name: cleanName });
+      gawContext?.toast?.success?.(`Saved as new plugin "${cleanName}.tsx"`);
+    } else if (type === 'report') {
+      const reportId = `r_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
+      engine.saveReport({
+        id: reportId,
+        name: cleanName,
+        description: saveAsDescription.trim() || `Report ${cleanName}`,
+        query_id: '',
+        custom_sql: 'SELECT * FROM customers LIMIT 25;',
+        config: typeof editorVal === 'string' ? editorVal : JSON.stringify(editorVal || {}),
+        created_at: now,
+      });
+      engine.notifyChange(true);
+      setDbVersion((v) => v + 1);
+      openOrActivateItem({ type: 'report', id: reportId, name: cleanName });
+      gawContext?.toast?.success?.(`Saved as new report "${cleanName}.json"`);
+    } else {
+      // Query / SQL / Table
+      const queryId = `q_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
+      engine.run(
+        'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+        [queryId, cleanName, saveAsDescription.trim() || `Saved query ${cleanName}`, editorVal, '{}', '{}', now]
+      );
+      engine.notifyChange(true);
+      setDbVersion((v) => v + 1);
+      openOrActivateItem({ type: 'query', id: queryId, name: cleanName, code: editorVal });
+      gawContext?.toast?.success?.(`Saved as new query "${cleanName}"`);
+    }
+
+    setShowSaveAsModal(false);
+  }, [saveAsName, saveAsDescription, saveAsTarget, activeTab, activeTabId, engine, gawContext, openOrActivateItem]);
+
   handleSaveActiveTabRef.current = handleSaveActiveTab;
   handleRunAndShowInNonIDERef.current = handleRunAndShowInNonIDE;
   handleDeleteActiveItemRef.current = handleDeleteActiveItem;
   handleToggleViewInIDERef.current = handleToggleViewInIDE;
+  handleOpenSaveAsRef.current = handleOpenSaveAs;
 
   // Handler: Add New Dynamic TSX Plugin
   const handleAddNewPlugin = useCallback(() => {
@@ -1866,6 +1982,12 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => handleSaveActiveTab(),
       },
       {
+        id: 'cmd_save_as',
+        title: 'File: Save As...',
+        shortcut: 'Ctrl+Shift+S',
+        action: () => handleOpenSaveAs(),
+      },
+      {
         id: 'cmd_toggle_theme',
         title: `Preferences: Color Theme (Switch to ${isDark ? 'Light' : 'Dark'} Mode)`,
         shortcut: '',
@@ -2018,6 +2140,11 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         label: 'Save Current Tab',
         shortcut: 'Ctrl+S',
         action: () => handleSaveActiveTabRef.current?.(),
+      },
+      {
+        label: 'Save As...',
+        shortcut: 'Ctrl+Shift+S',
+        action: () => handleOpenSaveAsRef.current?.(),
       },
       {
         label: 'Save All Tabs',
@@ -3296,12 +3423,27 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           <div
                             key={q.id}
                             onClick={() => openOrActivateItem({ type: 'query', id: q.id, name: q.name })}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
+                            className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition select-none ${
                               isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
                             }`}
                           >
-                            <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
-                            <span className="truncate">{q.name.replace(/\.sql$/i, '')}</span>
+                            <div className="flex items-center gap-1.5 min-w-0 truncate">
+                              <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
+                              <span className="truncate">{q.name.replace(/\.sql$/i, '')}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenSaveAs({ type: 'query', id: q.id, name: q.name, code: q.query });
+                              }}
+                              className={`p-0.5 rounded opacity-0 group-hover:opacity-100 transition flex-shrink-0 ${
+                                isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                              }`}
+                              title="Save As..."
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -3610,6 +3752,18 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                   }`}
                 >
                   <Save className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenSaveAsRef.current?.()}
+                  title="Save As... (Ctrl+Shift+S)"
+                  className={`p-1.5 rounded transition flex items-center justify-center ${
+                    isDark
+                      ? 'hover:bg-slate-700 text-slate-300 hover:text-white'
+                      : 'hover:bg-slate-200 text-slate-700 hover:text-black'
+                  }`}
+                >
+                  <Copy className="w-3.5 h-3.5" />
                 </button>
                 <button
                   type="button"
@@ -4315,6 +4469,104 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. SAVE AS MODAL */}
+      {showSaveAsModal && (
+        <div
+          onClick={() => setShowSaveAsModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-text"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full max-w-md rounded-xl p-6 shadow-2xl border ${
+              isDark
+                ? 'bg-[#252526] border-[#454545] text-slate-200'
+                : 'bg-white border-[#d4d4d4] text-slate-800'
+            }`}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                <Copy className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold">Save As...</h3>
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Save a copy or rename query in database
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Query Name:
+                </label>
+                <input
+                  type="text"
+                  value={saveAsName}
+                  onChange={(e) => setSaveAsName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmSaveAs();
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Enter new query name..."
+                  className={`w-full px-3 py-2 rounded text-xs focus:outline-none border ${
+                    isDark
+                      ? 'bg-[#1e1e1e] border-[#454545] text-white placeholder-slate-500 focus:border-blue-500'
+                      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-600'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className={`block text-xs font-semibold mb-1 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Description (optional):
+                </label>
+                <input
+                  type="text"
+                  value={saveAsDescription}
+                  onChange={(e) => setSaveAsDescription(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleConfirmSaveAs();
+                    }
+                  }}
+                  placeholder="Enter query description..."
+                  className={`w-full px-3 py-2 rounded text-xs focus:outline-none border ${
+                    isDark
+                      ? 'bg-[#1e1e1e] border-[#454545] text-white placeholder-slate-500 focus:border-blue-500'
+                      : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-blue-600'
+                  }`}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSaveAsModal(false)}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition ${
+                  isDark ? 'hover:bg-slate-700 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSaveAs}
+                disabled={!saveAsName.trim()}
+                className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
+              >
+                Save
               </button>
             </div>
           </div>
