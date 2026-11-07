@@ -49,6 +49,8 @@ import { SavedReport } from '../../types/report';
 import { safeStorage } from '../../utils/storage';
 import { QueryGrid } from '../QueryGrid';
 import { PluginHost } from '../PluginHost';
+import { ReportViewer } from '../ReportViewer';
+import { MultiQueryResultsView } from '../MultiQueryResultsView';
 import { CodeFormatter } from '../../engine/formatter';
 import { GAW_TYPES_DECLARATION } from './gawTypesDeclaration';
 import { REACT_TYPES_DECLARATION, LUCIDE_TYPES_DECLARATION } from './vendorTypesDeclaration';
@@ -143,6 +145,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const handleRunAndShowInNonIDERef = useRef<() => void>(() => {});
   const handleDeleteActiveItemRef = useRef<() => void>(() => {});
   const handleToggleCommentsRef = useRef<() => void>(() => {});
+  const handleToggleViewInIDERef = useRef<() => void>(() => {});
+
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return safeStorage.getItem('gaw_format_on_save') !== 'false';
   });
@@ -325,6 +329,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || '');
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+
+  // Toggle View inside IDE (Ctrl+Shift+K) - Code <-> Preview/Data/Results/Report
+  const [toggledTabIds, setToggledTabIds] = useState<Record<string, boolean>>({});
+  const isViewToggled = !!(activeTabId && toggledTabIds[activeTabId]);
+
+  const handleToggleViewInIDE = useCallback(() => {
+    if (!activeTabId) return;
+    setToggledTabIds((prev) => ({
+      ...prev,
+      [activeTabId]: !prev[activeTabId],
+    }));
+  }, [activeTabId]);
 
   // Close tab
   const closeTab = useCallback((idToClose: string) => {
@@ -765,6 +781,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         return;
       }
 
+      // Ctrl+Shift+K: Toggle view in IDE (Code <-> Preview/Data/Results/Report)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleToggleViewInIDERef.current?.();
+        return;
+      }
+
       // Ctrl+/: Toggle line comments
       if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.code === 'Slash')) {
         e.preventDefault();
@@ -935,6 +959,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     // Keybinding: Ctrl+Shift+F to automatically save changes, run query, and show results in non-IDE view
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
       handleRunAndShowInNonIDERef.current?.();
+    });
+
+    // Keybinding: Ctrl+Shift+K to toggle view inside IDE
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyK, () => {
+      handleToggleViewInIDERef.current?.();
     });
 
     // Keybinding: Ctrl+/ to toggle comments
@@ -1461,6 +1490,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   handleSaveActiveTabRef.current = handleSaveActiveTab;
   handleRunAndShowInNonIDERef.current = handleRunAndShowInNonIDE;
   handleDeleteActiveItemRef.current = handleDeleteActiveItem;
+  handleToggleViewInIDERef.current = handleToggleViewInIDE;
 
   // Handler: Add New Dynamic TSX Plugin
   const handleAddNewPlugin = useCallback(() => {
@@ -1807,6 +1837,12 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => handleExitIDE(),
       },
       {
+        id: 'cmd_toggle_view',
+        title: 'View: Toggle View in IDE (Code <-> Live Preview / Data Grid / Report)',
+        shortcut: 'Ctrl+Shift+K',
+        action: () => handleToggleViewInIDE(),
+      },
+      {
         id: 'cmd_new_sql',
         title: 'File: New SQL Query File',
         shortcut: 'Alt+N',
@@ -2149,6 +2185,11 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         label: 'Toggle Live TSX Preview',
         shortcut: 'Ctrl+J',
         action: () => setShowLivePreview((p) => !p),
+      },
+      {
+        label: 'Toggle View (Code <-> Preview/Data/Report)',
+        shortcut: 'Ctrl+Shift+K',
+        action: () => handleToggleViewInIDE(),
       },
       {
         label: 'Toggle Minimap',
@@ -3410,6 +3451,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     <div className="space-y-1.5">
                       {[
                         ['Ctrl + Shift + F', 'Toggle Monaco IDE / Gawkyy Shell'],
+                        ['Ctrl + Shift + K', 'Toggle View (Code <-> Preview/Data/Report)'],
                         ['Shift + Alt + F', 'Format Document (Prettier)'],
                         ['Ctrl + Enter', 'Run Query / Test Plugin'],
                         ['Ctrl + S', 'Save File'],
@@ -3555,6 +3597,20 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleToggleViewInIDERef.current?.()}
+                  title="Toggle View (ctrl+shift+K)"
+                  className={`p-1.5 rounded transition flex items-center justify-center ${
+                    isViewToggled
+                      ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-xs'
+                      : isDark
+                      ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-950/40'
+                      : 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {tabs.map((tab) => {
@@ -3616,8 +3672,228 @@ export default function ${componentName}({ gawContext }: PluginProps) {
               </button>
             </div>
 
-          {/* Monaco Editor Frame */}
-          <div className="flex-1 flex overflow-hidden min-h-0">
+          {/* Main Panel Content: Monaco Editor Frame OR Toggled View Panel */}
+          {isViewToggled && activeTab ? (
+            <div className={`flex-1 flex flex-col overflow-hidden min-h-0 ${isDark ? 'bg-[#1e1e1e]' : 'bg-white'}`}>
+              {activeTab.type === 'plugin' && (
+                <div className={`flex-1 flex flex-col overflow-hidden h-full ${
+                  isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'
+                }`}>
+                  <div className={`flex items-center justify-between px-4 py-2 border-b text-xs flex-shrink-0 ${
+                    isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800 shadow-2xs'
+                  }`}>
+                    <div className="flex items-center gap-2 font-bold">
+                      <FileCode className="w-4 h-4 text-emerald-400" />
+                      <span>Plugin Live View: {activeTab.title.replace(/\.tsx$/i, '')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleToggleViewInIDE}
+                      className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
+                        isDark ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 border-slate-300 text-blue-700 hover:bg-slate-200'
+                      }`}
+                      title="Toggle View (ctrl+shift+K)"
+                    >
+                      Switch to Code (Ctrl+Shift+K)
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-auto p-2">
+                    <PluginHost
+                      code={activeTab.content}
+                      pluginName={activeTab.title}
+                      pluginId={activeTab.pluginId || activeTab.id}
+                      theme={theme}
+                      gawContext={gawContext}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeTab.type === 'table' && (() => {
+                const tableName = (activeTab.tableName || activeTab.title).replace(/\.sql$/i, '');
+                const schemaObj = engine.getSchema().find((t) => t.name.toLowerCase() === tableName.toLowerCase());
+                const isViewInDb = schemaObj?.type === 'view';
+
+                let gridResult: QueryResult = { columns: [], values: [] };
+                try {
+                  const res = engine.exec(`SELECT * FROM "${tableName}";`);
+                  if (res && res.length > 0) {
+                    gridResult = res[0];
+                  }
+                } catch (err: any) {
+                  gridResult = { columns: ['Error'], values: [[err.message || String(err)]], error: err.message };
+                }
+
+                return (
+                  <div className={`flex-1 flex flex-col overflow-hidden h-full ${
+                    isDark ? 'bg-[#181818] text-slate-100' : 'bg-white text-slate-900'
+                  }`}>
+                    <div className={`flex items-center justify-between px-4 py-2 border-b text-xs flex-shrink-0 ${
+                      isDark ? 'bg-[#252526] border-[#333333] text-white' : 'bg-[#f3f3f3] border-[#e5e5e5] text-slate-800 shadow-2xs'
+                    }`}>
+                      <div className="flex items-center gap-2 font-bold">
+                        <TableIcon className="w-4 h-4 text-amber-400" />
+                        <span>{isViewInDb ? 'SQL View Results' : 'Table Data Grid'}: {tableName}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleToggleViewInIDE}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 border-slate-300 text-blue-700 hover:bg-slate-200'
+                        }`}
+                        title="Toggle View (ctrl+shift+K)"
+                      >
+                        Switch to {isViewInDb ? 'View SQL' : 'Table DDL'} (Ctrl+Shift+K)
+                      </button>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                      <QueryGrid
+                        result={gridResult}
+                        onOpenInSpreadsheet={onOpenSpreadsheet}
+                        title={tableName}
+                        theme={theme}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {(activeTab.type === 'query' || activeTab.type === 'sql') && (() => {
+                const queryName = activeTab.title.replace(/\.sql$/i, '');
+                let resList: QueryResult[] = queryResults;
+                if (resList.length === 0 && activeTab.content.trim()) {
+                  try {
+                    resList = engine.exec(activeTab.content);
+                  } catch (err: any) {
+                    resList = [{ columns: ['Error'], values: [[err.message || String(err)]], error: err.message }];
+                  }
+                }
+
+                return (
+                  <div className={`flex-1 flex flex-col overflow-hidden h-full ${
+                    isDark ? 'bg-[#181818] text-slate-100' : 'bg-white text-slate-900'
+                  }`}>
+                    <div className={`flex items-center justify-between px-4 py-2 border-b text-xs flex-shrink-0 ${
+                      isDark ? 'bg-[#252526] border-[#333333] text-white' : 'bg-[#f3f3f3] border-[#e5e5e5] text-slate-800 shadow-2xs'
+                    }`}>
+                      <div className="flex items-center gap-2 font-bold">
+                        <Database className="w-4 h-4 text-indigo-400" />
+                        <span>Query Results: {queryName}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleToggleViewInIDE}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 border-slate-300 text-blue-700 hover:bg-slate-200'
+                        }`}
+                        title="Toggle View (ctrl+shift+K)"
+                      >
+                        Switch to Query SQL (Ctrl+Shift+K)
+                      </button>
+                    </div>
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                      {resList.length > 1 ? (
+                        <MultiQueryResultsView
+                          savedQuery={null}
+                          results={resList}
+                          title={queryName}
+                          theme={theme}
+                          onOpenInIDE={() => {}}
+                          onOpenSpreadsheet={(data, sheetName) => onOpenSpreadsheet?.(data || { columns: [], values: [] }, sheetName)}
+                          onBackToView={handleToggleViewInIDE}
+                        />
+                      ) : (
+                        <QueryGrid
+                          result={resList[0] || { columns: [], values: [] }}
+                          onOpenInSpreadsheet={onOpenSpreadsheet}
+                          title={queryName}
+                          theme={theme}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {activeTab.type === 'report' && (() => {
+                let currentReportObj: SavedReport | null = null;
+                if (activeTab.reportId) {
+                  currentReportObj = engine.getSavedReports().find((r) => r.id === activeTab.reportId) || null;
+                }
+                if (!currentReportObj) {
+                  try {
+                    const parsed = JSON.parse(activeTab.content);
+                    currentReportObj = {
+                      id: parsed.id || 'report_temp',
+                      name: parsed.name || activeTab.title.replace(/\.json$/i, ''),
+                      description: parsed.description || '',
+                      query_id: parsed.query_id || '',
+                      custom_sql: parsed.custom_sql || '',
+                      config: typeof parsed.config === 'string' ? parsed.config : JSON.stringify(parsed.config || {}),
+                      created_at: new Date().toISOString(),
+                    };
+                  } catch {
+                    currentReportObj = {
+                      id: activeTab.reportId || 'report_temp',
+                      name: activeTab.title.replace(/\.json$/i, ''),
+                      description: '',
+                      query_id: '',
+                      custom_sql: '',
+                      config: '{}',
+                      created_at: new Date().toISOString(),
+                    };
+                  }
+                }
+
+                return (
+                  <div className={`flex-1 flex flex-col overflow-hidden h-full ${
+                    isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'
+                  }`}>
+                    <div className={`flex items-center justify-between px-4 py-2 border-b text-xs flex-shrink-0 ${
+                      isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-800 shadow-2xs'
+                    }`}>
+                      <div className="flex items-center gap-2 font-bold">
+                        <FileText className="w-4 h-4 text-emerald-400" />
+                        <span>Report Display: {currentReportObj.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleToggleViewInIDE}
+                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
+                          isDark ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 border-slate-300 text-blue-700 hover:bg-slate-200'
+                        }`}
+                        title="Toggle View (ctrl+shift+K)"
+                      >
+                        Switch to Report JSON Code (Ctrl+Shift+K)
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-auto p-4">
+                      <ReportViewer
+                        report={currentReportObj}
+                        theme={theme}
+                        onBack={handleToggleViewInIDE}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {(activeTab.type === 'types' || activeTab.type === 'json') && (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-xs text-slate-400 space-y-3">
+                  <p>Toggle View is active. Switch back to Code view using Ctrl+Shift+K.</p>
+                  <button
+                    type="button"
+                    onClick={handleToggleViewInIDE}
+                    className="px-3 py-1.5 rounded bg-blue-600 text-white font-semibold shadow hover:bg-blue-500 transition"
+                  >
+                    Switch to Code (Ctrl+Shift+K)
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Monaco Editor Frame */
+            <div className="flex-1 flex overflow-hidden min-h-0">
             <div className={`flex-1 flex flex-col overflow-hidden ${showLivePreview ? 'w-1/2 border-r border-slate-800' : 'w-full'}`}>
               <div className="flex-1 min-h-0">
                 <Editor
@@ -3737,6 +4013,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
               </div>
             )}
           </div>
+        )}
         </div>
       </div>
 
