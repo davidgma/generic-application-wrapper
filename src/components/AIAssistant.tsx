@@ -444,7 +444,7 @@ export default function PricingSimulatorPlugin({ gaw }) {
           {activeTab === 'templates' && (
             <div className="space-y-4">
               <p className="text-xs text-slate-400">
-                One-click install pre-built, production-grade TSX plugins directly into your active SQLite database's <code className="text-indigo-400">t_plugins</code> table:
+                One-click install pre-built, production-grade TSX plugins directly into your active SQLite database's <code className="text-indigo-400">t_gaw_plugins</code> table:
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {templates.map((tpl) => (

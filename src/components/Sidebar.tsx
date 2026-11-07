@@ -141,7 +141,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return { systemPlugins: sys, userPlugins: usr };
   }, [plugins, search, mode]);
 
-  const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+  const GAWKYY_SYSTEM_TABLES = new Set([
+    't_gaw_settings',
+    't_gaw_plugins',
+    't_gaw_sql_queries',
+    't_gaw_reports',
+    't_settings',
+    't_plugins',
+    't_sql_queries',
+    't_reports',
+  ]);
   const isGawkyySystem = (t: TableSchema) => {
     const lower = t.name.toLowerCase();
     return GAWKYY_SYSTEM_TABLES.has(lower) || lower.startsWith('sqlite_');

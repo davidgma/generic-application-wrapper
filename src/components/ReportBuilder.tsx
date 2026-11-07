@@ -61,7 +61,7 @@ export const ReportBuilder: React.FC<ReportBuilderProps> = ({
     };
 
     engine.run(
-      'INSERT OR REPLACE INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO t_gaw_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         updatedReport.id,
         updatedReport.name,

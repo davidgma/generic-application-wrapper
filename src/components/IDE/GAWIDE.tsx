@@ -342,6 +342,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }));
   }, [activeTabId]);
 
+
+
   // Close tab
   const closeTab = useCallback((idToClose: string) => {
     setTabs((prev) => {
@@ -471,6 +473,51 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       setDbVersion((v) => v + 1);
     });
   }, [engine]);
+
+  // Memoized query result computation for toggled view in IDE (Code <-> Preview/Data/Results/Report)
+  const toggledTableResult = useMemo(() => {
+    if (!isViewToggled || activeTab?.type !== 'table') {
+      return { columns: [], values: [] };
+    }
+    const tableName = (activeTab.tableName || activeTab.title).replace(/\.sql$/i, '');
+    try {
+      const { columns, values } = engine.query(`SELECT * FROM "${tableName}";`);
+      return { columns, values };
+    } catch (err: any) {
+      return { columns: ['Error'], values: [[err.message || String(err)]], error: err.message };
+    }
+  }, [isViewToggled, activeTab?.type, activeTab?.tableName, activeTab?.title, dbVersion, engine]);
+
+  const toggledQueryResults = useMemo(() => {
+    if (!isViewToggled || (activeTab?.type !== 'query' && activeTab?.type !== 'sql')) {
+      return [];
+    }
+    if (queryResults.length > 0) {
+      return queryResults;
+    }
+    if (!activeTab?.content || !activeTab.content.trim()) {
+      return [];
+    }
+    try {
+      const statements = activeTab.content.split(';').map((s) => s.trim()).filter(Boolean);
+      const res: QueryResult[] = [];
+      for (const stmt of statements) {
+        if (/^\s*(SELECT|PRAGMA|EXPLAIN|WITH)\b/i.test(stmt)) {
+          const qRes = engine.query(stmt);
+          res.push({ columns: qRes.columns, values: qRes.values, sqlQuery: stmt });
+        } else {
+          res.push({
+            columns: ['info'],
+            values: [['Statement requires execution. Click Run (Ctrl+Enter) or Ctrl+Shift+F to execute.']],
+            sqlQuery: stmt,
+          });
+        }
+      }
+      return res.length > 0 ? res : [{ columns: [], values: [] }];
+    } catch (err: any) {
+      return [{ columns: ['Error'], values: [[err.message || String(err)]], error: err.message }];
+    }
+  }, [isViewToggled, activeTab?.type, activeTab?.content, queryResults, dbVersion, engine]);
 
   // Schema state for autocompletion and explorer
   const schema = useMemo(() => engine.getSchema(), [engine, dbVersion]);
@@ -1223,7 +1270,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         gawContext?.toast?.success?.(`Saved ${currentTab.title} (temporary in-memory for this session)`);
       } else {
         const now = new Date().toISOString();
-        engine.run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?', [
+        engine.run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?', [
           contentToSave,
           now,
           currentTab.pluginId,
@@ -1248,7 +1295,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       const now = new Date().toISOString();
 
       engine.run(
-        'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+        'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
         [newQueryId, baseQueryName, `Saved query for table "${cleanTitle}"`, contentToSave, '{}', '{}', now]
       );
       engine.notifyChange(true);
@@ -1303,11 +1350,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       let queryId = currentTab.queryId;
       if (existing) {
         queryId = existing.id;
-        engine.run('UPDATE t_sql_queries SET query = ? WHERE id = ?', [contentToSave, existing.id]);
+        engine.run('UPDATE t_gaw_sql_queries SET query = ? WHERE id = ?', [contentToSave, existing.id]);
       } else {
         queryId = queryId || `q_${Date.now()}`;
         engine.run(
-          'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [queryId, queryName, 'Custom Query saved from IDE', contentToSave, '{}', '{}', now]
         );
       }
@@ -1352,11 +1399,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         const existing = existingQueries.find((q) => q.id === queryId || q.name === cleanTitle);
         if (existing) {
           queryId = existing.id;
-          engine.run('UPDATE t_sql_queries SET query = ? WHERE id = ?;', [currentEditorVal, existing.id]);
+          engine.run('UPDATE t_gaw_sql_queries SET query = ? WHERE id = ?;', [currentEditorVal, existing.id]);
         } else {
           queryId = queryId || `q_${Date.now()}`;
           engine.run(
-            'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+            'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
             [queryId, cleanTitle, `Query ${cleanTitle}`, currentEditorVal, '{}', '{}', now]
           );
         }
@@ -1565,7 +1612,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 `;
     const now = new Date().toISOString();
     engine.run(
-      'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         pluginId,
         baseName,
@@ -1606,7 +1653,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const now = new Date().toISOString();
 
     engine.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [newId, queryName, `Pro-forma query to create table "${baseName}"`, proFormaSql, '{}', '{}', now]
     );
     engine.notifyChange(true);
@@ -1636,7 +1683,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const now = new Date().toISOString();
 
     engine.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [newId, queryName, `Pro-forma query to create view "${baseName}"`, proFormaSql, '{}', '{}', now]
     );
     engine.notifyChange(true);
@@ -1664,7 +1711,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const now = new Date().toISOString();
 
     engine.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [newId, baseName, `Custom query ${baseName}`, querySql, '{}', '{}', now]
     );
     engine.notifyChange(true);
@@ -1978,7 +2025,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
           tabs.forEach((tab) => {
             if (tab.isDirty && tab.type === 'plugin' && tab.pluginId) {
               try {
-                engine.run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
+                engine.run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
                   tab.content,
                   new Date().toISOString(),
                   tab.pluginId,
@@ -3714,16 +3761,6 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 const schemaObj = engine.getSchema().find((t) => t.name.toLowerCase() === tableName.toLowerCase());
                 const isViewInDb = schemaObj?.type === 'view';
 
-                let gridResult: QueryResult = { columns: [], values: [] };
-                try {
-                  const res = engine.exec(`SELECT * FROM "${tableName}";`);
-                  if (res && res.length > 0) {
-                    gridResult = res[0];
-                  }
-                } catch (err: any) {
-                  gridResult = { columns: ['Error'], values: [[err.message || String(err)]], error: err.message };
-                }
-
                 return (
                   <div className={`flex-1 flex flex-col overflow-hidden h-full ${
                     isDark ? 'bg-[#181818] text-slate-100' : 'bg-white text-slate-900'
@@ -3748,7 +3785,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     </div>
                     <div className="flex-1 min-h-0">
                       <QueryGrid
-                        result={gridResult}
+                        result={toggledTableResult}
                         onOpenInSpreadsheet={onOpenSpreadsheet}
                         title={tableName}
                         theme={theme}
@@ -3760,14 +3797,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 
               {(activeTab.type === 'query' || activeTab.type === 'sql') && (() => {
                 const queryName = activeTab.title.replace(/\.sql$/i, '');
-                let resList: QueryResult[] = queryResults;
-                if (resList.length === 0 && activeTab.content.trim()) {
-                  try {
-                    resList = engine.exec(activeTab.content);
-                  } catch (err: any) {
-                    resList = [{ columns: ['Error'], values: [[err.message || String(err)]], error: err.message }];
-                  }
-                }
+                const resList = toggledQueryResults;
 
                 return (
                   <div className={`flex-1 flex flex-col overflow-hidden h-full ${

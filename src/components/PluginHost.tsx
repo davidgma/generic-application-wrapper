@@ -61,7 +61,7 @@ export const PluginHost: React.FC<PluginHostProps> = ({
       if (fallback.success) {
         // Automatically repair the SQLite table so the corrupted version is replaced
         try {
-          SQLiteEngine.getInstance().run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
+          SQLiteEngine.getInstance().run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
             DEFAULT_PLUGIN_REGISTRY[pluginId],
             new Date().toISOString(),
             pluginId,
@@ -81,7 +81,7 @@ export const PluginHost: React.FC<PluginHostProps> = ({
     if (factory) {
       setRestoredCode(factory);
       try {
-        SQLiteEngine.getInstance().run('UPDATE t_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
+        SQLiteEngine.getInstance().run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
           factory,
           new Date().toISOString(),
           pluginId,

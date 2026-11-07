@@ -129,7 +129,7 @@ export const AddPluginModal: React.FC<AddPluginModalProps> = ({
     };
 
     engine.run(
-      'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         newPlugin.id,
         newPlugin.name,
@@ -180,7 +180,7 @@ export const AddPluginModal: React.FC<AddPluginModalProps> = ({
       };
 
       engine.run(
-        'INSERT OR REPLACE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT OR REPLACE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           newPlugin.id,
           newPlugin.name,
@@ -289,7 +289,7 @@ export default function ${name.replace(/[^a-zA-Z0-9]/g, '') || 'CustomPlugin'}({
     };
 
     engine.run(
-      'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         newPlugin.id,
         newPlugin.name,

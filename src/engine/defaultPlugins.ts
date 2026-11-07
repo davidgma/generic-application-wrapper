@@ -2457,7 +2457,7 @@ export default function HelpPlugin({ gaw }) {
     "    try {",
     "      setLoading(true);",
     "      // Query SQLite database objects",
-    "      const result = gaw.db.queryObjects('SELECT * FROM t_settings LIMIT 20;');",
+    "      const result = gaw.db.queryObjects('SELECT * FROM t_gaw_settings LIMIT 20;');",
     "      setRows(result || []);",
     "      gaw.toast.success('Loaded ' + (result?.length || 0) + ' records from SQLite!');",
     "    } catch (err) {",
@@ -2532,7 +2532,7 @@ export default function HelpPlugin({ gaw }) {
     '  menu_category,',
     '  route,',
     '  created_at',
-    'FROM t_plugins',
+    'FROM t_gaw_plugins',
     'ORDER BY menu_category, name;'
   ].join(String.fromCharCode(10));
 
@@ -3008,7 +3008,7 @@ export default function HelpPlugin({ gaw }) {
                 <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Plugin Architecture & Execution Model</h3>
               </div>
               <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
-                In Gawkyy, plugins are first-class applications stored directly inside the SQLite database in the <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-indigo-300 bg-slate-900' : 'text-indigo-800 bg-slate-100 border border-slate-200')}>t_plugins</code> table.
+                In Gawkyy, plugins are first-class applications stored directly inside the SQLite database in the <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-indigo-300 bg-slate-900' : 'text-indigo-800 bg-slate-100 border border-slate-200')}>t_gaw_plugins</code> table.
                 Each plugin is written in React (TSX) and receives the global <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-sky-300 bg-slate-900' : 'text-sky-800 bg-slate-100 border border-slate-200')}>gaw</code> context object.
                 Plugins are dynamically compiled client-side in milliseconds via Sucrase, hot-reloaded automatically, and isolated inside React Error Boundaries (Plugin Safe Mode).
               </p>
@@ -3181,7 +3181,7 @@ export default function HelpPlugin({ gaw }) {
                 </p>
                 <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
                   Every report is fully reactive: opening a report or clicking <strong>Refresh Data</strong> re-executes the underlying SQL against the active SQLite database in real time.
-                  Reports are stored as structured JSON configurations inside the SQLite database itself (<code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>t_reports</code>), so every visual report travels seamlessly across devices inside your portable <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>.sqlite</code> file.
+                  Reports are stored as structured JSON configurations inside the SQLite database itself (<code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>t_gaw_reports</code>), so every visual report travels seamlessly across devices inside your portable <code className={'font-mono px-1 py-0.5 rounded text-[11px] ' + (isDark ? 'text-emerald-300 bg-slate-900' : 'text-emerald-800 bg-slate-100 border border-slate-200')}>.sqlite</code> file.
                 </p>
               </div>
 
@@ -3277,7 +3277,7 @@ export default function HelpPlugin({ gaw }) {
                   </li>
                   <li>
                     <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Save to SQLite & Deliver</strong>:
-                    Click <strong>Save Report</strong>. Gawkyy serializes the design directly into <code className="font-mono text-indigo-600 dark:text-indigo-300">t_reports</code>. Click <strong>Print / Save as PDF</strong> anytime to produce an executive document.
+                    Click <strong>Save Report</strong>. Gawkyy serializes the design directly into <code className="font-mono text-indigo-600 dark:text-indigo-300">t_gaw_reports</code>. Click <strong>Print / Save as PDF</strong> anytime to produce an executive document.
                   </li>
                 </ol>
               </div>
@@ -4098,7 +4098,7 @@ export default function PluginManagerPlugin({ gaw }) {
             )}>
               <p className="font-semibold text-amber-500">Safe Deletion Guarantee:</p>
               <p className="leading-relaxed">
-                Only the plugin record inside this application's SQLite database (<code className={'font-mono ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>t_plugins</code>) will be removed.
+                Only the plugin record inside this application's SQLite database (<code className={'font-mono ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>t_gaw_plugins</code>) will be removed.
               </p>
               <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
                 Your original source file on local disk or Dropbox will <strong>NOT</strong> be deleted or touched.
@@ -5830,7 +5830,16 @@ export default function ComponentsListPlugin({ gaw }) {
     }
   }, [gaw.plugins]);
 
-  const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+  const GAWKYY_SYSTEM_TABLES = new Set([
+    't_gaw_settings',
+    't_gaw_plugins',
+    't_gaw_sql_queries',
+    't_gaw_reports',
+    't_settings',
+    't_plugins',
+    't_sql_queries',
+    't_reports',
+  ]);
   const isGawkyySystemItem = (name) => {
     if (!name) return false;
     const lower = name.toLowerCase();
@@ -6421,7 +6430,7 @@ export default function SettingsPlugin({ gaw }) {
 
   const loadSettings = () => {
     try {
-      const res = gaw.db?.queryObjects('SELECT key, value FROM t_settings;');
+      const res = gaw.db?.queryObjects('SELECT key, value FROM t_gaw_settings;');
       if (Array.isArray(res)) {
         const map = {};
         res.forEach(row => { map[row.key] = row.value; });
@@ -6448,10 +6457,10 @@ export default function SettingsPlugin({ gaw }) {
       const descVal = appDescription.trim();
       const initVal = initialPlugin.trim() || 'main';
 
-      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('app_name', ?, ?);", [nameVal, now]);
-      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('app_description', ?, ?);", [descVal, now]);
-      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('app_descripton', ?, ?);", [descVal, now]);
-      gaw.db.run("INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES ('initial_plugin', ?, ?);", [initVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_gaw_settings (key, value, updated_at) VALUES ('app_name', ?, ?);", [nameVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_gaw_settings (key, value, updated_at) VALUES ('app_description', ?, ?);", [descVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_gaw_settings (key, value, updated_at) VALUES ('app_descripton', ?, ?);", [descVal, now]);
+      gaw.db.run("INSERT OR REPLACE INTO t_gaw_settings (key, value, updated_at) VALUES ('initial_plugin', ?, ?);", [initVal, now]);
 
       setSavedSuccess(true);
       gaw.toast?.success('Updated application settings in SQLite.');
@@ -6496,7 +6505,7 @@ export default function SettingsPlugin({ gaw }) {
                 Application & System Settings
               </h1>
               <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                Manage database application parameters (t_settings) and visual editor appearance settings.
+                Manage database application parameters (t_gaw_settings) and visual editor appearance settings.
               </p>
             </div>
           </div>
@@ -6505,7 +6514,7 @@ export default function SettingsPlugin({ gaw }) {
           </span>
         </div>
 
-        {/* Section 1: Application Settings (t_settings) */}
+        {/* Section 1: Application Settings (t_gaw_settings) */}
         <div className={'p-6 rounded-2xl border shadow-xl space-y-5 ' + (
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
         )}>
@@ -6513,7 +6522,7 @@ export default function SettingsPlugin({ gaw }) {
             <div className="flex items-center gap-2">
               <AppWindow className="w-4 h-4 text-emerald-500" />
               <h2 className="text-sm font-bold text-emerald-500 tracking-wide">
-                Application Settings (<code className="font-mono text-xs">t_settings</code>)
+                Application Settings (<code className="font-mono text-xs">t_gaw_settings</code>)
               </h2>
             </div>
             <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">

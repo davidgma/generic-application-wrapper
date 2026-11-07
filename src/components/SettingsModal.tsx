@@ -69,12 +69,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto py-4 space-y-5 text-xs">
-          {/* App Mode & Brand Configuration (t_settings) */}
+          {/* App Mode & Brand Configuration (t_gaw_settings) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <AppWindow className="w-4 h-4 text-emerald-500" />
-                <h3 className="font-bold text-emerald-500 uppercase tracking-wider text-[11px]">Application Settings (t_settings)</h3>
+                <h3 className="font-bold text-emerald-500 uppercase tracking-wider text-[11px]">Application Settings (t_gaw_settings)</h3>
               </div>
               <span className="text-[10px] font-mono text-slate-400">SQLite Database</span>
             </div>

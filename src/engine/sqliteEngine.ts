@@ -480,13 +480,13 @@ export class SQLiteEngine {
 
     // Create System Tables
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS t_settings (
+      CREATE TABLE IF NOT EXISTS t_gaw_settings (
         key TEXT PRIMARY KEY,
         value TEXT,
         updated_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_plugins (
+      CREATE TABLE IF NOT EXISTS t_gaw_plugins (
         id TEXT PRIMARY KEY,
         name TEXT,
         version TEXT,
@@ -500,7 +500,7 @@ export class SQLiteEngine {
         updated_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_sql_queries (
+      CREATE TABLE IF NOT EXISTS t_gaw_sql_queries (
         id TEXT PRIMARY KEY,
         name TEXT,
         description TEXT,
@@ -510,7 +510,7 @@ export class SQLiteEngine {
         created_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_reports (
+      CREATE TABLE IF NOT EXISTS t_gaw_reports (
         id TEXT PRIMARY KEY,
         name TEXT,
         description TEXT,
@@ -545,13 +545,13 @@ export class SQLiteEngine {
 
     // 1. Create System Tables Only
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS t_settings (
+      CREATE TABLE IF NOT EXISTS t_gaw_settings (
         key TEXT PRIMARY KEY,
         value TEXT,
         updated_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_plugins (
+      CREATE TABLE IF NOT EXISTS t_gaw_plugins (
         id TEXT PRIMARY KEY,
         name TEXT,
         version TEXT,
@@ -565,7 +565,7 @@ export class SQLiteEngine {
         updated_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_sql_queries (
+      CREATE TABLE IF NOT EXISTS t_gaw_sql_queries (
         id TEXT PRIMARY KEY,
         name TEXT,
         description TEXT,
@@ -575,7 +575,7 @@ export class SQLiteEngine {
         created_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_reports (
+      CREATE TABLE IF NOT EXISTS t_gaw_reports (
         id TEXT PRIMARY KEY,
         name TEXT,
         description TEXT,
@@ -601,7 +601,7 @@ export class SQLiteEngine {
     ];
 
     for (const [k, v, u] of settings) {
-      this.db.run('INSERT INTO t_settings (key, value, updated_at) VALUES (?, ?, ?)', [k, v, u]);
+      this.db.run('INSERT INTO t_gaw_settings (key, value, updated_at) VALUES (?, ?, ?)', [k, v, u]);
     }
 
     // 3. Seed only the 5 minimal plugins
@@ -632,13 +632,13 @@ export class SQLiteEngine {
 
     // 1. Create System Tables
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS t_settings (
+      CREATE TABLE IF NOT EXISTS t_gaw_settings (
         key TEXT PRIMARY KEY,
         value TEXT,
         updated_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_plugins (
+      CREATE TABLE IF NOT EXISTS t_gaw_plugins (
         id TEXT PRIMARY KEY,
         name TEXT,
         version TEXT,
@@ -652,7 +652,7 @@ export class SQLiteEngine {
         updated_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_sql_queries (
+      CREATE TABLE IF NOT EXISTS t_gaw_sql_queries (
         id TEXT PRIMARY KEY,
         name TEXT,
         description TEXT,
@@ -662,7 +662,7 @@ export class SQLiteEngine {
         created_at TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS t_reports (
+      CREATE TABLE IF NOT EXISTS t_gaw_reports (
         id TEXT PRIMARY KEY,
         name TEXT,
         description TEXT,
@@ -688,7 +688,7 @@ export class SQLiteEngine {
     ];
 
     for (const [k, v, u] of settings) {
-      this.db.run('INSERT INTO t_settings (key, value, updated_at) VALUES (?, ?, ?)', [k, v, u]);
+      this.db.run('INSERT INTO t_gaw_settings (key, value, updated_at) VALUES (?, ?, ?)', [k, v, u]);
     }
 
     // 3. Create Sample Business Schema & Populate Data
@@ -731,7 +731,7 @@ export class SQLiteEngine {
 
     for (const p of plugins) {
       this.db.run(
-        'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [p.id, p.name, p.version, p.enabled, p.icon, p.menu_category, p.route, p.description, p.code, now, now]
       );
     }
@@ -741,12 +741,12 @@ export class SQLiteEngine {
     if (!this.db) return;
     const now = new Date().toISOString();
     this.db.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         'q_plugins_overview',
         'Plugins Registry Summary',
-        'Example query extracting registered dynamic TSX plugins, system extensions, version numbers, and descriptions from the t_plugins table.',
-        'SELECT id, name, version, enabled, menu_category, description, updated_at FROM t_plugins ORDER BY name ASC;',
+        'Example query extracting registered dynamic TSX plugins, system extensions, version numbers, and descriptions from the t_gaw_plugins table.',
+        'SELECT id, name, version, enabled, menu_category, description, updated_at FROM t_gaw_plugins ORDER BY name ASC;',
         '[]',
         '{"density":"compact"}',
         now,
@@ -773,11 +773,11 @@ export class SQLiteEngine {
     };
 
     this.db.run(
-      'INSERT INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         'report_plugins_catalog',
         'Plugins Registry Report',
-        'Sample report displaying the details and registry information of the t_plugins table.',
+        'Sample report displaying the details and registry information of the t_gaw_plugins table.',
         'q_plugins_overview',
         '',
         JSON.stringify(config),
@@ -995,14 +995,14 @@ export class SQLiteEngine {
         id: 'q_plugins_overview',
         name: 'Plugins Registry Summary',
         description: 'Summary of all registered dynamic TSX plugins, system extensions, version numbers, and active status.',
-        query: `SELECT id, name, version, enabled, menu_category, description, updated_at FROM t_plugins ORDER BY name ASC;`,
+        query: `SELECT id, name, version, enabled, menu_category, description, updated_at FROM t_gaw_plugins ORDER BY name ASC;`,
       },
     ];
 
     const now = new Date().toISOString();
     for (const q of queries) {
       this.db.run(
-        'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [q.id, q.name, q.description, q.query, '{}', '{}', now]
       );
     }
@@ -1034,7 +1034,7 @@ export class SQLiteEngine {
     };
 
     this.db.run(
-      'INSERT INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         'report_exec_overview',
         'Executive Sales & Operations Report',
@@ -1065,7 +1065,7 @@ export class SQLiteEngine {
     };
 
     this.db.run(
-      'INSERT INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         'report_inventory_reorder',
         'Inventory Valuation & Reorder Notice',
@@ -1093,7 +1093,7 @@ export class SQLiteEngine {
     };
 
     this.db.run(
-      'INSERT INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO t_gaw_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         'report_plugins_catalog',
         'Plugins Registry Report',
@@ -1159,7 +1159,7 @@ export class SQLiteEngine {
 
     for (const p of plugins) {
       this.db.run(
-        'INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [p.id, p.name, p.version, p.enabled, p.icon, p.menu_category, p.route, p.description, p.code, now, now]
       );
     }
@@ -1346,7 +1346,16 @@ export class SQLiteEngine {
       );
 
       const schemas: TableSchema[] = [];
-      const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+      const GAWKYY_SYSTEM_TABLES = new Set([
+        't_gaw_settings',
+        't_gaw_plugins',
+        't_gaw_sql_queries',
+        't_gaw_reports',
+        't_settings',
+        't_plugins',
+        't_sql_queries',
+        't_reports',
+      ]);
 
       for (const row of tablesResult.values) {
         const name = String(row[0]);
@@ -1418,35 +1427,64 @@ export class SQLiteEngine {
     if (!this.db) return;
     try {
       this.db.run(`
-        CREATE TABLE IF NOT EXISTS t_settings (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
-        CREATE TABLE IF NOT EXISTS t_plugins (id TEXT PRIMARY KEY, name TEXT, version TEXT, enabled INTEGER, icon TEXT, menu_category TEXT, route TEXT, description TEXT, code TEXT, target_area TEXT DEFAULT 'middle', created_at TEXT, updated_at TEXT);
-        CREATE TABLE IF NOT EXISTS t_sql_queries (id TEXT PRIMARY KEY, name TEXT, description TEXT, query TEXT, params TEXT, layout TEXT, created_at TEXT);
-        CREATE TABLE IF NOT EXISTS t_reports (id TEXT PRIMARY KEY, name TEXT, description TEXT, query_id TEXT, custom_sql TEXT, config TEXT, created_at TEXT);
+        CREATE TABLE IF NOT EXISTS t_gaw_settings (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
+        CREATE TABLE IF NOT EXISTS t_gaw_plugins (id TEXT PRIMARY KEY, name TEXT, version TEXT, enabled INTEGER, icon TEXT, menu_category TEXT, route TEXT, description TEXT, code TEXT, target_area TEXT DEFAULT 'middle', created_at TEXT, updated_at TEXT);
+        CREATE TABLE IF NOT EXISTS t_gaw_sql_queries (id TEXT PRIMARY KEY, name TEXT, description TEXT, query TEXT, params TEXT, layout TEXT, created_at TEXT);
+        CREATE TABLE IF NOT EXISTS t_gaw_reports (id TEXT PRIMARY KEY, name TEXT, description TEXT, query_id TEXT, custom_sql TEXT, config TEXT, created_at TEXT);
       `);
 
       try {
-        this.db.run("ALTER TABLE t_plugins ADD COLUMN target_area TEXT DEFAULT 'middle';");
+        this.db.run("ALTER TABLE t_gaw_plugins ADD COLUMN target_area TEXT DEFAULT 'middle';");
       } catch (e) {
         // Column already exists
       }
 
+      // Backward compatibility migration: If old t_* tables exist, copy rows to t_gaw_* tables
+      try {
+        const hasOldSettings = this.db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='t_settings';");
+        if (hasOldSettings && hasOldSettings.length > 0 && hasOldSettings[0].values.length > 0) {
+          this.db.run("INSERT OR IGNORE INTO t_gaw_settings SELECT * FROM t_settings;");
+        }
+      } catch (e) {}
+
+      try {
+        const hasOldPlugins = this.db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='t_plugins';");
+        if (hasOldPlugins && hasOldPlugins.length > 0 && hasOldPlugins[0].values.length > 0) {
+          this.db.run("INSERT OR IGNORE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) SELECT id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at FROM t_plugins;");
+        }
+      } catch (e) {}
+
+      try {
+        const hasOldQueries = this.db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='t_sql_queries';");
+        if (hasOldQueries && hasOldQueries.length > 0 && hasOldQueries[0].values.length > 0) {
+          this.db.run("INSERT OR IGNORE INTO t_gaw_sql_queries SELECT * FROM t_sql_queries;");
+        }
+      } catch (e) {}
+
+      try {
+        const hasOldReports = this.db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='t_reports';");
+        if (hasOldReports && hasOldReports.length > 0 && hasOldReports[0].values.length > 0) {
+          this.db.run("INSERT OR IGNORE INTO t_gaw_reports SELECT * FROM t_reports;");
+        }
+      } catch (e) {}
+
       // System plugins are maintained in-memory as part of Gawkyy core.
-      // Remove any previously stored system plugins from t_plugins to keep database clean.
+      // Remove any previously stored system plugins from t_gaw_plugins to keep database clean.
       this.db.run(
-        "DELETE FROM t_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings', 'plugin_header_navbar', 'plugin_components_list', 'plugin_footer_status', 'plugin_debugging');"
+        "DELETE FROM t_gaw_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings', 'plugin_header_navbar', 'plugin_components_list', 'plugin_footer_status', 'plugin_debugging');"
       );
 
       // Ensure default settings exist
       const now = new Date().toISOString();
       this.db.run(
-        "INSERT OR IGNORE INTO t_settings (key, value, updated_at) VALUES ('app_name', 'New App', ?), ('app_description', '', ?), ('app_descripton', '', ?), ('initial_plugin', 'main', ?);",
+        "INSERT OR IGNORE INTO t_gaw_settings (key, value, updated_at) VALUES ('app_name', 'New App', ?), ('app_description', '', ?), ('app_descripton', '', ?), ('initial_plugin', 'main', ?);",
         [now, now, now, now]
       );
-      const checkStarter = this.db.exec("SELECT id FROM t_plugins WHERE id = 'plugin_hello_world';");
+      const checkStarter = this.db.exec("SELECT id FROM t_gaw_plugins WHERE id = 'plugin_hello_world';");
       if (!checkStarter || checkStarter.length === 0 || !checkStarter[0].values || checkStarter[0].values.length === 0) {
         const now = new Date().toISOString();
         this.db.run(
-          'INSERT OR IGNORE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR IGNORE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           [
             'plugin_hello_world',
             'Hello World Starter',
@@ -1470,7 +1508,7 @@ export class SQLiteEngine {
   public getPlugins(): PluginRecord[] {
     const sysList = Array.from(this.systemPlugins.values());
     try {
-      const userList = this.queryObjects<PluginRecord>('SELECT * FROM t_plugins ORDER BY name ASC;')
+      const userList = this.queryObjects<PluginRecord>('SELECT * FROM t_gaw_plugins ORDER BY name ASC;')
         .filter((p) => !SYSTEM_PLUGIN_IDS.has(p.id))
         .map((p) => ({
           ...p,
@@ -1499,7 +1537,7 @@ export class SQLiteEngine {
       return;
     }
     if (!this.db) return;
-    this.run('UPDATE t_plugins SET enabled = ?, updated_at = ? WHERE id = ?;', [
+    this.run('UPDATE t_gaw_plugins SET enabled = ?, updated_at = ? WHERE id = ?;', [
       enabled ? 1 : 0,
       new Date().toISOString(),
       pluginId,
@@ -1513,7 +1551,7 @@ export class SQLiteEngine {
       return;
     }
     if (!this.db) return;
-    this.run('DELETE FROM t_plugins WHERE id = ?;', [pluginId]);
+    this.run('DELETE FROM t_gaw_plugins WHERE id = ?;', [pluginId]);
     this.notifyChange(true);
   }
 
@@ -1530,9 +1568,9 @@ export class SQLiteEngine {
     }
     if (!this.db) return;
     try {
-      this.db.run("ALTER TABLE t_plugins ADD COLUMN target_area TEXT DEFAULT 'middle';");
+      this.db.run("ALTER TABLE t_gaw_plugins ADD COLUMN target_area TEXT DEFAULT 'middle';");
     } catch (e) {}
-    this.run('UPDATE t_plugins SET target_area = ?, updated_at = ? WHERE id = ?;', [
+    this.run('UPDATE t_gaw_plugins SET target_area = ?, updated_at = ? WHERE id = ?;', [
       validArea,
       new Date().toISOString(),
       pluginId,
@@ -1560,10 +1598,10 @@ export class SQLiteEngine {
 
     if (!this.db) return;
     const now = new Date().toISOString();
-    const existing = this.queryObjects<PluginRecord>('SELECT * FROM t_plugins WHERE id = ? LIMIT 1;', [plugin.id]);
+    const existing = this.queryObjects<PluginRecord>('SELECT * FROM t_gaw_plugins WHERE id = ? LIMIT 1;', [plugin.id]);
     if (existing && existing.length > 0) {
       this.run(
-        `UPDATE t_plugins SET
+        `UPDATE t_gaw_plugins SET
            name = ?,
            version = ?,
            enabled = ?,
@@ -1591,7 +1629,7 @@ export class SQLiteEngine {
       );
     } else {
       this.run(
-        `INSERT INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, target_area, created_at, updated_at)
+        `INSERT INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, target_area, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           plugin.id,
@@ -1614,7 +1652,7 @@ export class SQLiteEngine {
 
   public getSavedQueries(): SavedQuery[] {
     try {
-      return this.queryObjects<SavedQuery>('SELECT * FROM t_sql_queries ORDER BY name ASC;');
+      return this.queryObjects<SavedQuery>('SELECT * FROM t_gaw_sql_queries ORDER BY name ASC;');
     } catch (e) {
       return [];
     }
@@ -1622,7 +1660,7 @@ export class SQLiteEngine {
 
   public getSavedReports(): SavedReport[] {
     try {
-      return this.queryObjects<SavedReport>('SELECT * FROM t_reports ORDER BY name ASC;');
+      return this.queryObjects<SavedReport>('SELECT * FROM t_gaw_reports ORDER BY name ASC;');
     } catch (e) {
       return [];
     }
@@ -1630,7 +1668,7 @@ export class SQLiteEngine {
 
   public getSetting(key: string, defaultValue: string = ''): string {
     try {
-      const res = this.queryObjects<{ value: string }>('SELECT value FROM t_settings WHERE key = ? LIMIT 1;', [key]);
+      const res = this.queryObjects<{ value: string }>('SELECT value FROM t_gaw_settings WHERE key = ? LIMIT 1;', [key]);
       return res.length > 0 ? res[0].value : defaultValue;
     } catch (e) {
       return defaultValue;
@@ -1639,12 +1677,21 @@ export class SQLiteEngine {
 
   public setSetting(key: string, value: string): void {
     const now = new Date().toISOString();
-    this.run('INSERT OR REPLACE INTO t_settings (key, value, updated_at) VALUES (?, ?, ?);', [key, value, now]);
+    this.run('INSERT OR REPLACE INTO t_gaw_settings (key, value, updated_at) VALUES (?, ?, ?);', [key, value, now]);
     this.notifyChange(true);
   }
 
   public isSystemTable(tableName: string): boolean {
-    const GAWKYY_SYSTEM_TABLES = new Set(['t_settings', 't_plugins', 't_sql_queries', 't_reports']);
+    const GAWKYY_SYSTEM_TABLES = new Set([
+      't_gaw_settings',
+      't_gaw_plugins',
+      't_gaw_sql_queries',
+      't_gaw_reports',
+      't_settings',
+      't_plugins',
+      't_sql_queries',
+      't_reports',
+    ]);
     const lower = tableName.toLowerCase();
     return GAWKYY_SYSTEM_TABLES.has(lower) || lower.startsWith('sqlite_');
   }
@@ -1834,19 +1881,19 @@ export class SQLiteEngine {
   }
 
   public deleteQuery(id: string): void {
-    this.run('DELETE FROM t_sql_queries WHERE id = ?;', [id]);
+    this.run('DELETE FROM t_gaw_sql_queries WHERE id = ?;', [id]);
     this.notifyChange(true);
   }
 
   public deleteReport(id: string): void {
-    this.run('DELETE FROM t_reports WHERE id = ?;', [id]);
+    this.run('DELETE FROM t_gaw_reports WHERE id = ?;', [id]);
     this.notifyChange(true);
   }
 
   public saveReport(report: SavedReport): void {
     const now = new Date().toISOString();
     this.run(
-      'INSERT OR REPLACE INTO t_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT OR REPLACE INTO t_gaw_reports (id, name, description, query_id, custom_sql, config, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [
         report.id,
         report.name,

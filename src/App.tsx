@@ -1040,7 +1040,7 @@ export default function App() {
     };
 
     engine.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
     );
     engine.notifyChange(true);
@@ -1078,7 +1078,7 @@ export default function App() {
     };
 
     engine.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
     );
     engine.notifyChange(true);
@@ -1113,7 +1113,7 @@ export default function App() {
     };
 
     engine.run(
-      'INSERT INTO t_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
       [newId, baseName, newQuery.description, querySql, '{}', '{}', newQuery.created_at]
     );
     engine.notifyChange(true);
@@ -2350,7 +2350,7 @@ export default function App() {
             const engine = SQLiteEngine.getInstance();
             const now = new Date().toISOString();
             engine.run(
-              'INSERT OR REPLACE INTO t_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              'INSERT OR REPLACE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
               [plg.id, plg.name, '1.0.0', 1, plg.icon, plg.menu_category, plg.route, plg.description, plg.code, now, now]
             );
             toastApi.success(`Installed plugin "${plg.name}" into SQLite!`);
