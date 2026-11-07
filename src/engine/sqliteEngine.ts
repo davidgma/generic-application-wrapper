@@ -1,4 +1,11 @@
-import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import rawInitSqlJs, { Database, SqlJsStatic } from 'sql.js';
+
+const initSqlJs = (config?: Parameters<typeof rawInitSqlJs>[0]): Promise<SqlJsStatic> => {
+  const fn = typeof rawInitSqlJs === 'function'
+    ? rawInitSqlJs
+    : (rawInitSqlJs as any)?.default || (window as any)?.initSqlJs;
+  return fn(config);
+};
 import { ColumnInfo, QueryResult, TableSchema, SavedQuery } from '../types/sqlite';
 import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../types/plugin';
 import { SavedReport } from '../types/report';
@@ -23,7 +30,7 @@ import {
 
 const WASM_IDB_NAME = 'gaw_sqlite_cache';
 const WASM_STORE_NAME = 'binaries';
-const WASM_KEY = 'sql_wasm_binary_v1';
+const WASM_KEY = 'sql_wasm_binary_v2';
 
 async function getCachedWasmBinary(): Promise<ArrayBuffer | null> {
   if (typeof window === 'undefined' || !window.indexedDB) return null;
