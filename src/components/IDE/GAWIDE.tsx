@@ -93,6 +93,8 @@ interface GAWIDEProps {
   onOpenAI?: () => void;
   theme?: 'vs-dark' | 'vs-light';
   onToggleTheme?: () => void;
+  mode?: 'dev' | 'app';
+  onToggleMode?: (mode: 'dev' | 'app') => void;
   gawContext?: any;
   isVSCodeMode?: boolean;
   onToggleVSCodeMode?: () => void;
@@ -119,6 +121,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   onOpenAI,
   theme = 'vs-dark',
   onToggleTheme,
+  mode = 'dev',
+  onToggleMode,
   gawContext,
   isVSCodeMode = true,
   onToggleVSCodeMode,
@@ -584,6 +588,61 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const allViews = useMemo(() => [...userViews, ...systemViews], [userViews, systemViews]);
   const allQueries = useMemo(() => engine.getSavedQueries(), [engine, tabs, dbVersion]);
   const allReports = useMemo(() => engine.getSavedReports(), [engine, tabs, dbVersion]);
+
+  // Active item highlighting helper for Explorer Tree
+  const isItemActive = useCallback(
+    (type: 'plugin' | 'table' | 'query' | 'report' | 'types' | 'json', id?: string, name?: string) => {
+      if (!activeTab) return false;
+      if (type === 'types') return activeTab.type === 'types';
+      if (type === 'json') return activeTab.type === 'json' && activeTab.title === 'package.json';
+
+      const cleanActiveTitle = (activeTab.type === 'table' || activeTab.type === 'query' || activeTab.type === 'sql')
+        ? activeTab.title.replace(/\.sql$/i, '')
+        : activeTab.title.replace(/\.(tsx|json)$/i, '');
+      const cleanInputName = name ? name.replace(/\.(sql|tsx|json)$/i, '') : undefined;
+
+      if (type === 'plugin') {
+        if (activeTab.type !== 'plugin') return false;
+        return (id && activeTab.pluginId === id) || (cleanInputName && cleanActiveTitle === cleanInputName);
+      }
+      if (type === 'table') {
+        if (activeTab.type !== 'table') return false;
+        const activeTableName = activeTab.tableName || cleanActiveTitle;
+        return cleanInputName ? activeTableName.toLowerCase() === cleanInputName.toLowerCase() : false;
+      }
+      if (type === 'query') {
+        if (activeTab.type !== 'query' && activeTab.type !== 'sql') return false;
+        return (id && activeTab.queryId === id) || (cleanInputName && cleanActiveTitle === cleanInputName);
+      }
+      if (type === 'report') {
+        if (activeTab.type !== 'report') return false;
+        return (id && activeTab.reportId === id) || (cleanInputName && cleanActiveTitle === cleanInputName);
+      }
+      return false;
+    },
+    [activeTab]
+  );
+
+  const getItemClass = useCallback(
+    (
+      type: 'plugin' | 'table' | 'query' | 'report' | 'types' | 'json',
+      id?: string,
+      name?: string,
+      baseDarkColor = 'text-sky-300',
+      baseLightColor = 'text-sky-600'
+    ) => {
+      const active = isItemActive(type, id, name);
+      if (active) {
+        return isDark
+          ? 'bg-[#094771] text-white font-bold border-l-2 border-l-blue-400 shadow-2xs'
+          : 'bg-[#e8f0fe] text-blue-900 font-bold border-l-2 border-l-blue-600 shadow-2xs';
+      }
+      return isDark
+        ? `${baseDarkColor} hover:text-white hover:bg-[#2a2d2e]`
+        : `${baseLightColor} hover:text-black hover:bg-slate-100 font-medium`;
+    },
+    [isItemActive, isDark]
+  );
 
   // Open or Activate an item in a tab
   const openOrActivateItem = useCallback(
@@ -1302,7 +1361,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   };
 
   // Save Plugin, Table DDL, Query, or Report (with Format on Save)
-  const handleSaveActiveTab = async () => {
+  const handleSaveActiveTab = async (silent: boolean = false) => {
     const currentTab = tabs.find((t) => t.id === activeTabId) || activeTab;
     if (!currentTab) return;
 
@@ -1338,8 +1397,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         setTabs((prev) =>
           prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
-        // Note: Do NOT mark global database storage dirty; tab's dot notification clears
-        gawContext?.toast?.success?.(`Saved ${currentTab.title} (temporary in-memory for this session)`);
+        if (!silent) gawContext?.toast?.success?.(`Saved ${currentTab.title} (temporary in-memory for this session)`);
       } else {
         const now = new Date().toISOString();
         engine.run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?', [
@@ -1352,7 +1410,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
         engine.notifyChange(true);
-        gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
+        if (!silent) gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
       }
     } else if (currentTab.type === 'table') {
       const cleanTitle = (currentTab.tableName || currentTab.title).replace(/\.sql$/i, '');
@@ -1392,7 +1450,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         code: contentToSave,
       });
 
-      gawContext?.toast?.success?.(`Created new query "${baseQueryName}" with table SQL. Use Run or Ctrl+Shift+F in query to execute.`);
+      if (!silent) gawContext?.toast?.success?.(`Created new query "${baseQueryName}" with table SQL. Use Run or Ctrl+Shift+F in query to execute.`);
       return;
     } else if (currentTab.type === 'report' && currentTab.reportId) {
       try {
@@ -1409,7 +1467,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         setTabs((prev) =>
           prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
         );
-        gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
+        if (!silent) gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
       } catch (err: any) {
         alert('Invalid JSON in Report configuration: ' + err.message);
       }
@@ -1434,12 +1492,12 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       setTabs((prev) =>
         prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false, queryId } : t))
       );
-      gawContext?.toast?.success?.(`Saved query "${queryName}"`);
+      if (!silent) gawContext?.toast?.success?.(`Saved query "${queryName}"`);
     } else {
       setTabs((prev) =>
         prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false } : t))
       );
-      gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
+      if (!silent) gawContext?.toast?.success?.(`Saved ${currentTab.title}`);
     }
   };
 
@@ -1516,7 +1574,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
             code: currentEditorVal,
           });
         }
-        gawContext?.toast?.success?.(`Executed "${cleanTitle}"`);
       } catch (err: any) {
         gawContext?.toast?.error?.(`Query execution error: ${err.message}`);
         setQueryResults([
@@ -1528,14 +1585,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         ]);
       }
     } else if (currentTab.type === 'plugin') {
-      await handleSaveActiveTab();
+      await handleSaveActiveTab(true);
       if (onExitIDE) {
         onExitIDE({ type: 'plugin', id: currentTab.pluginId, name: cleanTitle });
       } else {
         handleExitIDE();
       }
     } else if (currentTab.type === 'report') {
-      await handleSaveActiveTab();
+      await handleSaveActiveTab(true);
       if (onExitIDE) {
         onExitIDE({ type: 'report', id: currentTab.reportId, name: cleanTitle });
       } else {
@@ -2419,6 +2476,10 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         shortcut: 'Shift+Alt+F',
         action: () => handleFormatDocument(),
       },
+      {
+        label: 'Settings',
+        action: () => openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
+      },
     ],
     Selection: [
       {
@@ -2762,6 +2823,47 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 
           {/* Right Layout Controls */}
           <div className="flex items-center gap-1.5">
+            {onToggleMode && (
+              <div
+                className={`flex items-center rounded border p-0.5 text-xs font-semibold ${
+                  isDark ? 'bg-[#1e1e1e] border-[#3c3c3c]' : 'bg-slate-200 border-slate-300'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onToggleMode('dev')}
+                  className={`px-2 py-0.5 rounded transition text-[11px] font-bold cursor-pointer ${
+                    mode === 'dev'
+                      ? isDark
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white text-blue-700 shadow-xs'
+                      : isDark
+                      ? 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Developer Mode"
+                >
+                  Dev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleMode('app')}
+                  className={`px-2 py-0.5 rounded transition text-[11px] font-bold cursor-pointer ${
+                    mode === 'app'
+                      ? isDark
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-emerald-600 text-white shadow-xs'
+                      : isDark
+                      ? 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="App Mode"
+                >
+                  App
+                </button>
+              </div>
+            )}
+
             {onToggleTheme && (
               <button
                 onClick={onToggleTheme}
@@ -2959,9 +3061,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                 <div
                                   key={p.id}
                                   onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                                    isDark ? 'text-sky-300 hover:text-white hover:bg-slate-800' : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
-                                  }`}
+                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                                    'plugin',
+                                    p.id,
+                                    p.name,
+                                    'text-sky-300',
+                                    'text-sky-600'
+                                  )}`}
                                 >
                                   <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
                                   <span className="truncate">{p.name}.tsx</span>
@@ -3007,9 +3113,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                 <div
                                   key={p.id}
                                   onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                                    isDark ? 'text-emerald-300 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
-                                  }`}
+                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                                    'plugin',
+                                    p.id,
+                                    p.name,
+                                    'text-emerald-300',
+                                    'text-emerald-600'
+                                  )}`}
                                 >
                                   <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
                                   <span className="truncate">{p.name}.tsx</span>
@@ -3084,17 +3194,19 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                               {userTables.length === 0 && (
                                 <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user tables</div>
                               )}
-                              {userTables.map((t) => {
+                               {userTables.map((t) => {
                                 const isExpanded = !!expandedFolders[`table_${t.name}`];
                                 const cols = getTableColumns(t);
                                 return (
                                   <div key={t.name} className="space-y-0.5">
                                     <div
-                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
-                                        isDark
-                                          ? 'text-emerald-300 hover:text-white hover:bg-slate-800'
-                                          : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
-                                      }`}
+                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                        'table',
+                                        undefined,
+                                        t.name,
+                                        'text-emerald-300',
+                                        'text-emerald-600'
+                                      )}`}
                                       title={`Table: ${t.name} (Click name to view DDL, click arrow to view columns)`}
                                     >
                                       <div
@@ -3200,11 +3312,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                   return (
                                     <div key={t.name} className="space-y-0.5">
                                       <div
-                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
-                                          isDark
-                                            ? 'text-sky-300 hover:text-white hover:bg-slate-800'
-                                            : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
-                                        }`}
+                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                          'table',
+                                          undefined,
+                                          t.name,
+                                          'text-sky-300',
+                                          'text-sky-600'
+                                        )}`}
                                         title={`System Table: ${t.name} (Click name to view DDL, click arrow to view columns)`}
                                       >
                                         <div
@@ -3361,11 +3475,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                 return (
                                   <div key={v.name} className="space-y-0.5">
                                     <div
-                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
-                                        isDark
-                                          ? 'text-emerald-300 hover:text-white hover:bg-slate-800'
-                                          : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
-                                      }`}
+                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                        'table',
+                                        undefined,
+                                        v.name,
+                                        'text-emerald-300',
+                                        'text-emerald-600'
+                                      )}`}
                                       title={`View: ${v.name} (Click name to view DDL, click arrow to view columns)`}
                                     >
                                       <div
@@ -3462,11 +3578,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                   return (
                                     <div key={v.name} className="space-y-0.5">
                                       <div
-                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${
-                                          isDark
-                                            ? 'text-sky-300 hover:text-white hover:bg-slate-800'
-                                            : 'text-sky-600 hover:text-sky-700 hover:bg-sky-50 font-medium'
-                                        }`}
+                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                          'table',
+                                          undefined,
+                                          v.name,
+                                          'text-sky-300',
+                                          'text-sky-600'
+                                        )}`}
                                         title={`System View: ${v.name} (Click name to view DDL, click arrow to view columns)`}
                                       >
                                         <div
@@ -3579,9 +3697,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           <div
                             key={q.id}
                             onClick={() => openOrActivateItem({ type: 'query', id: q.id, name: q.name })}
-                            className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition select-none ${
-                              isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
-                            }`}
+                            className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition select-none ${getItemClass(
+                              'query',
+                              q.id,
+                              q.name,
+                              'text-cyan-300',
+                              'text-cyan-700'
+                            )}`}
                           >
                             <div className="flex items-center gap-1.5 min-w-0 truncate">
                               <Database className="w-3.5 h-3.5 text-cyan-500 flex-shrink-0" />
@@ -3639,9 +3761,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           <div
                             key={r.id}
                             onClick={() => openOrActivateItem({ type: 'report', id: r.id, name: r.name })}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                              isDark ? 'text-emerald-300 hover:text-white hover:bg-slate-800' : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium'
-                            }`}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                              'report',
+                              r.id,
+                              r.name,
+                              'text-emerald-300',
+                              'text-emerald-600'
+                            )}`}
                           >
                             <FileText className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
                             <span className="truncate">{r.name}.json</span>
@@ -3655,18 +3781,26 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                   <div className={`pt-2 border-t space-y-0.5 ${isDark ? 'border-[#333333]' : 'border-slate-200'}`}>
                     <div
                       onClick={() => openOrActivateItem({ type: 'types' })}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
-                      }`}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                        'types',
+                        undefined,
+                        'gaw.d.ts',
+                        'text-slate-300',
+                        'text-slate-900'
+                      )}`}
                     >
                       <FileCode className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
                       <span>types/gaw.d.ts</span>
                     </div>
                     <div
                       onClick={() => openOrActivateItem({ type: 'json', name: 'package.json' })}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${
-                        isDark ? 'text-slate-300 hover:text-white hover:bg-[#2a2d2e]' : 'text-slate-950 font-semibold hover:text-black hover:bg-slate-100'
-                      }`}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                        'json',
+                        undefined,
+                        'package.json',
+                        'text-slate-300',
+                        'text-slate-900'
+                      )}`}
                     >
                       <FileText className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
                       <span>package.json</span>

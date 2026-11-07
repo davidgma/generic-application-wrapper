@@ -2241,6 +2241,8 @@ export default function App() {
             onOpenAI={() => setShowAIModal(true)}
             theme={theme}
             onToggleTheme={handleToggleTheme}
+            mode={mode}
+            onToggleMode={handleToggleMode}
             gawContext={gawContext}
             onExitIDE={handleExitIDE}
             onActiveTabChange={(target) => setCurrentIdeTarget(target)}

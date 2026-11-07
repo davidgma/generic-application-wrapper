@@ -901,8 +901,6 @@ export default function HelloWorldPlugin({ gaw }) {
       // Count user tables
       const tables = gaw.db.queryObjects("SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
       setTableCount(tables[0]?.count || 0);
-
-      gaw.toast.info('Queried SQLite database successfully!');
     } catch (err) {
       gaw.toast.error('Query error: ' + err.message);
     }
