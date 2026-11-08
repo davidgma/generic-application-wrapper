@@ -198,7 +198,7 @@ export const MultiQueryResultsView: React.FC<MultiQueryResultsViewProps> = ({
 
                   {/* Case 3: Table Results */}
                   {hasTableData && (
-                    <div className={results.length > 1 ? 'h-[360px] flex flex-col' : 'min-h-[420px] flex flex-col'}>
+                    <div className={results.length > 1 ? 'max-h-[500px] flex flex-col min-h-0 p-2' : 'max-h-[650px] flex flex-col min-h-0 p-2'}>
                       <QueryGrid
                         result={res}
                         title={results.length > 1 ? `${title} (Statement #${index + 1})` : title}

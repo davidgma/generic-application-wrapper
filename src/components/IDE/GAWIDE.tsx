@@ -515,16 +515,52 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   // Asynchronous query/view result computation for toggled view in IDE (Code <-> Preview/Data/Results/Report)
   const [toggledResultsState, setToggledResultsState] = useState<QueryResult[]>([]);
+  const lastExecutedTabContentRef = useRef<string>('');
 
   useEffect(() => {
     if (!isViewToggled || !activeTab) {
       setToggledResultsState([]);
+      lastExecutedTabContentRef.current = '';
       return;
     }
+
+    const currentTabKey = `${activeTab.id}:${activeTab.type}:${activeTab.content}`;
+
+    // If queryResults from runCurrentQuery exists and activeTab is a query, use it
+    if ((activeTab.type === 'query' || activeTab.type === 'sql') && queryResults.length > 0) {
+      const formatted = queryResults.map((r) => {
+        if (!r.columns || r.columns.length === 0 || (r.columns.length === 2 && r.columns[0] === 'status')) {
+          return { ...r, columns: ['Status'], values: [['Sql statement ran successfully']] };
+        }
+        return r;
+      });
+      setToggledResultsState(formatted);
+      return;
+    }
+
+    // Skip re-executing identical tab content when dbVersion updates due to DDL mutations (prevents infinite CPU loops)
+    if (lastExecutedTabContentRef.current === currentTabKey) {
+      return;
+    }
+    lastExecutedTabContentRef.current = currentTabKey;
 
     try {
       if (activeTab.type === 'table') {
         const tableName = (activeTab.tableName || activeTab.title).replace(/\.sql$/i, '');
+
+        // First try read-only SELECT * query which NEVER triggers notifyChange or reactivity loops
+        try {
+          const { columns, values } = engine.query(`SELECT * FROM "${tableName}";`);
+          if (!columns || columns.length === 0) {
+            setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
+          } else {
+            setToggledResultsState([{ columns, values }]);
+          }
+          return;
+        } catch {
+          // Fallback if SELECT failed
+        }
+
         let execRes: QueryResult[] = [];
         if (activeTab.content && activeTab.content.trim()) {
           try {
@@ -544,28 +580,8 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           return;
         }
 
-        try {
-          const { columns, values } = engine.query(`SELECT * FROM "${tableName}";`);
-          if (!columns || columns.length === 0) {
-            setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
-          } else {
-            setToggledResultsState([{ columns, values }]);
-          }
-        } catch {
-          setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
-        }
+        setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
       } else if (activeTab.type === 'query' || activeTab.type === 'sql') {
-        if (queryResults.length > 0) {
-          const formatted = queryResults.map((r) => {
-            if (!r.columns || r.columns.length === 0 || (r.columns.length === 2 && r.columns[0] === 'status')) {
-              return { ...r, columns: ['Status'], values: [['Sql statement ran successfully']] };
-            }
-            return r;
-          });
-          setToggledResultsState(formatted);
-          return;
-        }
-
         if (!activeTab.content || !activeTab.content.trim()) {
           setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
           return;
@@ -4384,7 +4400,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         Switch to {isViewInDb ? 'View SQL' : 'Table DDL'} (Ctrl+Shift+K)
                       </button>
                     </div>
-                    <div className="flex-1 min-h-0">
+                    <div className="flex-1 min-h-0 p-3 overflow-y-auto">
                       <QueryGrid
                         result={toggledResultsState[0] || { columns: [], values: [] }}
                         onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
@@ -4434,12 +4450,14 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           onBackToView={handleToggleViewInIDE}
                         />
                       ) : (
-                        <QueryGrid
-                          result={resList[0] || { columns: [], values: [] }}
-                          onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
-                          title={queryName}
-                          theme={theme}
-                        />
+                        <div className="h-full flex flex-col p-3 overflow-y-auto min-h-0">
+                          <QueryGrid
+                            result={resList[0] || { columns: [], values: [] }}
+                            onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
+                            title={queryName}
+                            theme={theme}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
