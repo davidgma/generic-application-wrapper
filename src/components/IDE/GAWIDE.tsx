@@ -1518,11 +1518,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       const newQueryId = `q_${cleanTitle.toLowerCase()}_${Date.now()}`;
       const now = new Date().toISOString();
 
-      engine.run(
-        'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-        [newQueryId, baseQueryName, `Saved query for table "${cleanTitle}"`, contentToSave, '{}', '{}', now]
-      );
-      engine.notifyChange(true);
+      engine.saveQuery({
+        id: newQueryId,
+        name: baseQueryName,
+        description: `Saved query for table "${cleanTitle}"`,
+        query: contentToSave,
+        params: '{}',
+        layout: '{}',
+        created_at: now,
+      });
       setDbVersion((v) => v + 1);
 
       // Keep table tab marked saved
@@ -1571,18 +1575,16 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       const existing = existingQueries.find((q) => q.name === queryName || q.id === currentTab.queryId);
 
       const now = new Date().toISOString();
-      let queryId = currentTab.queryId;
-      if (existing) {
-        queryId = existing.id;
-        engine.run('UPDATE t_gaw_sql_queries SET query = ? WHERE id = ?', [contentToSave, existing.id]);
-      } else {
-        queryId = queryId || `q_${Date.now()}`;
-        engine.run(
-          'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [queryId, queryName, 'Custom Query saved from IDE', contentToSave, '{}', '{}', now]
-        );
-      }
-      engine.notifyChange(true);
+      let queryId = currentTab.queryId || (existing ? existing.id : `q_${Date.now()}`);
+      engine.saveQuery({
+        id: queryId,
+        name: queryName,
+        description: existing?.description || 'Custom Query saved from IDE',
+        query: contentToSave,
+        params: existing?.params || '{}',
+        layout: existing?.layout || '{}',
+        created_at: existing?.created_at || now,
+      });
       setTabs((prev) =>
         prev.map((t) => (t.id === currentTab.id ? { ...t, content: contentToSave, savedContent: contentToSave, isDirty: false, queryId } : t))
       );
@@ -1621,16 +1623,16 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       if (currentTab.type === 'sql' || currentTab.type === 'query') {
         const existingQueries = engine.getSavedQueries();
         const existing = existingQueries.find((q) => q.id === queryId || q.name === cleanTitle);
-        if (existing) {
-          queryId = existing.id;
-          engine.run('UPDATE t_gaw_sql_queries SET query = ? WHERE id = ?;', [currentEditorVal, existing.id]);
-        } else {
-          queryId = queryId || `q_${Date.now()}`;
-          engine.run(
-            'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-            [queryId, cleanTitle, `Query ${cleanTitle}`, currentEditorVal, '{}', '{}', now]
-          );
-        }
+        queryId = existing ? existing.id : (queryId || `q_${Date.now()}`);
+        engine.saveQuery({
+          id: queryId,
+          name: cleanTitle,
+          description: existing?.description || `Query ${cleanTitle}`,
+          query: currentEditorVal,
+          params: existing?.params || '{}',
+          layout: existing?.layout || '{}',
+          created_at: existing?.created_at || now,
+        });
       }
 
       // Mark tab as saved / not dirty
@@ -1700,18 +1702,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     if (deletedQueriesUndoStackRef.current.length > 0) {
       const lastDeleted = deletedQueriesUndoStackRef.current.pop()!;
       try {
-        engine.run(
-          'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-          [
-            lastDeleted.id,
-            lastDeleted.name,
-            lastDeleted.description || `Query ${lastDeleted.name}`,
-            lastDeleted.query,
-            lastDeleted.params || '{}',
-            lastDeleted.layout || '{}',
-            lastDeleted.created_at || new Date().toISOString(),
-          ]
-        );
+        engine.saveQuery({
+          id: lastDeleted.id,
+          name: lastDeleted.name,
+          description: lastDeleted.description || `Query ${lastDeleted.name}`,
+          query: lastDeleted.query,
+          params: lastDeleted.params || '{}',
+          layout: lastDeleted.layout || '{}',
+          created_at: lastDeleted.created_at || new Date().toISOString(),
+        });
         engine.notifyChange(true);
         setDbVersion((v) => v + 1);
         openOrActivateItem({
@@ -1907,10 +1906,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       );
 
       if (existing) {
-        engine.run(
-          'UPDATE t_gaw_sql_queries SET name = ?, description = ?, query = ? WHERE id = ?;',
-          [cleanName, saveAsDescription.trim() || existing.description || `Query ${cleanName}`, editorVal, existing.id]
-        );
+        engine.saveQuery({
+          id: existing.id,
+          name: cleanName,
+          description: saveAsDescription.trim() || existing.description || `Query ${cleanName}`,
+          query: editorVal,
+          params: existing.params || '{}',
+          layout: existing.layout || '{}',
+          created_at: existing.created_at || now,
+        });
         setTabs((prev) =>
           prev.map((t) =>
             t.queryId === existing.id || t.id === (currentTabToSave as TabItem).id
@@ -1921,10 +1925,15 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         gawContext?.toast?.success?.(`Renamed query to "${cleanName}"`);
       } else {
         const queryId = targetQueryId || `q_${cleanName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${Date.now()}`;
-        engine.run(
-          'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-          [queryId, cleanName, saveAsDescription.trim() || `Saved query ${cleanName}`, editorVal, '{}', '{}', now]
-        );
+        engine.saveQuery({
+          id: queryId,
+          name: cleanName,
+          description: saveAsDescription.trim() || `Saved query ${cleanName}`,
+          query: editorVal,
+          params: '{}',
+          layout: '{}',
+          created_at: now,
+        });
         setTabs((prev) =>
           prev.map((t) =>
             t.id === (currentTabToSave as TabItem).id
@@ -2061,11 +2070,15 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const queryName = `Create ${baseName} Table`;
     const now = new Date().toISOString();
 
-    engine.run(
-      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-      [newId, queryName, `Pro-forma query to create table "${baseName}"`, proFormaSql, '{}', '{}', now]
-    );
-    engine.notifyChange(true);
+    engine.saveQuery({
+      id: newId,
+      name: queryName,
+      description: `Pro-forma query to create table "${baseName}"`,
+      query: proFormaSql,
+      params: '{}',
+      layout: '{}',
+      created_at: now,
+    });
     setExpandedFolders((prev) => {
       const next = { ...prev, queries: true };
       safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
@@ -2091,11 +2104,15 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const queryName = `Create ${baseName} View`;
     const now = new Date().toISOString();
 
-    engine.run(
-      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-      [newId, queryName, `Pro-forma query to create view "${baseName}"`, proFormaSql, '{}', '{}', now]
-    );
-    engine.notifyChange(true);
+    engine.saveQuery({
+      id: newId,
+      name: queryName,
+      description: `Pro-forma query to create view "${baseName}"`,
+      query: proFormaSql,
+      params: '{}',
+      layout: '{}',
+      created_at: now,
+    });
     setExpandedFolders((prev) => {
       const next = { ...prev, queries: true };
       safeStorage.setItem('gaw_ide_expanded_folders', JSON.stringify(next));
@@ -2119,10 +2136,15 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const querySql = `-- SQL Query\nSELECT * FROM "${firstTable}" LIMIT 25;\n`;
     const now = new Date().toISOString();
 
-    engine.run(
-      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-      [newId, baseName, `Custom query ${baseName}`, querySql, '{}', '{}', now]
-    );
+    engine.saveQuery({
+      id: newId,
+      name: baseName,
+      description: `Custom query ${baseName}`,
+      query: querySql,
+      params: '{}',
+      layout: '{}',
+      created_at: now,
+    });
     engine.notifyChange(true);
     setExpandedFolders((prev) => {
       const next = { ...prev, queries: true };

@@ -1053,11 +1053,7 @@ export default function App() {
       created_at: new Date().toISOString(),
     };
 
-    engine.run(
-      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-      [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
-    );
-    engine.notifyChange(true);
+    engine.saveQuery(newQuery);
     // Do not run query immediately! Automatically switch to IDE and display the SQL creation code
     handleOpenInIDE({
       type: 'query',
@@ -1091,11 +1087,7 @@ export default function App() {
       created_at: new Date().toISOString(),
     };
 
-    engine.run(
-      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-      [newId, queryName, newQuery.description, proFormaSql, '{}', '{}', newQuery.created_at]
-    );
-    engine.notifyChange(true);
+    engine.saveQuery(newQuery);
     handleOpenInIDE({
       type: 'query',
       id: newId,
@@ -1126,11 +1118,7 @@ export default function App() {
       created_at: new Date().toISOString(),
     };
 
-    engine.run(
-      'INSERT INTO t_gaw_sql_queries (id, name, description, query, params, layout, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-      [newId, baseName, newQuery.description, querySql, '{}', '{}', newQuery.created_at]
-    );
-    engine.notifyChange(true);
+    engine.saveQuery(newQuery);
     refreshDatabaseState();
 
     if (activeView === 'ide') {
