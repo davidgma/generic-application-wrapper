@@ -7070,16 +7070,9 @@ export default function AISpecGeneratorPlugin({ gaw }) {
 
   const isDark = currentTheme === 'vs-dark';
 
-  const promptPresets = [
-    'Order Pipeline Kanban Board with real-time status updates',
-    'Inventory Restock & SKU Valuation Matrix with action buttons',
-    'Client CRM Contact Dossier with inline credit limit editing',
-    'Executive Analytic KPI Brief with sales metrics summary'
-  ];
-
   const generatedPrompt = useMemo(() => {
     return [
-      "You are an expert React and TypeScript software engineer writing a dynamic runtime component for Gawkyy — a modern, web-native database platform powered by in-browser SQLite (sql.js).",
+      "Write a dynamic runtime component for Gawkyy — a modern, web-native database platform powered by in-browser SQLite (sql.js).",
       "",
       "### OBJECTIVE",
       customGoal || "Build a high-performance React component for Gawkyy.",
@@ -7206,7 +7199,7 @@ export default function AISpecGeneratorPlugin({ gaw }) {
         <div className={'p-5 rounded-2xl border space-y-4 shadow-lg ' + (
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
-          <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">1. Describe Your Desired Component Feature</h2>
+          <h2 className="text-sm font-bold text-indigo-400">1. Describe Your Desired Component Feature</h2>
           <textarea
             rows={3}
             value={customGoal}
@@ -7216,24 +7209,6 @@ export default function AISpecGeneratorPlugin({ gaw }) {
               isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
             )}
           />
-
-          <div className="space-y-1.5">
-            <span className="text-[11px] font-semibold text-slate-400">Quick Specification Presets:</span>
-            <div className="flex flex-wrap gap-2">
-              {promptPresets.map((preset, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setCustomGoal(preset)}
-                  className={'px-3 py-1 rounded-lg text-[11px] border transition cursor-pointer ' + (
-                    isDark ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                  )}
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Step 2: Pre-Engineered Prompt Exporter */}
@@ -7241,7 +7216,7 @@ export default function AISpecGeneratorPlugin({ gaw }) {
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+            <h2 className="text-sm font-bold text-emerald-400">
               2. Pre-Engineered AI Prompt (Ready for Gemini / Claude / ChatGPT)
             </h2>
             <button
