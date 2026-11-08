@@ -1414,22 +1414,10 @@ export class SQLiteEngine {
           pk: Number(c[5]),
         }));
 
-        // Quick row count estimate (fast execution without heavy full-table scan stalls)
-        let rowCount = 0;
-        try {
-          const countRes = this.query(`SELECT COUNT(*) FROM "${name}";`);
-          if (countRes && countRes.values && countRes.values.length > 0) {
-            rowCount = Number(countRes.values[0][0]) || 0;
-          }
-        } catch {
-          rowCount = 0;
-        }
-
         schemas.push({
           name,
           type,
           columns,
-          rowCount,
           isSystem,
         });
       }

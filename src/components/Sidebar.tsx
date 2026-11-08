@@ -555,11 +555,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 }`} />
                                 <span className="truncate">{t.name}</span>
                               </div>
-                              <span className={`text-[10px] font-mono ml-1 ${
-                                isActive ? 'text-white/80' : isDark ? 'text-sky-300/80' : 'text-sky-500/90 font-medium'
-                              }`}>
-                                {t.rowCount} rows
-                              </span>
+                              {t.rowCount !== undefined && (
+                                <span className={`text-[10px] font-mono ml-1 ${
+                                  isActive ? 'text-white/80' : isDark ? 'text-sky-300/80' : 'text-sky-500/90 font-medium'
+                                }`}>
+                                  {t.rowCount} rows
+                                </span>
+                              )}
                             </button>
 
                             <div
@@ -641,11 +643,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               }`} />
                               <span className="truncate">{t.name}</span>
                             </div>
-                            <span className={`text-[10px] font-mono ml-1 ${
-                              isActive ? 'text-white/80' : isDark ? 'text-emerald-300/80' : 'text-emerald-500/90 font-medium'
-                            }`}>
-                              {t.rowCount} rows
-                            </span>
+                              {t.rowCount !== undefined && (
+                                <span className={`text-[10px] font-mono ml-1 ${
+                                  isActive ? 'text-white/80' : isDark ? 'text-emerald-300/80' : 'text-emerald-500/90 font-medium'
+                                }`}>
+                                  {t.rowCount} rows
+                                </span>
+                              )}
                           </button>
 
                           {mode !== 'app' && (

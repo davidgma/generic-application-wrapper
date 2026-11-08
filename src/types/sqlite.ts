@@ -11,7 +11,7 @@ export interface TableSchema {
   name: string;
   type: 'table' | 'view';
   columns: ColumnInfo[];
-  rowCount: number;
+  rowCount?: number;
   isSystem: boolean;
 }
 

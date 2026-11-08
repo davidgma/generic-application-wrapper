@@ -1279,7 +1279,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               label: t.name,
               kind: monaco.languages.CompletionItemKind.Class,
               insertText: t.name,
-              detail: `Table (${t.rowCount || 0} rows)`,
+              detail: t.rowCount !== undefined ? `Table (${t.rowCount} rows)` : `${t.type === 'view' ? 'View' : 'Table'}`,
               range,
             });
           }
