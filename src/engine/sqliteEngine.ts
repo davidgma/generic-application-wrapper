@@ -1429,16 +1429,25 @@ export class SQLiteEngine {
     }
   }
 
+  private cachedByteSize: number = 0;
+
+  public getByteSize(): number {
+    if (this.cachedByteSize > 0) return this.cachedByteSize;
+    if (!this.db) return 0;
+    try {
+      const bin = this.db.export();
+      this.cachedByteSize = bin.byteLength;
+      return this.cachedByteSize;
+    } catch {
+      return 0;
+    }
+  }
+
   public exportBinary(): Uint8Array {
     if (!this.db) throw new Error('Database not initialized');
-    // Drop any non-ext internal system tables (t_gaw_*) so they are not written to external DB file on export
-    const legacyNonExtTables = ['t_gaw_settings', 't_gaw_plugins', 't_gaw_sql_queries', 't_gaw_reports', 't_settings', 't_plugins', 't_sql_queries', 't_reports'];
-    for (const tbl of legacyNonExtTables) {
-      try {
-        this.db.run(`DROP TABLE IF EXISTS "${tbl}";`);
-      } catch (_) {}
-    }
-    return this.db.export();
+    const bin = this.db.export();
+    this.cachedByteSize = bin.byteLength;
+    return bin;
   }
 
   public loadBinary(data: Uint8Array, dbName?: string): void {
@@ -1450,6 +1459,7 @@ export class SQLiteEngine {
         // ignore
       }
     }
+    this.cachedByteSize = data.byteLength;
     this.db = new this.sqlJs.Database(data);
     if (dbName) {
       this.activeDbName = dbName;

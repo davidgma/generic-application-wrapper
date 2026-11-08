@@ -149,10 +149,15 @@ export class FileStorageEngine {
           this.lastModifiedDisk = file.lastModified;
           this.lastLocalSyncExternalTime = file.lastModified;
           this.notifyStatus();
+        } else {
+          // If permission is not granted on reload, clean stale handle from IDB to prevent initial load delays
+          await setStoredHandle(null);
         }
+      } else {
+        await setStoredHandle(null);
       }
     } catch {
-      // Permission not yet granted or handle expired
+      await setStoredHandle(null);
     }
   }
 
@@ -331,7 +336,7 @@ export class FileStorageEngine {
     const engine = SQLiteEngine.getInstance();
     let fileSize = 0;
     try {
-      fileSize = engine.exportBinary().byteLength;
+      fileSize = engine.getByteSize();
     } catch {
       // not initialized yet
     }
