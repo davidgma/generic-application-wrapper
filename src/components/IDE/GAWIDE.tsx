@@ -2562,7 +2562,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         },
       },
       {
-        label: 'Extensions / Plugins',
+        label: 'Extensions / Components',
         action: () => {
           setActiveActivity('extensions');
           setIsPrimarySidebarOpen(true);
@@ -2633,7 +2633,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => runCurrentQuery(),
       },
       {
-        label: 'Validate TSX Plugin Syntax',
+        label: 'Validate TSX Component Syntax',
         action: () => {
           if (activeTab?.type === 'plugin') {
             const res = PluginEngine.compile(activeTab.content, activeTab.pluginId || 'test');
@@ -3013,7 +3013,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
               {/* TAB A: EXPLORER */}
               {activeActivity === 'explorer' && (
                 <div className="space-y-2 text-xs">
-                  {/* Folder: PLUGINS */}
+                  {/* Folder: COMPONENTS */}
                   <div>
                     <div
                       onClick={() => toggleFolder('plugins')}
@@ -3024,7 +3024,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                       <div className="flex items-center gap-1.5 min-w-0">
                         {expandedFolders.plugins ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         <Folder className="w-3.5 h-3.5 text-blue-500" />
-                        <span>plugins ({allPlugins.length})</span>
+                        <span>components ({allPlugins.length})</span>
                       </div>
                       <button
                         type="button"
@@ -3035,7 +3035,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         className={`p-0.5 rounded transition ${
                           isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
                         }`}
-                        title="Add New Dynamic Plugin (.tsx)"
+                        title="Add New Component (.tsx)"
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -3043,17 +3043,32 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 
                     {expandedFolders.plugins && (
                       <div className="pl-4 space-y-1.5 mt-0.5">
-                        {/* Subfolder: System Plugins */}
+                        {/* Subfolder: System Components */}
                         <div>
                           <div
                             onClick={() => toggleFolder('pluginsSystem')}
-                            className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                            className={`flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
                               isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
                             }`}
                           >
-                            {expandedFolders.pluginsSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
-                            <span>System ({systemPlugins.length})</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {expandedFolders.pluginsSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                              <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                              <span>System ({systemPlugins.length})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddNewPlugin();
+                              }}
+                              className={`p-0.5 rounded transition ${
+                                isDark ? 'hover:bg-slate-700 text-sky-400 hover:text-white' : 'hover:bg-slate-200 text-sky-600 hover:text-black'
+                              }`}
+                              title="Add New System Component (.tsx)"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
                           </div>
                           {expandedFolders.pluginsSystem && (
                             <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
@@ -3077,7 +3092,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           )}
                         </div>
 
-                        {/* Subfolder: User Plugins */}
+                        {/* Subfolder: User Components */}
                         <div>
                           <div
                             onClick={() => toggleFolder('pluginsUser')}
@@ -3099,7 +3114,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                               className={`p-0.5 rounded transition ${
                                 isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
                               }`}
-                              title="Add New User Plugin (.tsx)"
+                              title="Add New User Component (.tsx)"
                             >
                               <Plus className="w-3 h-3" />
                             </button>
@@ -3107,7 +3122,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           {expandedFolders.pluginsUser && (
                             <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-emerald-500/20">
                               {userPlugins.length === 0 && (
-                                <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user plugins</div>
+                                <div className="px-2 py-0.5 text-[10px] text-slate-500 italic">No user components</div>
                               )}
                               {userPlugins.map((p) => (
                                 <div
@@ -3296,13 +3311,28 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           <div>
                             <div
                               onClick={() => toggleFolder('tablesSystem')}
-                              className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                              className={`flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
                                 isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
                               }`}
                             >
-                              {expandedFolders.tablesSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                              <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
-                              <span>System ({systemTables.length})</span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {expandedFolders.tablesSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                <span>System ({systemTables.length})</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddNewTable();
+                                }}
+                                className={`p-0.5 rounded transition ${
+                                  isDark ? 'hover:bg-slate-700 text-sky-400 hover:text-white' : 'hover:bg-slate-200 text-sky-600 hover:text-black'
+                                }`}
+                                title="Add New System Table (Creates pro-forma CREATE TABLE query)"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
                             </div>
                             {expandedFolders.tablesSystem && (
                               <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
@@ -3562,13 +3592,28 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           <div>
                             <div
                               onClick={() => toggleFolder('viewsSystem')}
-                              className={`flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
+                              className={`flex items-center justify-between px-2 py-0.5 text-[11px] font-semibold cursor-pointer rounded transition ${
                                 isDark ? 'text-sky-300 hover:text-sky-200' : 'text-sky-500 hover:text-sky-600'
                               }`}
                             >
-                              {expandedFolders.viewsSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                              <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
-                              <span>System ({systemViews.length})</span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {expandedFolders.viewsSystem ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                <Folder className={`w-3 h-3 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                <span>System ({systemViews.length})</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddNewView();
+                                }}
+                                className={`p-0.5 rounded transition ${
+                                  isDark ? 'hover:bg-slate-700 text-sky-400 hover:text-white' : 'hover:bg-slate-200 text-sky-600 hover:text-black'
+                                }`}
+                                title="Add New System View (Creates pro-forma CREATE VIEW query)"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
                             </div>
                             {expandedFolders.viewsSystem && (
                               <div className="pl-4 space-y-0.5 mt-0.5 border-l ml-2 border-sky-500/20">
@@ -3932,7 +3977,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         ['Ctrl + Shift + F', 'Toggle Monaco IDE / Gawkyy Shell'],
                         ['Ctrl + Shift + K', 'Toggle View (Code <-> Preview/Data/Report)'],
                         ['Shift + Alt + F', 'Format Document (Prettier)'],
-                        ['Ctrl + Enter', 'Run Query / Test Plugin'],
+                        ['Ctrl + Enter', 'Run Query / Test Component'],
                         ['Ctrl + S', 'Save File'],
                         ['Ctrl + Shift + P', 'Command Palette'],
                         ['Ctrl + B', 'Toggle Primary Side Bar'],
@@ -4175,7 +4220,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                   }`}>
                     <div className="flex items-center gap-2 font-bold">
                       <FileCode className="w-4 h-4 text-emerald-400" />
-                      <span>Plugin Live View: {activeTab.title.replace(/\.tsx$/i, '')}</span>
+                      <span>Component Live View: {activeTab.title.replace(/\.tsx$/i, '')}</span>
                     </div>
                     <button
                       type="button"
@@ -4466,7 +4511,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 >
                   <span className="font-bold flex items-center gap-1.5">
                     <Eye className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Live Sandboxed Plugin Preview</span>
+                    <span>Live Sandboxed Component Preview</span>
                   </span>
                   <button
                     onClick={() => setShowLivePreview(false)}
@@ -4740,7 +4785,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 <strong>Database Engine</strong>: SQLite WebAssembly via sql.js
               </p>
               <p>
-                <strong>Plugin Transpiler</strong>: Sucrase TSX / React 19 in-browser compiler
+                <strong>Component Transpiler</strong>: Sucrase TSX / React 19 in-browser compiler
               </p>
               <p>
                 <strong>Code Formatter</strong>: Prettier In-Browser Standalone Formatter

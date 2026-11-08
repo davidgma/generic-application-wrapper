@@ -14,6 +14,8 @@ export const SYSTEM_PLUGIN_IDS = new Set<string>([
   'plugin_footer_status',
   'plugin_settings',
   'plugin_debugging',
+  'plugin_ai_spec_generator',
+  'plugin_spreadsheet_studio',
 ]);
 
 export function isSystemPlugin(plugin: { id: string; is_system?: boolean; isSystem?: boolean; menu_category?: string }): boolean {

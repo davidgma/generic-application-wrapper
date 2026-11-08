@@ -15,6 +15,8 @@ import {
   DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
   DEFAULT_SETTINGS_PLUGIN_CODE,
   DEFAULT_DEBUGGING_PLUGIN_CODE,
+  DEFAULT_AI_SPEC_GENERATOR_PLUGIN_CODE,
+  DEFAULT_SPREADSHEET_STUDIO_PLUGIN_CODE,
 } from '../engine/defaultPlugins';
 
 const DEFAULT_PLUGIN_REGISTRY: Record<string, string> = {
@@ -30,6 +32,8 @@ const DEFAULT_PLUGIN_REGISTRY: Record<string, string> = {
   plugin_footer_status: DEFAULT_FOOTER_STATUS_PLUGIN_CODE,
   plugin_settings: DEFAULT_SETTINGS_PLUGIN_CODE,
   plugin_debugging: DEFAULT_DEBUGGING_PLUGIN_CODE,
+  plugin_ai_spec_generator: DEFAULT_AI_SPEC_GENERATOR_PLUGIN_CODE,
+  plugin_spreadsheet_studio: DEFAULT_SPREADSHEET_STUDIO_PLUGIN_CODE,
 };
 
 interface PluginHostProps {
