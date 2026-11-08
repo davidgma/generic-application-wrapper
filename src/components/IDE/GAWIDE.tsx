@@ -2091,6 +2091,43 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     [openOrActivateItem]
   );
 
+  // Open spreadsheet in IDE main panel
+  const handleIDEOpenSpreadsheet = useCallback(
+    (data: { columns: string[]; values: any[][] }, sheetName?: string) => {
+      if (gawContext) {
+        (gawContext as any).spreadsheetPendingData = {
+          columns: data.columns,
+          values: data.values,
+          sheetName: sheetName || activeTab?.title?.replace(/\.sql$/i, '') || 'Query Result',
+          returnTabId: activeTabId,
+        };
+      }
+      openAndTogglePlugin('plugin_spreadsheet_studio', 'Spreadsheet Studio');
+    },
+    [gawContext, activeTabId, activeTab, openAndTogglePlugin]
+  );
+
+  useEffect(() => {
+    if (gawContext) {
+      (gawContext as any).returnToPreviousIDETab = (tabId: string) => {
+        if (tabId && tabs.some((t) => t.id === tabId)) {
+          setActiveTabId(tabId);
+        }
+      };
+      if (gawContext.navigation) {
+        (gawContext.navigation as any).openPreviousTab = () => {
+          const pending = (gawContext as any).spreadsheetPendingData;
+          if (pending?.returnTabId && tabs.some((t) => t.id === pending.returnTabId)) {
+            setActiveTabId(pending.returnTabId);
+          } else if (tabs.length > 1) {
+            const prev = tabs.find((t) => t.id !== 'tab_plugin_plugin_spreadsheet_studio');
+            if (prev) setActiveTabId(prev.id);
+          }
+        };
+      }
+    }
+  }, [gawContext, tabs]);
+
   // Add new SQL tab
   const addSqlTab = () => {
     const id = `tab_sql_${Date.now()}`;
@@ -4275,7 +4312,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     <div className="flex-1 min-h-0">
                       <QueryGrid
                         result={toggledTableResult}
-                        onOpenInSpreadsheet={onOpenSpreadsheet}
+                        onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
                         title={tableName}
                         theme={theme}
                       />
@@ -4318,13 +4355,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           title={queryName}
                           theme={theme}
                           onOpenInIDE={() => {}}
-                          onOpenSpreadsheet={(data, sheetName) => onOpenSpreadsheet?.(data || { columns: [], values: [] }, sheetName)}
+                          onOpenSpreadsheet={(data, sheetName) => handleIDEOpenSpreadsheet(data || { columns: [], values: [] }, sheetName)}
                           onBackToView={handleToggleViewInIDE}
                         />
                       ) : (
                         <QueryGrid
                           result={resList[0] || { columns: [], values: [] }}
-                          onOpenInSpreadsheet={onOpenSpreadsheet}
+                          onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
                           title={queryName}
                           theme={theme}
                         />
@@ -4487,7 +4524,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                       ) : (
                         <QueryGrid
                           result={currentResult}
-                          onOpenInSpreadsheet={onOpenSpreadsheet}
+                          onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
                           title={activeTab.title}
                           theme={theme}
                         />

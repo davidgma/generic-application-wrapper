@@ -7052,286 +7052,220 @@ export default function DebuggingPlugin({ gaw }) {
 }
 `;
 
-export const DEFAULT_AI_SPEC_GENERATOR_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+export const DEFAULT_AI_SPEC_GENERATOR_PLUGIN_CODE = `import React, { useState, useMemo } from 'react';
 
 export default function AISpecGeneratorPlugin({ gaw }) {
-  const [prompt, setPrompt] = useState('');
-  const [componentType, setComponentType] = useState('dashboard');
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [componentName, setComponentName] = useState('MyGeneratedComponent');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [tables, setTables] = useState([]);
+  const [customGoal, setCustomGoal] = useState(
+    'Build an interactive Order Processing and Invoice Dispatch dashboard with status filtering and total metrics calculation.'
+  );
+  const [copied, setCopied] = useState(false);
 
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('gaw_theme');
       if (stored === 'vs-light' || stored === 'vs-dark') return stored;
     }
-    return gaw.theme || 'vs-dark';
+    return gaw?.theme || 'vs-dark';
   });
-
-  useEffect(() => {
-    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
-      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
-    });
-    return () => { if (unsub) unsub(); };
-  }, [gaw.eventBus]);
 
   const isDark = currentTheme === 'vs-dark';
 
-  useEffect(() => {
-    try {
-      const schemaList = gaw.db.getSchema();
-      setTables(schemaList.map(s => s.name));
-    } catch (e) {
-      setTables([]);
-    }
-  }, [gaw.db]);
-
-  const promptSuggestions = [
-    'Create an interactive order tracking dashboard with search and total metrics.',
-    'Build an inventory restock and SKU valuation grid with restock action buttons.',
-    'Design a client CRM contact dossier manager with credit limit editing.',
-    'Generate a high-level executive KPI brief with sales metrics.'
+  const promptPresets = [
+    'Order Pipeline Kanban Board with real-time status updates',
+    'Inventory Restock & SKU Valuation Matrix with action buttons',
+    'Client CRM Contact Dossier with inline credit limit editing',
+    'Executive Analytic KPI Brief with sales metrics summary'
   ];
 
-  const handleGenerate = () => {
-    setIsGenerating(true);
-    setTimeout(() => {
-      const cleanName = componentName.replace(/[^a-zA-Z0-9]/g, '') || 'CustomComponent';
-      const sampleTablesList = tables.length > 0 ? tables.join(', ') : 'customers, orders, products';
-      const code = [
-        "import React, { useState, useEffect } from 'react';",
-        "",
-        "export default function " + cleanName + "({ gaw }) {",
-        "  const [data, setData] = useState([]);",
-        "  const [search, setSearch] = useState('');",
-        "  const isDark = (gaw.theme || 'vs-dark') === 'vs-dark';",
-        "",
-        "  useEffect(() => {",
-        "    try {",
-        "      // Querying tables from active SQLite database: " + sampleTablesList,
-        "      const result = gaw.db.queryObjects('SELECT * FROM t_gaw_settings LIMIT 20;');",
-        "      setData(result || []);",
-        "    } catch (err) {",
-        "      gaw.toast?.error('Failed to query SQLite: ' + (err.message || String(err)));",
-        "    }",
-        "  }, []);",
-        "",
-        "  const filtered = data.filter(item => ",
-        "    JSON.stringify(item).toLowerCase().includes(search.toLowerCase())",
-        "  );",
-        "",
-        "  return (",
-        '    <div className={"p-6 min-h-full transition-colors " + (isDark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900")}>',
-        '      <div className="max-w-5xl mx-auto space-y-6">',
-        '        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">',
-        '          <div>',
-        '            <h1 className="text-xl font-bold tracking-tight">' + (prompt || "AI Spec Generated React Component") + '</h1>',
-        '            <p className="text-xs text-slate-400 mt-1">Generated component with direct access to SQLite database via gaw.db context.</p>',
-        '          </div>',
-        '          <button onClick={() => gaw.toast?.success("Component refreshed!")} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow">',
-        '            Refresh Data',
-        '          </button>',
-        '        </div>',
-        '',
-        '        <div className="flex items-center gap-3">',
-        '          <input',
-        '            type="text"',
-        '            placeholder="Search records..."',
-        '            value={search}',
-        '            onChange={(e) => setSearch(e.target.value)}',
-        '            className="w-full max-w-sm px-3 py-1.5 text-xs rounded-lg border bg-slate-950 border-slate-700 text-white focus:outline-none focus:border-indigo-500"',
-        '          />',
-        '        </div>',
-        '',
-        '        <div className="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden shadow">',
-        '          <div className="p-3 bg-slate-900 font-semibold text-xs border-b border-slate-800 flex justify-between">',
-        '            <span>Generated Output Data</span>',
-        '            <span className="font-mono text-indigo-400">{filtered.length} items</span>',
-        '          </div>',
-        '          <div className="p-4 font-mono text-xs text-emerald-400 overflow-auto max-h-80">',
-        '            <pre>{JSON.stringify(filtered, null, 2)}</pre>',
-        '          </div>',
-        '        </div>',
-        '      </div>',
-        '    </div>',
-        '  );',
-        '}'
-      ].join('\\n');
+  const generatedPrompt = useMemo(() => {
+    return [
+      "You are an expert React and TypeScript software engineer writing a dynamic runtime component for Gawkyy — a modern, web-native database platform powered by in-browser SQLite (sql.js).",
+      "",
+      "### OBJECTIVE",
+      customGoal || "Build a high-performance React component for Gawkyy.",
+      "",
+      "### HOST ENVIRONMENT & RUNTIME STACK",
+      "- Technology Summary: React TSX, TypeScript, SQLite WebAssembly (sql.js), Tailwind CSS, Lucide React icons.",
+      "- The component is compiled in-browser at runtime using Sucrase (0 restarts required).",
+      "- Standard React hooks (useState, useEffect, useMemo, useCallback, useRef) and Lucide icons (from lucide-react) are available in global scope.",
+      "- The component MUST export a default React component function accepting a single prop { gaw }: ",
+      "  export default function MyComponent({ gaw }: { gaw: GAWContext }) { ... }",
+      "",
+      "### COMMON GAWKYY SERVICES & API SPECIFICATION",
+      "1. SQLite Database Service (gaw.db / gaw.sqlite):",
+      "   - gaw.db.queryObjects<T>(sql: string, params?: any[]): T[] -> Returns array of plain objects matching row column names.",
+      "   - gaw.db.query(sql: string, params?: any[]): { columns: string[]; values: any[][] } -> Returns raw matrix structure.",
+      "   - gaw.db.run(sql: string, params?: any[]): void -> Executes DML/DDL (INSERT, UPDATE, DELETE, CREATE).",
+      "   - gaw.db.getSchema(): Array<{ name: string; type: string; columns: any[] }> -> Returns database tables & schema.",
+      "",
+      "2. UI & Feedback Services (gaw.toast / gaw.ui.toast):",
+      "   - gaw.toast.success(message: string): void",
+      "   - gaw.toast.error(message: string): void",
+      "   - gaw.toast.info(message: string): void",
+      "   - gaw.toast.warning(message: string): void",
+      "",
+      "3. Workspace Navigation & Event Bus (gaw.navigation & gaw.eventBus):",
+      "   - gaw.navigation.openQuery(sql: string): void",
+      "   - gaw.navigation.openTable(tableName: string): void",
+      "   - gaw.navigation.openPlugin(componentId: string): void",
+      "   - gaw.navigation.openSpreadsheet(data?: any, title?: string): void",
+      "   - gaw.eventBus.on('db_changed', callback: () => void): () => void -> Subscribe to database mutations.",
+      "   - gaw.eventBus.emit('db_changed'): void -> Trigger database refresh across components.",
+      "",
+      "### TYPESCRIPT TYPES & INTERFACES",
+      "interface GAWContext {",
+      "  db: {",
+      "    queryObjects: (sql: string, params?: any[]) => any[];",
+      "    query: (sql: string, params?: any[]) => { columns: string[]; values: any[][] };",
+      "    run: (sql: string, params?: any[]) => void;",
+      "    getSchema: () => any[];",
+      "  };",
+      "  toast: {",
+      "    success: (msg: string) => void;",
+      "    error: (msg: string) => void;",
+      "    info: (msg: string) => void;",
+      "  };",
+      "  navigation: {",
+      "    openQuery: (sql: string) => void;",
+      "    openTable: (tableName: string) => void;",
+      "    openPlugin: (id: string) => void;",
+      "    openSpreadsheet: (data?: any, title?: string) => void;",
+      "  };",
+      "  eventBus: {",
+      "    on: (event: string, fn: any) => () => void;",
+      "    emit: (event: string, payload?: any) => void;",
+      "  };",
+      "  theme: 'vs-dark' | 'vs-light';",
+      "}",
+      "",
+      "### EXAMPLE PRO-FORMA COMPONENT STRUCTURE",
+      "import React, { useState, useEffect } from 'react';",
+      "",
+      "export default function ProFormaComponent({ gaw }) {",
+      "  const [records, setRecords] = useState([]);",
+      "  const isDark = (gaw.theme || 'vs-dark') === 'vs-dark';",
+      "",
+      "  const loadData = () => {",
+      "    try {",
+      "      const data = gaw.db.queryObjects('SELECT * FROM customers LIMIT 10;');",
+      "      setRecords(data || []);",
+      "    } catch (err) {",
+      "      gaw.toast?.error('Query failed: ' + err.message);",
+      "    }",
+      "  };",
+      "",
+      "  useEffect(() => {",
+      "    loadData();",
+      "    const unsub = gaw.eventBus?.on('db_changed', loadData);",
+      "    return () => { if (unsub) unsub(); };",
+      "  }, []);",
+      "",
+      "  return (",
+      '    <div className={"p-6 min-h-full " + (isDark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-900")}>',
+      '      <h1 className="text-xl font-bold">Pro-Forma Component Header</h1>',
+      '      <p className="text-xs text-slate-400 mt-1">Total Loaded Records: {records.length}</p>',
+      '    </div>',
+      "  );",
+      "}",
+      "",
+      "### GUIDELINES",
+      "1. Return ONLY pristine TSX source code inside a typescript codeblock.",
+      "2. Ensure clean dark/light mode support using Tailwind CSS utilities.",
+      "3. All data updates MUST execute DML with gaw.db.run() and emit 'db_changed' on gaw.eventBus."
+    ].join('\\n');
+  }, [customGoal]);
 
-      setGeneratedCode(code);
-      setIsGenerating(false);
-      gaw.toast?.success('Generated component spec successfully!');
-    }, 600);
-  };
-
-  const handleInstallToPlugins = () => {
-    if (!generatedCode) {
-      gaw.toast?.warning('Please generate a component specification first.');
-      return;
-    }
-    const cleanId = 'plugin_' + componentName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    try {
-      gaw.plugins?.importPlugin({
-        id: cleanId,
-        name: componentName,
-        version: '1.0.0',
-        enabled: 1,
-        icon: 'Sparkles',
-        menu_category: 'AI Generated',
-        route: '/' + cleanId,
-        description: prompt || 'AI Spec Generated React Component',
-        code: generatedCode
-      });
-      gaw.toast?.success('Component "' + componentName + '" installed into database!');
-      gaw.navigation?.openPlugin(cleanId);
-    } catch (err) {
-      gaw.toast?.error('Failed to install component: ' + err.message);
-    }
+  const handleCopy = () => {
+    navigator.clipboard.writeText(generatedPrompt);
+    setCopied(true);
+    gaw.toast?.success('AI Prompt copied to clipboard!');
+    setTimeout(() => setCopied(false), 2500);
   };
 
   return (
     <div className={'p-6 max-w-5xl mx-auto space-y-6 pb-28 ' + (isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800')}>
+      {/* Header Banner */}
       <div className={'p-6 rounded-2xl border shadow-xl flex flex-wrap items-center justify-between gap-4 ' + (
         isDark ? 'bg-gradient-to-r from-indigo-950 to-slate-900 border-indigo-800/50' : 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200'
       )}>
         <div>
           <h1 className={'text-xl font-bold tracking-tight ' + (isDark ? 'text-white' : 'text-slate-900')}>
-            AI Specification & React Component Generator
+            AI Specification & Component Prompt Exporter
           </h1>
           <p className={'text-xs mt-1 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
-            Specify features or natural language requirements to compile production-ready React TSX micro-apps using in-browser SQLite tables.
+            Generate concise, pre-engineered prompts tailored for Google Gemini, Claude, or ChatGPT to build production-ready Gawkyy TSX components.
           </p>
         </div>
         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-          Native AI Studio Engine
+          Prompt Generator
         </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Specification Controls */}
+      <div className="space-y-6">
+        {/* Step 1: Feature Goal Input */}
         <div className={'p-5 rounded-2xl border space-y-4 shadow-lg ' + (
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
-          <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">1. Component Specification</h2>
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Component Class / Export Name</label>
-            <input
-              type="text"
-              value={componentName}
-              onChange={(e) => setComponentName(e.target.value)}
-              placeholder="OrderTrackerComponent"
-              className={'w-full px-3 py-2 rounded-xl text-xs font-mono border focus:outline-none focus:border-indigo-500 ' + (
-                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-              )}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Component Archetype</label>
-            <select
-              value={componentType}
-              onChange={(e) => setComponentType(e.target.value)}
-              className={'w-full px-3 py-2 rounded-xl text-xs border focus:outline-none focus:border-indigo-500 ' + (
-                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-              )}
-            >
-              <option value="dashboard">Interactive Dashboard & Metrics</option>
-              <option value="grid">Data Grid & Action Desk</option>
-              <option value="form">CRUD Record Editor Form</option>
-              <option value="report">Executive Analytic Brief</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold mb-1">Prompt / Feature Specification</label>
-            <textarea
-              rows={4}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Describe the React component logic, state, and SQLite queries..."
-              className={'w-full px-3 py-2 rounded-xl text-xs border focus:outline-none focus:border-indigo-500 ' + (
-                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-              )}
-            />
-          </div>
+          <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wider">1. Describe Your Desired Component Feature</h2>
+          <textarea
+            rows={3}
+            value={customGoal}
+            onChange={(e) => setCustomGoal(e.target.value)}
+            placeholder="Describe the component logic, layout, filters, or SQLite queries..."
+            className={'w-full px-3.5 py-2.5 rounded-xl text-xs border focus:outline-none focus:border-indigo-500 ' + (
+              isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+            )}
+          />
 
           <div className="space-y-1.5">
-            <span className="text-[11px] font-semibold text-slate-400">Quick Prompt Presets:</span>
-            <div className="flex flex-wrap gap-1.5">
-              {promptSuggestions.map((s, i) => (
+            <span className="text-[11px] font-semibold text-slate-400">Quick Specification Presets:</span>
+            <div className="flex flex-wrap gap-2">
+              {promptPresets.map((preset, idx) => (
                 <button
-                  key={i}
+                  key={idx}
                   type="button"
-                  onClick={() => setPrompt(s)}
-                  className={'px-2.5 py-1 rounded-lg text-[11px] border transition text-left ' + (
+                  onClick={() => setCustomGoal(preset)}
+                  className={'px-3 py-1 rounded-lg text-[11px] border transition cursor-pointer ' + (
                     isDark ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
                   )}
                 >
-                  {s}
+                  {preset}
                 </button>
               ))}
             </div>
           </div>
-
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg transition active:scale-95 cursor-pointer"
-          >
-            {isGenerating ? 'Compiling Component Spec...' : '✨ Generate React Component'}
-          </button>
         </div>
 
-        {/* Code & Preview Result */}
-        <div className={'p-5 rounded-2xl border space-y-4 shadow-lg flex flex-col justify-between ' + (
+        {/* Step 2: Pre-Engineered Prompt Exporter */}
+        <div className={'p-5 rounded-2xl border space-y-4 shadow-lg ' + (
           isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
         )}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">2. TSX Source Code Output</h2>
-              {generatedCode && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Ready to Compile
-                </span>
-              )}
-            </div>
-
-            {generatedCode ? (
-              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-emerald-400 overflow-auto max-h-96">
-                <pre>{generatedCode}</pre>
-              </div>
-            ) : (
-              <div className="p-12 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-2">
-                <p className="font-semibold text-slate-400">No Component Generated Yet</p>
-                <p>Fill in the specification prompt on the left and click "Generate React Component".</p>
-              </div>
-            )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+              2. Pre-Engineered AI Prompt (Ready for Gemini / Claude / ChatGPT)
+            </h2>
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shadow cursor-pointer active:scale-95"
+            >
+              <span>{copied ? '✓ Copied to Clipboard!' : '📋 Copy AI Prompt'}</span>
+            </button>
           </div>
 
-          {generatedCode && (
-            <div className="pt-4 border-t border-slate-800 flex items-center gap-3">
-              <button
-                onClick={handleInstallToPlugins}
-                className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
-              >
-                1-Click Install to Database
-              </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(generatedCode);
-                  gaw.toast?.success('Copied code to clipboard!');
-                }}
-                className={'px-3 py-2 rounded-xl border text-xs font-semibold transition cursor-pointer ' + (
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                )}
-              >
-                Copy Code
-              </button>
-            </div>
-          )}
+          <div className={'p-4 rounded-xl border text-xs font-mono overflow-auto max-h-80 whitespace-pre-wrap ' + (
+            isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-800'
+          )}>
+            {generatedPrompt}
+          </div>
+
+          <div className={'p-4 rounded-xl border space-y-1.5 text-xs ' + (
+            isDark ? 'bg-indigo-950/30 border-indigo-500/20 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+          )}>
+            <span className="font-bold">How to use this prompt:</span>
+            <p>1. Click <strong>Copy AI Prompt</strong> above.</p>
+            <p>2. Paste into <strong>Google Gemini, Claude, or ChatGPT</strong>.</p>
+            <p>3. Copy the generated TSX code block and paste it directly into <strong>Gawkyy IDE</strong> as a new component!</p>
+          </div>
         </div>
       </div>
     </div>
@@ -7339,114 +7273,310 @@ export default function AISpecGeneratorPlugin({ gaw }) {
 }
 `;
 
-export const DEFAULT_SPREADSHEET_STUDIO_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
+export const DEFAULT_SPREADSHEET_STUDIO_PLUGIN_CODE = `import React, { useState, useEffect, useMemo, useRef } from 'react';
 
 export default function SpreadsheetStudioPlugin({ gaw }) {
-  const [selectedSource, setSelectedSource] = useState('customers');
-  const [gridData, setGridData] = useState({ columns: [], values: [] });
-
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('gaw_theme');
       if (stored === 'vs-light' || stored === 'vs-dark') return stored;
     }
-    return gaw.theme || 'vs-dark';
+    return gaw?.theme || 'vs-dark';
   });
-
-  useEffect(() => {
-    const unsub = gaw.eventBus?.on('theme_changed', (th) => {
-      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
-    });
-    return () => { if (unsub) unsub(); };
-  }, [gaw.eventBus]);
 
   const isDark = currentTheme === 'vs-dark';
 
+  useEffect(() => {
+    const unsub = gaw?.eventBus?.on('theme_changed', (th) => {
+      if (th === 'vs-light' || th === 'vs-dark') setCurrentTheme(th);
+    });
+    return () => { if (unsub) unsub?.(); };
+  }, [gaw?.eventBus]);
+
+  // Convert 0-based column index to letter (A, B, ..., Z, AA, AB...)
+  const colToLetter = (colIndex) => {
+    let letter = '';
+    let temp = colIndex;
+    while (temp >= 0) {
+      letter = String.fromCharCode((temp % 26) + 65) + letter;
+      temp = Math.floor(temp / 26) - 1;
+    }
+    return letter;
+  };
+
+  // Convert letter to 0-based column index
+  const letterToCol = (letter) => {
+    let col = 0;
+    for (let i = 0; i < letter.length; i++) {
+      col = col * 26 + (letter.charCodeAt(i) - 64);
+    }
+    return col - 1;
+  };
+
+  // State: Source table dropdown selection
+  const [selectedSource, setSelectedSource] = useState('customers');
+  const [sourceInfo, setSourceInfo] = useState(null);
+
+  // Sheets data structure
+  const [sheets, setSheets] = useState([
+    {
+      id: 'sheet_1',
+      name: 'Sheet1',
+      rows: 35,
+      cols: 14,
+      data: {} // key "row_col", e.g. "0_0" for A1
+    }
+  ]);
+  const [activeSheetIdx, setActiveSheetIdx] = useState(0);
+  const activeSheet = sheets[activeSheetIdx] || sheets[0];
+
+  // Cell Selection & Editing
+  const [selectedCell, setSelectedCell] = useState({ row: 0, col: 0 });
+
+  // Check for pre-loaded dataset passed via gaw.spreadsheetPendingData
+  useEffect(() => {
+    const pending = gaw?.spreadsheetPendingData || (gaw && gaw.initialSheets);
+    if (pending) {
+      const cols = pending.columns || (pending[0] && pending[0].columns) || [];
+      const vals = pending.values || (pending[0] && pending[0].values) || [];
+      const sheetTitle = pending.sheetName || (pending[0] && pending[0].name) || 'Query Results';
+
+      const sheetData = {};
+      cols.forEach((cName, cIdx) => {
+        sheetData['0_' + cIdx] = {
+          raw: cName,
+          isBold: true,
+          bgColor: '#1e293b',
+          textColor: '#f8fafc'
+        };
+      });
+
+      vals.forEach((row, rIdx) => {
+        row.forEach((cellVal, cIdx) => {
+          const num = Number(cellVal);
+          const isNum = !isNaN(num) && cellVal !== '' && cellVal !== null;
+          sheetData[(rIdx + 1) + '_' + cIdx] = {
+            raw: cellVal,
+            formatType: isNum ? 'decimal' : 'text'
+          };
+        });
+      });
+
+      setSheets([
+        {
+          id: 'sheet_pending',
+          name: sheetTitle,
+          rows: Math.max(vals.length + 5, 30),
+          cols: Math.max(cols.length, 12),
+          data: sheetData
+        }
+      ]);
+      setSourceInfo({ name: sheetTitle, returnTabId: pending.returnTabId });
+      if (gaw) gaw.spreadsheetPendingData = null;
+    }
+  }, [gaw]);
+
+  // Load database tables
   const tables = useMemo(() => {
     try {
-      return gaw.db.getTables() || [];
+      return gaw?.db?.getTables() || gaw?.db?.getSchema()?.map(s => s.name) || ['customers', 'products', 'orders'];
     } catch (e) {
       return ['customers', 'products', 'orders'];
     }
-  }, [gaw.db]);
+  }, [gaw?.db]);
 
-  const loadSourceData = (tableName) => {
+  // Populate sheet from selected database table
+  const loadTableIntoSheet = (tableName) => {
     try {
-      const res = gaw.db.getTableData(tableName, 50);
-      setGridData(res || { columns: [], values: [] });
-    } catch (e) {
-      try {
-        const raw = gaw.db.query('SELECT * FROM "' + tableName + '" LIMIT 50;');
-        setGridData(raw || { columns: [], values: [] });
-      } catch (err) {
-        gaw.toast?.error('Failed to load table: ' + err.message);
-      }
+      const res = gaw?.db?.getTableData ? gaw.db.getTableData(tableName, 50) : gaw.db.query('SELECT * FROM "' + tableName + '" LIMIT 50;');
+      if (!res || !res.columns) return;
+
+      const sheetData = {};
+      res.columns.forEach((colName, cIdx) => {
+        sheetData['0_' + cIdx] = {
+          raw: colName,
+          isBold: true,
+          bgColor: '#1e293b',
+          textColor: '#f8fafc'
+        };
+      });
+
+      res.values.forEach((row, rIdx) => {
+        row.forEach((cellVal, cIdx) => {
+          const num = Number(cellVal);
+          const isNum = !isNaN(num) && cellVal !== '' && cellVal !== null;
+          sheetData[(rIdx + 1) + '_' + cIdx] = {
+            raw: cellVal,
+            formatType: isNum ? 'decimal' : 'text'
+          };
+        });
+      });
+
+      setSheets([
+        {
+          id: 'sheet_' + tableName,
+          name: tableName,
+          rows: Math.max(res.values.length + 5, 35),
+          cols: Math.max(res.columns.length, 12),
+          data: sheetData
+        }
+      ]);
+      setSourceInfo(null);
+      gaw?.toast?.success('Loaded table "' + tableName + '" into spreadsheet matrix.');
+    } catch (err) {
+      gaw?.toast?.error('Failed to load table: ' + (err.message || String(err)));
     }
   };
 
-  useEffect(() => {
-    loadSourceData(selectedSource);
-  }, [selectedSource]);
+  const selectedKey = selectedCell.row + '_' + selectedCell.col;
+  const currentCellObj = activeSheet.data[selectedKey] || { raw: '' };
 
-  const handleCellChange = (rowIndex, colIndex, value) => {
-    const nextValues = gridData.values.map((row, r) =>
-      r === rowIndex ? row.map((cell, c) => (c === colIndex ? value : cell)) : row
-    );
-    setGridData({ ...gridData, values: nextValues });
+  // Evaluate cell values & formulas
+  const evaluateCellValue = (cell) => {
+    if (!cell || cell.raw === null || cell.raw === undefined) return '';
+    const rawStr = String(cell.raw);
+    if (!rawStr.startsWith('=')) {
+      if (cell.formatType === 'currency') {
+        const num = Number(cell.raw);
+        return isNaN(num) ? rawStr : '$' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      if (cell.formatType === 'percent') {
+        const num = Number(cell.raw);
+        return isNaN(num) ? rawStr : (num * 100).toFixed(1) + '%';
+      }
+      return rawStr;
+    }
+
+    try {
+      const formula = rawStr.slice(1).toUpperCase().trim();
+      const rangeMatch = formula.match(/^(SUM|AVERAGE|AVG|COUNT|MIN|MAX)\\(([A-Z]+)(\\d+):([A-Z]+)(\\d+)\\)$/);
+      if (rangeMatch) {
+        const [, func, startColLet, startRowStr, endColLet, endRowStr] = rangeMatch;
+        const startC = letterToCol(startColLet);
+        const endC = letterToCol(endColLet);
+        const startR = parseInt(startRowStr, 10) - 1;
+        const endR = parseInt(endRowStr, 10) - 1;
+
+        const numbers = [];
+        for (let r = Math.min(startR, endR); r <= Math.max(startR, endR); r++) {
+          for (let c = Math.min(startC, endC); c <= Math.max(startC, endC); c++) {
+            const rawVal = activeSheet.data[r + '_' + c]?.raw;
+            const num = Number(rawVal);
+            if (!isNaN(num) && rawVal !== null && rawVal !== '') {
+              numbers.push(num);
+            }
+          }
+        }
+
+        let res = 0;
+        if (func === 'SUM') res = numbers.reduce((a, b) => a + b, 0);
+        else if (func === 'AVERAGE' || func === 'AVG') res = numbers.length ? numbers.reduce((a, b) => a + b, 0) / numbers.length : 0;
+        else if (func === 'COUNT') res = numbers.length;
+        else if (func === 'MIN') res = numbers.length ? Math.min(...numbers) : 0;
+        else if (func === 'MAX') res = numbers.length ? Math.max(...numbers) : 0;
+
+        return String(res);
+      }
+      return rawStr;
+    } catch (e) {
+      return '#ERROR!';
+    }
   };
 
-  const handleExportCsv = () => {
-    if (!gridData.columns.length) return;
-    const lines = [
-      gridData.columns.join(','),
-      ...gridData.values.map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(','))
-    ];
-    const blob = new Blob([lines.join('\\n')], { type: 'text/csv' });
+  // Update selected cell content
+  const updateSelectedCell = (val) => {
+    const nextData = { ...activeSheet.data };
+    const num = Number(val);
+    const isNum = !isNaN(num) && val !== '' && !val.startsWith('=');
+    nextData[selectedKey] = {
+      ...currentCellObj,
+      raw: val,
+      formatType: isNum ? (currentCellObj.formatType || 'decimal') : 'text'
+    };
+    const nextSheets = sheets.map((s, idx) => (idx === activeSheetIdx ? { ...s, data: nextData } : s));
+    setSheets(nextSheets);
+  };
+
+  // Cell Formatting Toggles
+  const updateSelectedCellFormat = (updates) => {
+    const nextData = { ...activeSheet.data };
+    nextData[selectedKey] = { ...currentCellObj, ...updates };
+    const nextSheets = sheets.map((s, idx) => (idx === activeSheetIdx ? { ...s, data: nextData } : s));
+    setSheets(nextSheets);
+  };
+
+  // Export CSV
+  const handleExportCSV = () => {
+    const rowsList = [];
+    for (let r = 0; r < activeSheet.rows; r++) {
+      const rowVals = [];
+      let rowHasData = false;
+      for (let c = 0; c < activeSheet.cols; c++) {
+        const val = evaluateCellValue(activeSheet.data[r + '_' + c]);
+        if (val) rowHasData = true;
+        rowVals.push('"' + String(val).replace(/"/g, '""') + '"');
+      }
+      if (rowHasData || r === 0) rowsList.push(rowVals.join(','));
+    }
+    const blob = new Blob([rowsList.join('\\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = (selectedSource || 'spreadsheet_export') + '.csv';
+    a.download = (activeSheet.name || 'spreadsheet') + '.csv';
     a.click();
     URL.revokeObjectURL(url);
-    gaw.toast?.success('Spreadsheet exported to CSV!');
+    gaw?.toast?.success('Exported ' + activeSheet.name + ' to CSV!');
   };
 
-  const stats = useMemo(() => {
-    let sum = 0;
-    let count = 0;
-    gridData.values.forEach(row => {
-      row.forEach(val => {
-        const num = Number(val);
-        if (!isNaN(num) && val !== null && val !== '') {
-          sum += num;
-          count++;
-        }
-      });
-    });
-    return { sum, count, rows: gridData.values.length, cols: gridData.columns.length };
-  }, [gridData]);
+  // Return to Query/Table view
+  const handleReturnToSource = () => {
+    if (gaw?.navigation?.openPreviousTab) {
+      gaw.navigation.openPreviousTab();
+    } else if (gaw?.returnToPreviousIDETab && sourceInfo?.returnTabId) {
+      gaw.returnToPreviousIDETab(sourceInfo.returnTabId);
+    } else {
+      gaw?.navigation?.openQuery('SELECT * FROM customers;');
+    }
+  };
 
   return (
-    <div className={'flex flex-col min-h-full p-6 pb-28 ' + (isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800')}>
-      {/* Top Header */}
-      <div className={'flex flex-wrap items-center justify-between gap-4 pb-4 border-b ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
-        <div>
-          <h1 className={'text-xl font-bold tracking-tight ' + (isDark ? 'text-white' : 'text-slate-900')}>
-            Spreadsheet Studio
-          </h1>
-          <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-            Interactive multi-table matrix workspace for editing cell values, calculating totals, and exporting CSV files.
-          </p>
+    <div className={'flex flex-col h-full w-full overflow-hidden ' + (isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800')}>
+      {/* Top Navigation & Action Header */}
+      <div className={'flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b flex-shrink-0 ' + (
+        isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+      )}>
+        <div className="flex items-center gap-3">
+          {sourceInfo && (
+            <button
+              onClick={handleReturnToSource}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+              title="Return to original Query or Table view in IDE"
+            >
+              <span>← Return to Query or Table View</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm tracking-tight text-emerald-400">📊 Spreadsheet Studio</span>
+            {sourceInfo && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                Source: {sourceInfo.name}
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Table Source:</span>
+        <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className={isDark ? 'text-slate-400' : 'text-slate-600'}>Load DB Table:</span>
             <select
               value={selectedSource}
-              onChange={(e) => setSelectedSource(e.target.value)}
-              className={'px-3 py-1.5 rounded-lg border text-xs font-semibold focus:outline-none ' + (
-                isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+              onChange={(e) => {
+                setSelectedSource(e.target.value);
+                loadTableIntoSheet(e.target.value);
+              }}
+              className={'px-2.5 py-1 rounded-lg border text-xs font-semibold focus:outline-none ' + (
+                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
               )}
             >
               {tables.map(t => (
@@ -7456,70 +7586,194 @@ export default function SpreadsheetStudioPlugin({ gaw }) {
           </div>
 
           <button
-            onClick={handleExportCsv}
-            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+            onClick={handleExportCSV}
+            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition cursor-pointer"
           >
-            Export to CSV
+            Export CSV
           </button>
         </div>
       </div>
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-2 @[450px]:grid-cols-4 gap-3 my-4 cq-stack">
-        <div className={'p-3 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200')}>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase">Rows</span>
-          <div className={'text-lg font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>{stats.rows}</div>
+      {/* Formula & Formatting Toolbar */}
+      <div className={'flex flex-wrap items-center gap-2 px-4 py-2 border-b text-xs flex-shrink-0 ' + (
+        isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+      )}>
+        {/* Cell Coordinate Display */}
+        <div className={'px-2.5 py-1 rounded font-mono font-bold text-xs border text-center min-w-[50px] ' + (
+          isDark ? 'bg-slate-950 border-slate-800 text-emerald-400' : 'bg-white border-slate-300 text-emerald-600'
+        )}>
+          {colToLetter(selectedCell.col)}{selectedCell.row + 1}
         </div>
-        <div className={'p-3 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200')}>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase">Columns</span>
-          <div className={'text-lg font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>{stats.cols}</div>
+
+        <span className="text-slate-500 font-bold">fx</span>
+
+        {/* Formula Bar Input Box */}
+        <input
+          type="text"
+          value={currentCellObj.raw ?? ''}
+          onChange={(e) => updateSelectedCell(e.target.value)}
+          placeholder="Enter value or formula (e.g. =SUM(A1:A10), =AVERAGE(B1:B5))"
+          className={'flex-1 min-w-[200px] px-3 py-1 rounded border font-mono text-xs focus:outline-none focus:border-indigo-500 ' + (
+            isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
+          )}
+        />
+
+        {/* Formatting Controls */}
+        <div className="flex items-center gap-1 border-l pl-2 border-slate-700">
+          <button
+            onClick={() => updateSelectedCellFormat({ isBold: !currentCellObj.isBold })}
+            className={'px-2 py-1 rounded font-bold border cursor-pointer ' + (
+              currentCellObj.isBold ? 'bg-indigo-600 text-white border-indigo-500' : (isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-300 text-slate-700')
+            )}
+            title="Bold"
+          >
+            B
+          </button>
+          <button
+            onClick={() => updateSelectedCellFormat({ isItalic: !currentCellObj.isItalic })}
+            className={'px-2 py-1 rounded italic border cursor-pointer ' + (
+              currentCellObj.isItalic ? 'bg-indigo-600 text-white border-indigo-500' : (isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-300 text-slate-700')
+            )}
+            title="Italic"
+          >
+            I
+          </button>
+          <button
+            onClick={() => updateSelectedCellFormat({ formatType: currentCellObj.formatType === 'currency' ? 'decimal' : 'currency' })}
+            className={'px-2 py-1 rounded border font-mono cursor-pointer ' + (
+              currentCellObj.formatType === 'currency' ? 'bg-emerald-600 text-white border-emerald-500' : (isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-300 text-slate-700')
+            )}
+            title="Currency Format ($)"
+          >
+            $
+          </button>
+          <button
+            onClick={() => updateSelectedCellFormat({ formatType: currentCellObj.formatType === 'percent' ? 'decimal' : 'percent' })}
+            className={'px-2 py-1 rounded border font-mono cursor-pointer ' + (
+              currentCellObj.formatType === 'percent' ? 'bg-emerald-600 text-white border-emerald-500' : (isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-300 text-slate-700')
+            )}
+            title="Percent Format (%)"
+          >
+            %
+          </button>
         </div>
-        <div className={'p-3 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200')}>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase">Numeric Sum</span>
-          <div className="text-lg font-bold text-emerald-500 font-mono">{stats.sum.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-        </div>
-        <div className={'p-3 rounded-xl border shadow-sm ' + (isDark ? 'bg-slate-800/80 border-slate-700' : 'bg-white border-slate-200')}>
-          <span className="text-[10px] font-semibold text-slate-400 uppercase">Numeric Cells</span>
-          <div className="text-lg font-bold text-indigo-400 font-mono">{stats.count}</div>
+
+        {/* Formula Helper Shortcuts */}
+        <div className="flex items-center gap-1 border-l pl-2 border-slate-700 text-[11px] font-mono text-slate-400">
+          <span>Formulas:</span>
+          {['=SUM(A1:A10)', '=AVG(B1:B10)', '=COUNT(A1:A10)'].map((fStr) => (
+            <button
+              key={fStr}
+              onClick={() => updateSelectedCell(fStr)}
+              className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700"
+            >
+              {fStr.split('(')[0]}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className={'flex-1 rounded-xl border overflow-auto shadow-sm ' + (isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-white border-slate-200')}>
-        <table className="w-full text-left text-xs border-collapse">
-          <thead className={'sticky top-0 font-semibold border-b ' + (isDark ? 'bg-slate-800/90 text-slate-200 border-slate-700' : 'bg-slate-100 text-slate-800 border-slate-200')}>
-            <tr>
-              <th className="py-2 px-3 w-12 text-center text-slate-500 border-r border-slate-800">#</th>
-              {gridData.columns.map((col, c) => (
-                <th key={c} className="py-2.5 px-3 font-mono font-semibold border-r border-slate-800/60">{col}</th>
+      {/* Main Grid View */}
+      <div className="flex-1 overflow-auto relative min-h-0">
+        <table className="w-full border-collapse text-xs select-none">
+          <thead className="sticky top-0 z-10">
+            <tr className={isDark ? 'bg-slate-950 text-slate-400 border-b border-slate-800' : 'bg-slate-200 text-slate-700 border-b border-slate-300'}>
+              <th className="w-12 py-1.5 px-2 text-center font-mono font-bold border-r border-slate-800 bg-slate-950">#</th>
+              {Array.from({ length: activeSheet.cols }).map((_, colIdx) => (
+                <th key={colIdx} className="py-1.5 px-3 min-w-[100px] text-center font-mono font-bold border-r border-slate-800/60">
+                  {colToLetter(colIdx)}
+                </th>
               ))}
             </tr>
           </thead>
-          <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60 text-slate-200' : 'divide-slate-200 text-slate-800')}>
-            {gridData.values.map((row, r) => (
-              <tr key={r} className={isDark ? 'hover:bg-slate-800/40' : 'hover:bg-slate-50'}>
-                <td className="py-2 px-3 text-center text-[10px] font-mono text-slate-500 border-r border-slate-800/60 bg-slate-900/30">{r + 1}</td>
-                {row.map((val, c) => (
-                  <td key={c} className="py-1 px-2 border-r border-slate-800/40">
-                    <input
-                      type="text"
-                      value={val ?? ''}
-                      onChange={(e) => handleCellChange(r, c, e.target.value)}
-                      className={'w-full bg-transparent px-1.5 py-0.5 rounded text-xs font-mono focus:outline-none focus:bg-indigo-950/50 focus:border-indigo-500 ' + (
-                        typeof val === 'number' ? 'text-emerald-400 text-right' : ''
+          <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60' : 'divide-slate-200')}>
+            {Array.from({ length: activeSheet.rows }).map((_, rowIdx) => (
+              <tr key={rowIdx} className={isDark ? 'hover:bg-slate-800/30' : 'hover:bg-slate-100/50'}>
+                {/* Row Header Number */}
+                <td className={'py-1 px-2 text-center font-mono text-[10px] font-bold border-r border-slate-800/80 sticky left-0 z-10 ' + (
+                  isDark ? 'bg-slate-950 text-slate-500' : 'bg-slate-100 text-slate-600'
+                )}>
+                  {rowIdx + 1}
+                </td>
+
+                {/* Cells in Row */}
+                {Array.from({ length: activeSheet.cols }).map((_, colIdx) => {
+                  const cellKey = rowIdx + '_' + colIdx;
+                  const cellObj = activeSheet.data[cellKey];
+                  const evaluated = evaluateCellValue(cellObj);
+                  const isSelected = selectedCell.row === rowIdx && selectedCell.col === colIdx;
+
+                  let cellStyle = {};
+                  if (cellObj?.isBold) cellStyle.fontWeight = 'bold';
+                  if (cellObj?.isItalic) cellStyle.fontStyle = 'italic';
+                  if (cellObj?.bgColor) cellStyle.backgroundColor = cellObj.bgColor;
+                  if (cellObj?.textColor) cellStyle.color = cellObj.textColor;
+
+                  return (
+                    <td
+                      key={colIdx}
+                      onClick={() => setSelectedCell({ row: rowIdx, col: colIdx })}
+                      style={cellStyle}
+                      className={'py-1 px-2 border-r border-slate-800/40 font-mono text-xs cursor-pointer overflow-hidden max-w-[150px] truncate transition ' + (
+                        isSelected ? (isDark ? 'ring-2 ring-indigo-500 bg-indigo-950/40' : 'ring-2 ring-indigo-600 bg-indigo-50') : ''
                       )}
-                    />
-                  </td>
-                ))}
+                    >
+                      {evaluated}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Sheet Tabs Footer */}
+      <div className={'flex items-center justify-between px-4 py-1.5 border-t text-xs flex-shrink-0 ' + (
+        isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'
+      )}>
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {sheets.map((sheet, sIdx) => (
+            <button
+              key={sheet.id}
+              onClick={() => setActiveSheetIdx(sIdx)}
+              className={'px-3 py-1 rounded-t border-t border-x font-semibold transition cursor-pointer ' + (
+                sIdx === activeSheetIdx
+                  ? (isDark ? 'bg-slate-900 border-slate-700 text-emerald-400' : 'bg-white border-slate-300 text-emerald-600')
+                  : (isDark ? 'border-transparent text-slate-500 hover:text-slate-300' : 'border-transparent text-slate-500 hover:text-slate-800')
+              )}
+            >
+              {sheet.name}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              const newSheet = {
+                id: 'sheet_' + Date.now(),
+                name: 'Sheet' + (sheets.length + 1),
+                rows: 35,
+                cols: 14,
+                data: {}
+              };
+              setSheets([...sheets, newSheet]);
+              setActiveSheetIdx(sheets.length);
+            }}
+            className="px-2 py-1 text-xs font-bold hover:text-indigo-400 cursor-pointer"
+            title="Add New Sheet"
+          >
+            +
+          </button>
+        </div>
+
+        <div className="text-[11px] font-mono">
+          {activeSheet.name}: {activeSheet.rows} rows × {activeSheet.cols} cols
+        </div>
+      </div>
     </div>
   );
 }
 `;
+
 
 
 
