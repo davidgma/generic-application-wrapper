@@ -491,14 +491,22 @@ export class SQLiteEngine {
     return () => this.listeners.delete(listener);
   }
 
+  private isNotifying: boolean = false;
+
   public notifyChange(isUserMutation: boolean = false): void {
-    this.listeners.forEach((fn) => {
-      try {
-        fn(isUserMutation);
-      } catch (err) {
-        console.error('SQLiteEngine listener error:', err);
-      }
-    });
+    if (this.isNotifying) return;
+    this.isNotifying = true;
+    try {
+      this.listeners.forEach((fn) => {
+        try {
+          fn(isUserMutation);
+        } catch (err) {
+          console.error('SQLiteEngine listener error:', err);
+        }
+      });
+    } finally {
+      this.isNotifying = false;
+    }
   }
 
   public createEmptyDatabase(dbName: string = 'untitled.db'): void {
@@ -1766,10 +1774,14 @@ export class SQLiteEngine {
   }
 
   public setSetting(key: string, value: string): void {
-    const now = new Date().toISOString();
-    const tbl = this.getSysTableName('settings');
-    this.run(`INSERT OR REPLACE INTO ${tbl} (key, value, updated_at) VALUES (?, ?, ?);`, [key, value, now]);
-    this.notifyChange(true);
+    if (!this.db) return;
+    try {
+      const now = new Date().toISOString();
+      const tbl = this.getSysTableName('settings');
+      this.db.run(`INSERT OR REPLACE INTO ${tbl} (key, value, updated_at) VALUES (?, ?, ?);`, [key, value, now]);
+    } catch (e) {
+      console.error('setSetting error:', e);
+    }
   }
 
   public isSystemTable(tableName: string): boolean {

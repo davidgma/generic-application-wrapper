@@ -571,15 +571,15 @@ export default function App() {
         safeStorage.setItem('gaw_layout_left_width', String(l));
         safeStorage.setItem('gaw_layout_right_width', String(r));
       } else {
-        const curTop = safeStorage.getItem('gaw_layout_top_height') || '96';
-        const curBottom = safeStorage.getItem('gaw_layout_bottom_height') || '28';
-        const curLeft = safeStorage.getItem('gaw_layout_left_width') || '280';
-        const curRight = safeStorage.getItem('gaw_layout_right_width') || '300';
+        const curTop = parseInt(safeStorage.getItem('gaw_layout_top_height') || '96', 10);
+        const curBottom = parseInt(safeStorage.getItem('gaw_layout_bottom_height') || '28', 10);
+        const curLeft = parseInt(safeStorage.getItem('gaw_layout_left_width') || '280', 10);
+        const curRight = parseInt(safeStorage.getItem('gaw_layout_right_width') || '300', 10);
 
-        engine.setSetting('layout_top_height', curTop);
-        engine.setSetting('layout_bottom_height', curBottom);
-        engine.setSetting('layout_left_width', curLeft);
-        engine.setSetting('layout_right_width', curRight);
+        setTopHeight(curTop);
+        setBottomHeight(curBottom);
+        setLeftWidth(curLeft);
+        setRightWidth(curRight);
       }
     } catch (e) {
       console.error('Failed to sync layout settings with database:', e);
