@@ -411,9 +411,21 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   }, []);
 
   const currentTargetInfo = useMemo(() => getTargetFromTab(activeTab), [activeTab, getTargetFromTab]);
+  const lastNotifiedTargetKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    onActiveTabChange?.(currentTargetInfo);
+    if (!currentTargetInfo) {
+      if (lastNotifiedTargetKeyRef.current !== null) {
+        lastNotifiedTargetKeyRef.current = null;
+        onActiveTabChange?.(null);
+      }
+      return;
+    }
+    const key = `${currentTargetInfo.type}:${currentTargetInfo.id || ''}:${currentTargetInfo.name || ''}`;
+    if (lastNotifiedTargetKeyRef.current !== key) {
+      lastNotifiedTargetKeyRef.current = key;
+      onActiveTabChange?.(currentTargetInfo);
+    }
   }, [currentTargetInfo, onActiveTabChange]);
 
   const handleExitIDE = useCallback(() => {
@@ -939,16 +951,19 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   }, [showCommandPalette, activeMenu, showAboutModal, handleCloseCommandPalette, handleExitIDE]);
 
   // Sync external targetTab request (from Sidebar edit options)
+  const lastProcessedTargetKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (targetTab) {
-      if (targetTab.timestamp && lastTargetTimestampRef.current === targetTab.timestamp) {
-        return;
-      }
-      if (targetTab.timestamp) {
-        lastTargetTimestampRef.current = targetTab.timestamp;
-      }
-      openOrActivateItem(targetTab);
+    if (!targetTab) {
+      lastProcessedTargetKeyRef.current = null;
+      return;
     }
+    const key = `${targetTab.type}:${targetTab.id || ''}:${targetTab.name || ''}:${targetTab.timestamp || ''}`;
+    if (lastProcessedTargetKeyRef.current === key) {
+      return;
+    }
+    lastProcessedTargetKeyRef.current = key;
+    openOrActivateItem(targetTab);
   }, [targetTab, openOrActivateItem]);
 
   // Update compilation status on plugin edit
@@ -4139,22 +4154,19 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 </button>
                 <button
                   type="button"
-                  disabled={activeTab?.type === 'table'}
                   onClick={() => {
-                    if (activeTab?.type !== 'table') {
-                      handleRunAndShowInNonIDERef.current?.();
-                    }
+                    handleToggleViewInIDERef.current?.();
                   }}
                   title={
-                    activeTab?.type === 'table'
-                      ? 'Run is disabled for tables (Press Ctrl+Shift+F to view table data in non-IDE)'
-                      : 'Run Query & Show Results in Non-IDE (Ctrl+Shift+F)'
+                    (() => {
+                      const tableName = (activeTab?.tableName || activeTab?.title || '').replace(/\.sql$/i, '');
+                      const schemaObj = engine.getSchema().find((t) => t.name.toLowerCase() === tableName.toLowerCase());
+                      if (schemaObj?.type === 'view') return 'Run view (Ctrl+Shift+K)';
+                      if (activeTab?.type === 'table') return 'Run table (Ctrl+Shift+K)';
+                      return 'Run query (Ctrl+Shift+K)';
+                    })()
                   }
-                  className={`p-1.5 rounded transition flex items-center justify-center ${
-                    activeTab?.type === 'table'
-                      ? 'opacity-35 cursor-not-allowed text-slate-500'
-                      : 'text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/40'
-                  }`}
+                  className="p-1.5 rounded transition flex items-center justify-center text-emerald-500 hover:text-emerald-400 hover:bg-emerald-950/40 cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                 </button>
