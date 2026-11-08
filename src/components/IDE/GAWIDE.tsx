@@ -513,36 +513,81 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     });
   }, [engine]);
 
-  // Memoized query result computation for toggled view in IDE (Code <-> Preview/Data/Results/Report)
-  const toggledTableResult = useMemo(() => {
-    if (!isViewToggled || activeTab?.type !== 'table') {
-      return { columns: [], values: [] };
-    }
-    const tableName = (activeTab.tableName || activeTab.title).replace(/\.sql$/i, '');
-    try {
-      const { columns, values } = engine.query(`SELECT * FROM "${tableName}";`);
-      return { columns, values };
-    } catch (err: any) {
-      return { columns: ['Error'], values: [[err.message || String(err)]], error: err.message };
-    }
-  }, [isViewToggled, activeTab?.type, activeTab?.tableName, activeTab?.title, dbVersion, engine]);
+  // Asynchronous query/view result computation for toggled view in IDE (Code <-> Preview/Data/Results/Report)
+  const [toggledResultsState, setToggledResultsState] = useState<QueryResult[]>([]);
 
-  const toggledQueryResults = useMemo(() => {
-    if (!isViewToggled || (activeTab?.type !== 'query' && activeTab?.type !== 'sql')) {
-      return [];
+  useEffect(() => {
+    if (!isViewToggled || !activeTab) {
+      setToggledResultsState([]);
+      return;
     }
-    if (queryResults.length > 0) {
-      return queryResults;
-    }
-    if (!activeTab?.content || !activeTab.content.trim()) {
-      return [];
-    }
+
     try {
-      return engine.exec(activeTab.content);
+      if (activeTab.type === 'table') {
+        const tableName = (activeTab.tableName || activeTab.title).replace(/\.sql$/i, '');
+        let execRes: QueryResult[] = [];
+        if (activeTab.content && activeTab.content.trim()) {
+          try {
+            execRes = engine.exec(activeTab.content);
+          } catch (e: any) {
+            setToggledResultsState([{ columns: ['Error'], values: [[e.message || String(e)]], error: e.message }]);
+            return;
+          }
+        }
+
+        const selectRes = execRes.find(
+          (r) => r.columns && r.columns.length > 0 && r.columns[0] !== 'status' && r.columns[0] !== 'error' && r.columns[0] !== 'Status'
+        );
+
+        if (selectRes && selectRes.values && selectRes.values.length > 0) {
+          setToggledResultsState([selectRes]);
+          return;
+        }
+
+        try {
+          const { columns, values } = engine.query(`SELECT * FROM "${tableName}";`);
+          if (!columns || columns.length === 0) {
+            setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
+          } else {
+            setToggledResultsState([{ columns, values }]);
+          }
+        } catch {
+          setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
+        }
+      } else if (activeTab.type === 'query' || activeTab.type === 'sql') {
+        if (queryResults.length > 0) {
+          const formatted = queryResults.map((r) => {
+            if (!r.columns || r.columns.length === 0 || (r.columns.length === 2 && r.columns[0] === 'status')) {
+              return { ...r, columns: ['Status'], values: [['Sql statement ran successfully']] };
+            }
+            return r;
+          });
+          setToggledResultsState(formatted);
+          return;
+        }
+
+        if (!activeTab.content || !activeTab.content.trim()) {
+          setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
+          return;
+        }
+
+        const execRes = engine.exec(activeTab.content);
+        if (!execRes || execRes.length === 0) {
+          setToggledResultsState([{ columns: ['Status'], values: [['Sql statement ran successfully']] }]);
+        } else {
+          const formatted = execRes.map((r) => {
+            if (!r.columns || r.columns.length === 0 || (r.columns.length === 2 && r.columns[0] === 'status')) {
+              return { ...r, columns: ['Status'], values: [['Sql statement ran successfully']] };
+            }
+            return r;
+          });
+          setToggledResultsState(formatted);
+        }
+      }
     } catch (err: any) {
-      return [{ columns: ['Error'], values: [[err.message || String(err)]], error: err.message }];
+      setToggledResultsState([{ columns: ['Error'], values: [[err.message || String(err)]], error: err.message }]);
     }
-  }, [isViewToggled, activeTab?.type, activeTab?.content, queryResults, dbVersion, engine]);
+  }, [isViewToggled, activeTabId, activeTab?.type, activeTab?.content, activeTab?.tableName, activeTab?.title, queryResults, dbVersion, engine]);
 
   // Save As Modal State
   const [showSaveAsModal, setShowSaveAsModal] = useState(false);
@@ -1324,9 +1369,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     setTimeout(() => {
       try {
         if (activeTab.type === 'sql' || activeTab.type === 'table' || activeTab.type === 'query') {
-          const results = engine.exec(activeTab.content);
+          const rawResults = engine.exec(activeTab.content);
+          const results = (!rawResults || rawResults.length === 0)
+            ? [{ columns: ['Status'], values: [['Sql statement ran successfully']] }]
+            : rawResults.map((r) => {
+                if (!r.columns || r.columns.length === 0 || (r.columns.length === 2 && r.columns[0] === 'status')) {
+                  return { ...r, columns: ['Status'], values: [['Sql statement ran successfully']] };
+                }
+                return r;
+              });
           setQueryResults(results);
           setActiveResultIndex(0);
+          engine.notifyChange(true);
         } else if (activeTab.type === 'report') {
           try {
             const parsed = JSON.parse(activeTab.content);
@@ -1336,9 +1390,18 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
               if (q) sqlToRun = q.query;
             }
             if (sqlToRun) {
-              const results = engine.exec(sqlToRun);
+              const rawResults = engine.exec(sqlToRun);
+              const results = (!rawResults || rawResults.length === 0)
+                ? [{ columns: ['Status'], values: [['Sql statement ran successfully']] }]
+                : rawResults.map((r) => {
+                    if (!r.columns || r.columns.length === 0 || (r.columns.length === 2 && r.columns[0] === 'status')) {
+                      return { ...r, columns: ['Status'], values: [['Sql statement ran successfully']] };
+                    }
+                    return r;
+                  });
               setQueryResults(results);
               setActiveResultIndex(0);
+              engine.notifyChange(true);
             } else {
               setQueryResults([
                 {
@@ -4323,7 +4386,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     </div>
                     <div className="flex-1 min-h-0">
                       <QueryGrid
-                        result={toggledTableResult}
+                        result={toggledResultsState[0] || { columns: [], values: [] }}
                         onOpenInSpreadsheet={handleIDEOpenSpreadsheet}
                         title={tableName}
                         theme={theme}
@@ -4335,7 +4398,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 
               {(activeTab.type === 'query' || activeTab.type === 'sql') && (() => {
                 const queryName = activeTab.title.replace(/\.sql$/i, '');
-                const resList = toggledQueryResults;
+                const resList = toggledResultsState;
 
                 return (
                   <div className={`flex-1 flex flex-col overflow-hidden h-full ${
