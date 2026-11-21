@@ -1960,7 +1960,7 @@ export default function App() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-2xl ring-2 ring-amber-400/60 animate-pulse bg-slate-900 flex items-center justify-center p-1">
+          <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-2xl ring-2 ring-sky-400/60 animate-pulse bg-slate-900 flex items-center justify-center p-1">
             <img src="/gawkyy-cat-256x256.png" alt="Gawkyy" className="w-full h-full object-cover" />
           </div>
           <div className="text-center">

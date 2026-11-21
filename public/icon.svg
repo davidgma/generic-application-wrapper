@@ -1,72 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="100%" height="100%">
-  <defs>
-    <!-- Filter for subtle drop shadow if needed -->
-  </defs>
-
   <!-- Left Outer Ear -->
-  <path d="M 64 102 L 46 44 C 44 38 48 34 54 36 L 108 76 Z" 
-        fill="#F4B366" stroke="#1F1B18" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
-  <!-- Left Inner Ear Pink -->
-  <path d="M 66 94 L 54 52 C 53 49 56 47 59 49 L 98 76 Z" 
-        fill="#ED7486"/>
+  <path d="M 60 112 Q 46 66 54 38 Q 84 44 108 76 Z"
+        fill="#3078E8" stroke="#0F172A" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Left Inner Ear Sky Blue -->
+  <path d="M 66 100 Q 57 68 62 50 Q 82 55 98 76 Z"
+        fill="#7AC3FF"/>
 
   <!-- Right Outer Ear -->
-  <path d="M 192 102 L 210 44 C 212 38 208 34 202 36 L 148 76 Z" 
-        fill="#F4B366" stroke="#1F1B18" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
-  <!-- Right Inner Ear Pink -->
-  <path d="M 190 94 L 202 52 C 203 49 200 47 197 49 L 158 76 Z" 
-        fill="#ED7486"/>
+  <path d="M 196 112 Q 210 66 202 38 Q 172 44 148 76 Z"
+        fill="#3078E8" stroke="#0F172A" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- Right Inner Ear Sky Blue -->
+  <path d="M 190 100 Q 199 68 194 50 Q 174 55 158 76 Z"
+        fill="#7AC3FF"/>
 
   <!-- Main Head Shape -->
-  <ellipse cx="128" cy="144" rx="90" ry="78" 
-           fill="#F4B366" stroke="#1F1B18" stroke-width="7"/>
+  <ellipse cx="128" cy="144" rx="90" ry="78"
+           fill="#3078E8" stroke="#0F172A" stroke-width="8"/>
 
-  <!-- Forehead Tabby Stripes -->
-  <!-- Middle vertical stripe -->
-  <path d="M 124 72 L 132 72 L 129 104 L 127 104 Z" fill="#4B3C33"/>
-  <!-- Left angled stripe -->
-  <path d="M 103 76 L 110 74 L 115 100 L 111 101 Z" fill="#4B3C33"/>
-  <!-- Right angled stripe -->
-  <path d="M 153 76 L 146 74 L 141 100 L 145 101 Z" fill="#4B3C33"/>
-
-  <!-- Cheek Tabby Stripes (Left) -->
-  <path d="M 40 128 L 62 133 L 42 138 Z" fill="#4B3C33"/>
-  <path d="M 43 147 L 66 149 L 46 156 Z" fill="#4B3C33"/>
-
-  <!-- Cheek Tabby Stripes (Right) -->
-  <path d="M 216 128 L 194 133 L 214 138 Z" fill="#4B3C33"/>
-  <path d="M 213 147 L 190 149 L 210 156 Z" fill="#4B3C33"/>
-
-  <!-- Whiskers (Left) -->
-  <path d="M 64 146 Q 36 145 14 148" fill="none" stroke="#1F1B18" stroke-width="5" stroke-linecap="round"/>
-  <path d="M 66 158 Q 40 165 22 174" fill="none" stroke="#1F1B18" stroke-width="5" stroke-linecap="round"/>
-
-  <!-- Whiskers (Right) -->
-  <path d="M 192 146 Q 220 145 242 148" fill="none" stroke="#1F1B18" stroke-width="5" stroke-linecap="round"/>
-  <path d="M 190 158 Q 216 165 234 174" fill="none" stroke="#1F1B18" stroke-width="5" stroke-linecap="round"/>
-
-  <!-- Soft Cream Muzzle Patch -->
-  <path d="M 88 170 C 88 142 110 138 128 138 C 146 138 168 142 168 170 C 168 194 146 208 128 208 C 110 208 88 194 88 170 Z" 
-        fill="#F9E4CA"/>
-
-  <!-- Big Adorable Eyes -->
   <!-- Left Eye -->
-  <circle cx="92" cy="142" r="20" fill="#181516"/>
+  <circle cx="92" cy="142" r="20" fill="#0F172A"/>
   <circle cx="98" cy="136" r="7.5" fill="#FFFFFF"/>
   <circle cx="85" cy="149" r="3.5" fill="#FFFFFF"/>
 
   <!-- Right Eye -->
-  <circle cx="164" cy="142" r="20" fill="#181516"/>
+  <circle cx="164" cy="142" r="20" fill="#0F172A"/>
   <circle cx="170" cy="136" r="7.5" fill="#FFFFFF"/>
   <circle cx="157" cy="149" r="3.5" fill="#FFFFFF"/>
 
-  <!-- Cute Black Nose -->
-  <path d="M 120 156 C 120 154 122 153 128 153 C 134 153 136 154 136 156 L 131 164 C 129 166 127 166 125 164 Z" 
-        fill="#181516"/>
+  <!-- Simple Nose -->
+  <path d="M 119 157 C 119 154 122 153 128 153 C 134 153 137 154 137 157 L 131 165 C 129 167 127 167 125 165 Z"
+        fill="#0F172A"/>
 
-  <!-- Smiling Cat Mouth -->
-  <path d="M 128 165 L 128 169 M 128 169 Q 120 178 111 172 Q 104 167 106 162" 
-        fill="none" stroke="#181516" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 128 169 Q 136 178 145 172 Q 152 167 150 162" 
-        fill="none" stroke="#181516" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Simple Cat Mouth -->
+  <path d="M 128 165 L 128 170 M 128 170 L 111 180 M 128 170 L 145 180"
+        fill="none" stroke="#0F172A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

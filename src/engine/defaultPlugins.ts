@@ -2835,7 +2835,7 @@ export default function HelpPlugin({ gaw }) {
                 <img
                   src="/gawkyy-cat-256x256.png"
                   alt="Gawkyy Mascot"
-                  className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-amber-400/40 flex-shrink-0"
+                  className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-sky-400/40 flex-shrink-0"
                 />
                 <div className="space-y-1">
                   <h3 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-sky-300' : 'text-blue-700')}>
@@ -5626,7 +5626,7 @@ export default function HeaderNavbarPlugin({ gaw }) {
         </button>
 
         <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => handleNavClick({ id: 'file' })}>
-          <div className="w-7 h-7 rounded-lg overflow-hidden ring-1 ring-amber-400/50 bg-slate-900 flex items-center justify-center p-0.5 flex-shrink-0">
+          <div className="w-7 h-7 rounded-lg overflow-hidden ring-1 ring-sky-400/50 bg-slate-900 flex items-center justify-center p-0.5 flex-shrink-0">
             <img src="/gawkyy-cat-256x256.png" alt="Gawkyy Logo" className="w-full h-full object-cover" />
           </div>
           <div className="flex flex-col">

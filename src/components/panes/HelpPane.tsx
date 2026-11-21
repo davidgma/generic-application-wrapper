@@ -117,7 +117,7 @@ export const HelpPane: React.FC<HelpPaneProps> = ({
             <img
               src="/gawkyy-cat-256x256.png"
               alt="Gawkyy Mascot"
-              className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-amber-400/40 flex-shrink-0"
+              className="w-16 h-16 rounded-2xl object-cover shadow-md ring-2 ring-sky-400/40 flex-shrink-0"
             />
             <div className="space-y-1">
               <h3 className={`text-base font-bold flex items-center gap-2 ${isDark ? 'text-sky-300' : 'text-slate-900'}`}>
