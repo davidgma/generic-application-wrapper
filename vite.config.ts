@@ -56,7 +56,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
         devOptions: {
@@ -64,6 +64,27 @@ export default defineConfig(() => {
         },
       }),
     ],
+    build: {
+      rolldownOptions: {
+        output: {
+          // Split large vendor packages into separate cacheable chunks under 500 kB
+          // Official Rolldown docs: https://rolldown.rs/reference/OutputOptions.codeSplitting
+          codeSplitting: {
+            groups: [
+              { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+              { name: 'vendor-lucide', test: /node_modules[\\/]lucide-react[\\/]/, maxSize: 350000 },
+              { name: 'vendor-sucrase', test: /node_modules[\\/]sucrase[\\/]/ },
+              { name: 'vendor-prettier', test: /node_modules[\\/]prettier[\\/]/, maxSize: 350000 },
+              { name: 'vendor-excel', test: /node_modules[\\/](read-excel-file|write-excel-file|fflate)[\\/]/ },
+              { name: 'vendor-motion', test: /node_modules[\\/](motion|framer-motion)[\\/]/ },
+              { name: 'vendor-monaco', test: /node_modules[\\/](@monaco-editor|monaco-editor)[\\/]/ },
+              { name: 'vendor-sqljs', test: /node_modules[\\/]sql\.js[\\/]/ },
+              { name: 'vendor', test: /node_modules[\\/]/, maxSize: 400000 },
+            ],
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve('.'),

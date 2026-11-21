@@ -1,6 +1,5 @@
-import prettier from 'prettier/standalone';
-import parserBabel from 'prettier/plugins/babel';
-import parserEstree from 'prettier/plugins/estree';
+// Code formatter utility using Prettier standalone and lightweight SQL formatting.
+// Official Prettier Browser/Standalone docs: https://prettier.io/docs/en/browser.html
 
 export class CodeFormatter {
   public static async format(code: string, language: 'typescript' | 'sql' | 'json'): Promise<string> {
@@ -17,9 +16,19 @@ export class CodeFormatter {
 
     if (language === 'typescript') {
       try {
+        // Dynamically load Prettier standalone and TypeScript/Babel parsers only when formatting code
+        const [prettierMod, babelMod, estreeMod] = await Promise.all([
+          import('prettier/standalone'),
+          import('prettier/plugins/babel'),
+          import('prettier/plugins/estree'),
+        ]);
+        const prettier = prettierMod.default || prettierMod;
+        const parserBabel = babelMod.default || babelMod;
+        const parserEstree = estreeMod.default || estreeMod;
+
         const formatted = await prettier.format(code, {
           parser: 'babel-ts',
-          plugins: [parserBabel, parserEstree],
+          plugins: [parserBabel as any, parserEstree as any],
           semi: true,
           singleQuote: true,
           tabWidth: 2,

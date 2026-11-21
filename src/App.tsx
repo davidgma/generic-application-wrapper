@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { SQLiteEngine } from './engine/sqliteEngine';
 import { FileStorageEngine } from './engine/fileStorage';
 import { DropboxSyncEngine } from './engine/dropboxSync';
@@ -13,22 +13,24 @@ import { logDebugStage, APP_START_TIME, isDebuggingEnabled, setDebuggingEnabled 
 
 import { QueryGrid } from './components/QueryGrid';
 import { MultiQueryResultsView } from './components/MultiQueryResultsView';
-import { GAWIDE, TargetTabInfo } from './components/IDE/GAWIDE';
-import { SpreadsheetView } from './components/SpreadsheetView';
-import { ReportViewer } from './components/ReportViewer';
-import { ReportBuilder } from './components/ReportBuilder';
+import type { TargetTabInfo } from './components/IDE/GAWIDE';
 import { PluginHost } from './components/PluginHost';
-import { AIAssistant } from './components/AIAssistant';
-import { AddPluginModal } from './components/AddPluginModal';
-import { DropboxModal } from './components/DropboxModal';
-import { SettingsModal } from './components/SettingsModal';
 import { ConflictDialog } from './components/ConflictDialog';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { DatabasePane } from './components/panes/DatabasePane';
-import { PluginsPane } from './components/panes/PluginsPane';
-import { HelpPane } from './components/panes/HelpPane';
 import { DEFAULT_HELP_PLUGIN_CODE } from './engine/defaultPlugins';
 import { FiveRegionLayout } from './components/FiveRegionLayout';
+
+// Code-split heavy secondary views and modals so initial app startup stays lightweight
+const GAWIDE = lazy(() => import('./components/IDE/GAWIDE').then((m) => ({ default: m.GAWIDE })));
+const SpreadsheetView = lazy(() => import('./components/SpreadsheetView').then((m) => ({ default: m.SpreadsheetView })));
+const ReportViewer = lazy(() => import('./components/ReportViewer').then((m) => ({ default: m.ReportViewer })));
+const ReportBuilder = lazy(() => import('./components/ReportBuilder').then((m) => ({ default: m.ReportBuilder })));
+const AIAssistant = lazy(() => import('./components/AIAssistant').then((m) => ({ default: m.AIAssistant })));
+const AddPluginModal = lazy(() => import('./components/AddPluginModal').then((m) => ({ default: m.AddPluginModal })));
+const DropboxModal = lazy(() => import('./components/DropboxModal').then((m) => ({ default: m.DropboxModal })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
+const DatabasePane = lazy(() => import('./components/panes/DatabasePane').then((m) => ({ default: m.DatabasePane })));
+const PluginsPane = lazy(() => import('./components/panes/PluginsPane').then((m) => ({ default: m.PluginsPane })));
 
 import {
   AlertCircle,
@@ -2050,47 +2052,51 @@ export default function App() {
     >
       {/* Pane 3: Database Hub */}
       {activeRoute === 'database' && activeView === 'database' && (
-        <DatabasePane
-          theme={theme}
-          tables={tables}
-          onOpenIDE={handleOpenInIDE}
-          onOpenSettings={() => gawContext.navigation?.openSettings?.()}
-          onResetDefault={() => {
-            SQLiteEngine.getInstance().createNorthwindDemoDatabase();
-            toastApi.success('Loaded Northwind Modern Commerce template.');
-            setSidebarOpenWithStorage(true);
-            refreshDatabaseState();
-            setActiveView('plugin:plugin_crm');
-            setActiveRoute('plugins');
-            navigateTo('plugins', 'plugin:plugin_crm');
-          }}
-          onSelectView={(v) => {
-            setActiveView(v);
-            if (v.startsWith('plugin:')) navigateTo('plugins', v);
-            else navigateTo('file', v);
-          }}
-          onToast={addToast}
-        />
+        <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading database view...</div>}>
+          <DatabasePane
+            theme={theme}
+            tables={tables}
+            onOpenIDE={handleOpenInIDE}
+            onOpenSettings={() => gawContext.navigation?.openSettings?.()}
+            onResetDefault={() => {
+              SQLiteEngine.getInstance().createNorthwindDemoDatabase();
+              toastApi.success('Loaded Northwind Modern Commerce template.');
+              setSidebarOpenWithStorage(true);
+              refreshDatabaseState();
+              setActiveView('plugin:plugin_crm');
+              setActiveRoute('plugins');
+              navigateTo('plugins', 'plugin:plugin_crm');
+            }}
+            onSelectView={(v) => {
+              setActiveView(v);
+              if (v.startsWith('plugin:')) navigateTo('plugins', v);
+              else navigateTo('file', v);
+            }}
+            onToast={addToast}
+          />
+        </Suspense>
       )}
 
       {/* Pane 4: Plugins Marketplace / Hub */}
       {activeRoute === 'plugins' && activeView === 'plugins' && (
-        <PluginsPane
-          theme={theme}
-          plugins={plugins}
-          onOpenIDE={handleOpenInIDE}
-          onAddPlugin={() => setShowAddPluginModal(true)}
-          onSelectView={(v) => {
-            setActiveView(v);
-            navigateTo('plugins', v);
-          }}
-          onTogglePlugin={(plugin) => {
-            const newEnabled = plugin.enabled === 1 ? false : true;
-            SQLiteEngine.getInstance().setPluginEnabled(plugin.id, newEnabled);
-            refreshDatabaseState();
-            toastApi.info(`${plugin.name} is now ${newEnabled ? 'enabled' : 'disabled'}.`);
-          }}
-        />
+        <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading components...</div>}>
+          <PluginsPane
+            theme={theme}
+            plugins={plugins}
+            onOpenIDE={handleOpenInIDE}
+            onAddPlugin={() => setShowAddPluginModal(true)}
+            onSelectView={(v) => {
+              setActiveView(v);
+              navigateTo('plugins', v);
+            }}
+            onTogglePlugin={(plugin) => {
+              const newEnabled = plugin.enabled === 1 ? false : true;
+              SQLiteEngine.getInstance().setPluginEnabled(plugin.id, newEnabled);
+              refreshDatabaseState();
+              toastApi.info(`${plugin.name} is now ${newEnabled ? 'enabled' : 'disabled'}.`);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* Pane 5: Help Route (Dynamic Help & System Guide Plugin) */}
@@ -2187,56 +2193,62 @@ export default function App() {
       {/* View 3: Publication Report Viewer */}
       {activeView.startsWith('report:') && currentReport && (
         <div className="flex-1 overflow-hidden select-text">
-          <ReportViewer
-            report={currentReport}
-            onEdit={() => {
-              setReportToEdit(currentReport);
-              setShowReportBuilder(true);
-            }}
-            onOpenInIDE={handleOpenInIDE}
-            onBack={() => {
-              setActiveView('view');
-              navigateTo('view', 'view');
-            }}
-            theme={theme}
-          />
+          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading report...</div>}>
+            <ReportViewer
+              report={currentReport}
+              onEdit={() => {
+                setReportToEdit(currentReport);
+                setShowReportBuilder(true);
+              }}
+              onOpenInIDE={handleOpenInIDE}
+              onBack={() => {
+                setActiveView('view');
+                navigateTo('view', 'view');
+              }}
+              theme={theme}
+            />
+          </Suspense>
         </div>
       )}
 
       {/* View 4: Embedded Spreadsheet Studio */}
       {activeView === 'spreadsheet' && (
         <div className="flex-1 overflow-hidden select-text">
-          <SpreadsheetView
-            initialSheets={spreadsheetInitialSheets}
-            sourceInfo={spreadsheetSource}
-            onReturnToSource={handleReturnFromSpreadsheet}
-            onClose={() => {
-              setActiveView('view');
-              navigateTo('view', 'view');
-            }}
-            theme={theme}
-          />
+          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading spreadsheet studio...</div>}>
+            <SpreadsheetView
+              initialSheets={spreadsheetInitialSheets}
+              sourceInfo={spreadsheetSource}
+              onReturnToSource={handleReturnFromSpreadsheet}
+              onClose={() => {
+                setActiveView('view');
+                navigateTo('view', 'view');
+              }}
+              theme={theme}
+            />
+          </Suspense>
         </div>
       )}
 
       {/* View 5: Internal Monaco Editor IDE (Full Screen) */}
       {activeView === 'ide' && (
         <div className="flex-1 overflow-hidden select-text">
-          <GAWIDE
-            targetTab={ideTargetTab}
-            onClearTargetTab={() => setIdeTargetTab(null)}
-            onOpenSpreadsheet={handleOpenSpreadsheet}
-            onOpenAI={() => setShowAIModal(true)}
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
-            mode={mode}
-            onToggleMode={handleToggleMode}
-            gawContext={gawContext}
-            onExitIDE={handleExitIDE}
-            onActiveTabChange={(target) => setCurrentIdeTarget(target)}
-            onRunAndExitToNonIDE={handleRunAndExitToNonIDE}
-            onDeleteObject={handleDeleteObject}
-          />
+          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading IDE...</div>}>
+            <GAWIDE
+              targetTab={ideTargetTab}
+              onClearTargetTab={() => setIdeTargetTab(null)}
+              onOpenSpreadsheet={handleOpenSpreadsheet}
+              onOpenAI={() => setShowAIModal(true)}
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              mode={mode}
+              onToggleMode={handleToggleMode}
+              gawContext={gawContext}
+              onExitIDE={handleExitIDE}
+              onActiveTabChange={(target) => setCurrentIdeTarget(target)}
+              onRunAndExitToNonIDE={handleRunAndExitToNonIDE}
+              onDeleteObject={handleDeleteObject}
+            />
+          </Suspense>
         </div>
       )}
     </main>
@@ -2299,84 +2311,94 @@ export default function App() {
 
       {/* 2. Dropbox Modal */}
       {showDropboxModal && (
-        <DropboxModal
-          onClose={() => setShowDropboxModal(false)}
-          onFileLoaded={(fn) => {
-            toastApi.success(`Loaded database ${fn} from Dropbox!`);
-            refreshDatabaseState();
-          }}
-        />
+        <Suspense fallback={null}>
+          <DropboxModal
+            onClose={() => setShowDropboxModal(false)}
+            onFileLoaded={(fn) => {
+              toastApi.success(`Loaded database ${fn} from Dropbox!`);
+              refreshDatabaseState();
+            }}
+          />
+        </Suspense>
       )}
 
       {/* 3. Settings Modal */}
       {showSettingsModal && (
-        <SettingsModal
-          onClose={() => setShowSettingsModal(false)}
-          theme={theme}
-          onThemeChange={(newTheme) => {
-            setTheme(newTheme);
-            safeStorage.setItem('gaw_theme', newTheme);
-            eventBusApi.emit('theme_changed', newTheme);
-          }}
-          onSettingsSaved={() => {
-            refreshDatabaseState();
-            toastApi.success('Updated application settings.');
-          }}
-        />
+        <Suspense fallback={null}>
+          <SettingsModal
+            onClose={() => setShowSettingsModal(false)}
+            theme={theme}
+            onThemeChange={(newTheme) => {
+              setTheme(newTheme);
+              safeStorage.setItem('gaw_theme', newTheme);
+              eventBusApi.emit('theme_changed', newTheme);
+            }}
+            onSettingsSaved={() => {
+              refreshDatabaseState();
+              toastApi.success('Updated application settings.');
+            }}
+          />
+        </Suspense>
       )}
 
       {/* 3b. Add Dynamic Plugin Modal (Local File/Directory, Dropbox, or IDE) */}
       {showAddPluginModal && (
-        <AddPluginModal
-          onClose={() => setShowAddPluginModal(false)}
-          onPluginAdded={(newPlugin, openInIDE) => {
-            toastApi.success(`Installed dynamic plugin "${newPlugin.name}" into SQLite!`);
-            refreshDatabaseState();
-            if (openInIDE) {
-              handleOpenInIDE({ type: 'plugin', id: newPlugin.id, name: newPlugin.name });
-            } else {
-              setActiveView(`plugin:${newPlugin.id}`);
-            }
-          }}
-          onOpenDropboxSettings={() => {
-            setShowAddPluginModal(false);
-            setActiveView('plugin:plugin_dropbox_sync');
-          }}
-          theme={theme}
-        />
+        <Suspense fallback={null}>
+          <AddPluginModal
+            onClose={() => setShowAddPluginModal(false)}
+            onPluginAdded={(newPlugin, openInIDE) => {
+              toastApi.success(`Installed dynamic plugin "${newPlugin.name}" into SQLite!`);
+              refreshDatabaseState();
+              if (openInIDE) {
+                handleOpenInIDE({ type: 'plugin', id: newPlugin.id, name: newPlugin.name });
+              } else {
+                setActiveView(`plugin:${newPlugin.id}`);
+              }
+            }}
+            onOpenDropboxSettings={() => {
+              setShowAddPluginModal(false);
+              setActiveView('plugin:plugin_dropbox_sync');
+            }}
+            theme={theme}
+          />
+        </Suspense>
       )}
 
       {/* 4. AI Specification Exporter Modal */}
       {showAIModal && (
-        <AIAssistant
-          onClose={() => setShowAIModal(false)}
-          onInstallPlugin={(plg) => {
-            const engine = SQLiteEngine.getInstance();
-            const now = new Date().toISOString();
-            engine.run(
-              'INSERT OR REPLACE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-              [plg.id, plg.name, '1.0.0', 1, plg.icon, plg.menu_category, plg.route, plg.description, plg.code, now, now]
-            );
-            toastApi.success(`Installed plugin "${plg.name}" into SQLite!`);
-            refreshDatabaseState();
-            setActiveView(`plugin:${plg.id}`);
-          }}
-          theme={theme}
-        />
+        <Suspense fallback={null}>
+          <AIAssistant
+            onClose={() => setShowAIModal(false)}
+            onInstallPlugin={(plg) => {
+              const engine = SQLiteEngine.getInstance();
+              const now = new Date().toISOString();
+              engine.run(
+                'INSERT OR REPLACE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [plg.id, plg.name, '1.0.0', 1, plg.icon, plg.menu_category, plg.route, plg.description, plg.code, now, now]
+              );
+              toastApi.success(`Installed plugin "${plg.name}" into SQLite!`);
+              refreshDatabaseState();
+              setActiveView(`plugin:${plg.id}`);
+            }}
+            theme={theme}
+          />
+        </Suspense>
       )}
 
       {/* 5. Report Builder Modal */}
       {showReportBuilder && (
-        <ReportBuilder
-          report={reportToEdit}
-          onSave={(savedRep) => {
-            toastApi.success(`Report "${savedRep.name}" saved!`);
-            refreshDatabaseState();
-            setShowReportBuilder(false);
-            setActiveView(`report:${savedRep.id}`);
-          }}
-          onClose={() => setShowReportBuilder(false)}
-        />
+        <Suspense fallback={null}>
+          <ReportBuilder
+            report={reportToEdit}
+            onSave={(savedRep) => {
+              toastApi.success(`Report "${savedRep.name}" saved!`);
+              refreshDatabaseState();
+              setShowReportBuilder(false);
+              setActiveView(`report:${savedRep.id}`);
+            }}
+            onClose={() => setShowReportBuilder(false)}
+          />
+        </Suspense>
       )}
 
       {/* 6. Two-Stage Deletion Confirmation Modal */}
