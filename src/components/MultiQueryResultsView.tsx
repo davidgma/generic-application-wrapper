@@ -1,3 +1,8 @@
+/**
+ * Official Documentation:
+ * - React Components & Props: https://react.dev/learn/passing-props-to-a-component
+ * - Lucide React Icons: https://lucide.dev/guide/packages/lucide-react
+ */
 import React from 'react';
 import {
   ArrowLeft,
@@ -18,9 +23,9 @@ interface MultiQueryResultsViewProps {
   results: QueryResult[];
   title: string;
   theme: 'vs-dark' | 'vs-light';
-  onOpenInIDE: (tab?: { type: 'query'; id: string; name: string }) => void;
+  onOpenInIDE?: (tab?: { type: 'query'; id: string; name: string }) => void;
   onOpenSpreadsheet: (data?: { columns: string[]; values: any[][] }, sheetName?: string) => void;
-  onBackToView: () => void;
+  onBackToView?: () => void;
   onRerunQuery?: () => void;
 }
 
@@ -43,17 +48,21 @@ export const MultiQueryResultsView: React.FC<MultiQueryResultsViewProps> = ({
         isDark ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
       }`}>
         <div className="flex items-center gap-2 min-w-0">
-          <button
-            onClick={onBackToView}
-            className={`flex items-center gap-1 font-medium transition ${
-              isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'
-            }`}
-            title="Back to View Hub"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>View</span>
-          </button>
-          <span className="text-slate-500">/</span>
+          {onBackToView && (
+            <>
+              <button
+                onClick={onBackToView}
+                className={`flex items-center gap-1 font-medium transition ${
+                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'
+                }`}
+                title="Back"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+              <span className="text-slate-500">/</span>
+            </>
+          )}
           <span className="font-bold truncate text-sm">{title.replace(/\.sql$/i, '')}</span>
           <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
             results.length > 1
@@ -80,23 +89,25 @@ export const MultiQueryResultsView: React.FC<MultiQueryResultsViewProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => {
-              if (savedQuery) {
-                onOpenInIDE({ type: 'query', id: savedQuery.id, name: savedQuery.name });
-              } else {
-                onOpenInIDE();
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
-            title="Edit this query in Monaco IDE (Ctrl+Shift+F)"
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>Edit Query in IDE</span>
-            <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
-              Ctrl+Shift+F
-            </kbd>
-          </button>
+          {onOpenInIDE && (
+            <button
+              onClick={() => {
+                if (savedQuery) {
+                  onOpenInIDE({ type: 'query', id: savedQuery.id, name: savedQuery.name });
+                } else {
+                  onOpenInIDE();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
+              title="Open this query in IDE Mode (Ctrl+Shift+F)"
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>Edit Query in IDE</span>
+              <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
+                Ctrl+Shift+F
+              </kbd>
+            </button>
+          )}
         </div>
       </div>
 

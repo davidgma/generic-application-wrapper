@@ -1,3 +1,8 @@
+/**
+ * Official Documentation:
+ * - TypeScript Handbook (Interfaces & Types): https://www.typescriptlang.org/docs/handbook/2/objects.html
+ * - React TypeScript Cheatsheet: https://react.dev/learn/typescript
+ */
 import React from 'react';
 import { QueryResult, TableSchema } from './sqlite';
 import { StorageMetadata, DropboxConfig, StorageTarget, RecentFileItem } from './storage';
@@ -70,6 +75,7 @@ export interface GAWDatabaseApi {
 
 export interface GAWNavigationApi {
   navigate: (route: string) => void;
+  selectView?: (view: string) => void;
   openQuery: (sql: string) => void;
   openSpreadsheet: (data: { columns: string[]; values: any[][] }, sheetName?: string) => void;
   openReport: (reportId: string) => void;
@@ -77,6 +83,9 @@ export interface GAWNavigationApi {
   openIDE: (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string }) => void;
   openAI?: () => void;
   openSettings?: () => void;
+  toggleTheme?: () => void;
+  // Supports switching between IDE mode and App mode ('dev' kept as alias for 'ide')
+  setMode?: (mode: 'ide' | 'app' | 'dev') => void;
 }
 
 export interface GAWEventBusApi {
@@ -150,6 +159,11 @@ export interface GAWContext {
   navigation: GAWNavigationApi;
   eventBus: GAWEventBusApi;
   theme: 'vs-dark' | 'vs-light';
+  mode?: 'ide' | 'app';
+  activeRoute?: string;
+  activeView?: string;
+  appName?: string;
+  appDescription?: string;
   plugin: PluginRecord;
   storage: GAWStorageApi;
   dropbox: GAWDropboxApi;

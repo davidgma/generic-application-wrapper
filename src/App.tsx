@@ -1,15 +1,21 @@
+/**
+ * Official Documentation:
+ * - React Hooks (useState, useEffect, useCallback, useMemo, useRef): https://react.dev/reference/react
+ * - sql.js (SQLite WebAssembly): https://sql.js.org/
+ * - Monaco Editor React: https://github.com/suren-atoyan/monaco-editor-react
+ */
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { SQLiteEngine } from './engine/sqliteEngine';
 import { FileStorageEngine } from './engine/fileStorage';
 import { DropboxSyncEngine } from './engine/dropboxSync';
 import { PluginEngine } from './engine/pluginEngine';
 import { TableSchema, SavedQuery, QueryResult } from './types/sqlite';
-import { PluginRecord, GAWContext, isSystemPlugin, SYSTEM_PLUGIN_IDS } from './types/plugin';
+import { PluginRecord, GAWContext, isSystemPlugin } from './types/plugin';
 import { SavedReport } from './types/report';
 import { ConflictDetails, StorageMetadata } from './types/storage';
 import { RecentFilesManager } from './engine/recentFiles';
 import { safeStorage } from './utils/storage';
-import { logDebugStage, APP_START_TIME, isDebuggingEnabled, setDebuggingEnabled } from './utils/debugLogger';
+import { logDebugStage, APP_START_TIME } from './utils/debugLogger';
 
 import { QueryGrid } from './components/QueryGrid';
 import { MultiQueryResultsView } from './components/MultiQueryResultsView';
@@ -29,21 +35,17 @@ const AIAssistant = lazy(() => import('./components/AIAssistant').then((m) => ({
 const AddPluginModal = lazy(() => import('./components/AddPluginModal').then((m) => ({ default: m.AddPluginModal })));
 const DropboxModal = lazy(() => import('./components/DropboxModal').then((m) => ({ default: m.DropboxModal })));
 const SettingsModal = lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
-const DatabasePane = lazy(() => import('./components/panes/DatabasePane').then((m) => ({ default: m.DatabasePane })));
-const PluginsPane = lazy(() => import('./components/panes/PluginsPane').then((m) => ({ default: m.PluginsPane })));
 
 import {
   AlertCircle,
   CheckCircle,
   Info,
   AlertTriangle,
-  X,
-  FileCode,
-  Table as TableIcon,
-  Play,
-  RotateCcw,
   Cloud,
   Code2,
+  Sparkles,
+  LayoutGrid,
+  ArrowRight,
 } from 'lucide-react';
 
 interface ToastItem {
@@ -71,20 +73,22 @@ export default function App() {
     }
   }, [theme]);
 
-  // Navigation: Active Route & Active View
-  // Routes: 'file' | 'database' | 'plugins' | 'help'
-  // Views: 'file', 'database', 'plugins', 'help', 'table:...', 'query:...', 'report:...', 'plugin:...', 'ide', 'spreadsheet'
-  const [activeRoute, setActiveRoute] = useState<'file' | 'database' | 'plugins' | 'help'>('file');
-  const [activeView, setActiveView] = useState<string>('plugin:plugin_file_manager');
-
-  // Dev / App mode state (persisted to localStorage)
-  const [mode, setMode] = useState<'dev' | 'app'>(() => {
+  // Mode state: strictly 2 modes — 'ide' (full workspace studio) and 'app' (end-user application)
+  const [mode, setMode] = useState<'ide' | 'app'>(() => {
     const saved = safeStorage.getItem('gaw_mode');
-    return saved === 'app' ? 'app' : 'dev';
+    return saved === 'app' ? 'app' : 'ide';
   });
 
-  const [lastDevView, setLastDevView] = useState<string>(() => {
-    return safeStorage.getItem('gaw_last_dev_view') || 'view';
+  // Navigation: Active Route & Active View
+  // Routes: 'file' | 'database' | 'plugins' | 'help'
+  // Views: 'ide', 'app_hub', 'table:...', 'query:...', 'report:...', 'plugin:...', 'spreadsheet'
+  const [activeRoute, setActiveRoute] = useState<'file' | 'database' | 'plugins' | 'help'>(() => {
+    const saved = safeStorage.getItem('gaw_mode');
+    return saved === 'app' ? 'plugins' : 'file';
+  });
+  const [activeView, setActiveView] = useState<string>(() => {
+    const saved = safeStorage.getItem('gaw_mode');
+    return saved === 'app' ? 'app_hub' : 'ide';
   });
 
   const [lastAppView, setLastAppView] = useState<string | null>(() => {
@@ -150,35 +154,16 @@ export default function App() {
     return safeStorage.getItem('gaw_db_active') === 'true';
   });
 
-  // Sidebar state loaded from & persisted to localStorage
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
-    const currentMode = safeStorage.getItem('gaw_mode');
-    if (currentMode === 'app') return false;
-    const prevDev = safeStorage.getItem('gaw_last_dev_sidebar_open');
-    if (prevDev !== null) return prevDev === 'true';
-    const saved = safeStorage.getItem('gaw_sidebar_open');
-    if (saved !== null) return saved === 'true';
-    return true; // Default in dev mode is restored (open)
-  });
+  // Sidebar state (applies to App Mode layout panes when not hidden; collapsed by default in App Mode)
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
   const handleToggleSidebar = useCallback(() => {
     setSidebarOpen((prev) => {
       const next = !prev;
       safeStorage.setItem('gaw_sidebar_open', String(next));
-      if (mode === 'dev') {
-        safeStorage.setItem('gaw_last_dev_sidebar_open', String(next));
-      }
       return next;
     });
-  }, [mode]);
-
-  const setSidebarOpenWithStorage = useCallback((open: boolean) => {
-    setSidebarOpen(open);
-    safeStorage.setItem('gaw_sidebar_open', String(open));
-    if (mode === 'dev') {
-      safeStorage.setItem('gaw_last_dev_sidebar_open', String(open));
-    }
-  }, [mode]);
+  }, []);
 
   // Hash Navigation Helper
   const navigateTo = useCallback((route: string, view?: string) => {
@@ -227,92 +212,6 @@ export default function App() {
     []
   );
 
-  // Toggle between Dev and App mode
-  const handleToggleMode = useCallback(
-    (newMode: 'dev' | 'app') => {
-      if (newMode === mode) return;
-
-      if (newMode === 'app') {
-        // Switching to App Mode: always hide the sidebar and remember previous dev state
-        safeStorage.setItem('gaw_last_dev_sidebar_open', String(sidebarOpen));
-        setSidebarOpen(false);
-        safeStorage.setItem('gaw_sidebar_open', 'false');
-
-        setLastDevView(activeView);
-        safeStorage.setItem('gaw_last_dev_view', activeView);
-
-        // When toggling between Dev and App mode, go to the most recent page that was being used
-        // or the initial setting if there was no previous page being used.
-        const targetView =
-          lastAppView && (lastAppView === 'app_hub' || lastAppView === 'file' || plugins.some((p) => `plugin:${p.id}` === lastAppView))
-            ? lastAppView
-            : getInitialAppView(plugins, appSettings.initialPlugin);
-
-        setMode('app');
-        safeStorage.setItem('gaw_mode', 'app');
-        setActiveView(targetView);
-        if (targetView.startsWith('plugin:')) {
-          setActiveRoute('plugins');
-          navigateTo('plugins', targetView);
-        } else if (targetView === 'app_hub') {
-          setActiveRoute('plugins');
-          navigateTo('plugins', 'app_hub');
-        } else if (targetView === 'file' || targetView === 'plugin:plugin_file_manager') {
-          setActiveRoute('file');
-          setActiveView('plugin:plugin_file_manager');
-          navigateTo('file', 'plugin:plugin_file_manager');
-        }
-      } else {
-        // Switching to Dev Mode: restore sidebar or not, depending on how it was before (default: restore)
-        const prevDevSidebar = safeStorage.getItem('gaw_last_dev_sidebar_open');
-        const shouldRestoreDevSidebar = prevDevSidebar !== null ? prevDevSidebar === 'true' : true;
-        setSidebarOpen(shouldRestoreDevSidebar);
-        safeStorage.setItem('gaw_sidebar_open', String(shouldRestoreDevSidebar));
-
-        setLastAppView(activeView);
-        safeStorage.setItem('gaw_last_app_view', activeView);
-
-        const targetView = lastDevView && lastDevView !== 'view' && lastDevView !== 'app_hub' ? lastDevView : 'plugin:plugin_file_manager';
-        setMode('dev');
-        safeStorage.setItem('gaw_mode', 'dev');
-        setActiveView(targetView);
-        if (targetView.startsWith('plugin:')) {
-          setActiveRoute('plugins');
-          navigateTo('plugins', targetView);
-        } else if (
-          targetView.startsWith('table:') ||
-          targetView.startsWith('query:') ||
-          targetView.startsWith('report:') ||
-          targetView === 'spreadsheet'
-        ) {
-          setActiveRoute('file');
-          navigateTo('file', targetView);
-        } else if (
-          targetView === 'file' ||
-          targetView === 'plugin:plugin_file_manager' ||
-          targetView === 'plugin:plugin_local_storage'
-        ) {
-          setActiveRoute('file');
-          setActiveView(targetView === 'file' ? 'plugin:plugin_file_manager' : targetView);
-          navigateTo('file', targetView === 'file' ? 'plugin:plugin_file_manager' : targetView);
-        } else if (targetView === 'database') {
-          setActiveRoute('database');
-          navigateTo('database', 'database');
-        } else if (targetView === 'plugins') {
-          setActiveRoute('plugins');
-          navigateTo('plugins', 'plugins');
-        } else if (targetView === 'ide') {
-          setActiveRoute('file');
-          navigateTo('file', 'ide');
-        } else if (targetView === 'help' || targetView === 'plugin:plugin_help') {
-          setActiveRoute('help');
-          navigateTo('help', 'plugin:plugin_help');
-        }
-      }
-    },
-    [mode, sidebarOpen, activeView, lastAppView, lastDevView, plugins, appSettings.initialPlugin, getInitialAppView, navigateTo]
-  );
-
   // Active query result for table/query views (supporting multiple queries separated by semicolons)
   const [activeQueryResult, setActiveQueryResult] = useState<QueryResult | null>(null);
   const [activeQueryResults, setActiveQueryResults] = useState<QueryResult[]>([]);
@@ -338,13 +237,7 @@ export default function App() {
   // Target tab to open and edit in IDE
   const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
   const [currentIdeTarget, setCurrentIdeTarget] = useState<TargetTabInfo | null>(null);
-
-  // VS Code Studio full-interface mode toggle (always true: non-full-screen IDE option removed)
-  const [isVSCodeMode, setIsVSCodeMode] = useState<boolean>(true);
-
-  const handleToggleVSCodeMode = useCallback(() => {
-    setActiveView('ide');
-  }, []);
+  const ideSaveDirtyRef = useRef<(() => Promise<void>) | null>(null);
 
   // Two-Stage Deletion Confirmation
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -673,13 +566,10 @@ export default function App() {
     }
   }, [isEngineReady, plugins, mode, appSettings.initialPlugin, getInitialAppView, navigateTo]);
 
-  // Keep lastDevView and lastAppView synchronized as user navigates
+  // Keep lastAppView synchronized while user navigates in App Mode
   useEffect(() => {
-    if (!activeView) return;
-    if (mode === 'dev') {
-      setLastDevView(activeView);
-      safeStorage.setItem('gaw_last_dev_view', activeView);
-    } else if (mode === 'app') {
+    if (!activeView || activeView === 'ide') return;
+    if (mode === 'app') {
       setLastAppView(activeView);
       safeStorage.setItem('gaw_last_app_view', activeView);
     }
@@ -810,23 +700,151 @@ export default function App() {
     };
   }, [addToast, refreshDatabaseState, storageEngine, dropboxEngine]);
 
-  // Open any object in IDE
+  // Open any object in IDE Mode
   const handleOpenInIDE = useCallback(
-    (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string; code?: string }) => {
+    (tab?: { type: 'plugin' | 'table' | 'query' | 'report' | 'sql'; id?: string; name?: string; code?: string; openInView?: boolean }) => {
       if (tab && (tab.id || tab.name || tab.code)) {
         setIdeTargetTab({
           type: tab.type,
           id: tab.id,
           name: tab.name,
           code: tab.code,
+          openInView: tab.openInView,
           timestamp: Date.now(),
         });
       }
+      setMode('ide');
+      safeStorage.setItem('gaw_mode', 'ide');
       setActiveView('ide');
       setActiveRoute('file');
       navigateTo('file', 'ide');
+      eventBusApi.emit('mode_changed', 'ide');
+      eventBusApi.emit('view_changed', 'ide', 'file');
     },
-    [navigateTo]
+    [navigateTo, eventBusApi]
+  );
+
+  // Toggle between IDE Mode and App Mode (auto-saves dirty IDE tabs before switching to App)
+  const handleToggleMode = useCallback(
+    async (newMode: 'ide' | 'app' | 'dev') => {
+      const normalizedMode: 'ide' | 'app' = newMode === 'dev' ? 'ide' : newMode;
+      if (normalizedMode === mode) return;
+
+      if (normalizedMode === 'app') {
+        if (ideSaveDirtyRef.current) {
+          await ideSaveDirtyRef.current();
+        }
+        const engine = SQLiteEngine.getInstance();
+        const freshPlugins = engine.getPlugins();
+        const freshInitPlugin = engine.getSetting('initial_plugin', 'main');
+        refreshDatabaseState();
+
+        setSidebarOpen(false);
+        safeStorage.setItem('gaw_sidebar_open', 'false');
+
+        const isLastAppViewValid =
+          lastAppView &&
+          (lastAppView === 'app_hub' ||
+            lastAppView === 'spreadsheet' ||
+            lastAppView.startsWith('report:') ||
+            lastAppView.startsWith('query:') ||
+            lastAppView.startsWith('table:') ||
+            freshPlugins.some((p) => `plugin:${p.id}` === lastAppView));
+
+        const targetView = isLastAppViewValid
+          ? lastAppView!
+          : getInitialAppView(freshPlugins, freshInitPlugin);
+
+        setMode('app');
+        safeStorage.setItem('gaw_mode', 'app');
+        setActiveView(targetView);
+
+        let targetRoute: 'file' | 'database' | 'plugins' | 'help' = 'plugins';
+        if (targetView.startsWith('plugin:')) {
+          const pId = targetView.replace('plugin:', '');
+          targetRoute =
+            pId === 'plugin_file_manager' || pId === 'plugin_local_storage'
+              ? 'file'
+              : pId === 'plugin_database_management'
+              ? 'database'
+              : pId === 'plugin_help'
+              ? 'help'
+              : 'plugins';
+        } else if (
+          targetView.startsWith('table:') ||
+          targetView.startsWith('query:') ||
+          targetView.startsWith('report:') ||
+          targetView === 'spreadsheet'
+        ) {
+          targetRoute = 'file';
+        }
+
+        setActiveRoute(targetRoute);
+        navigateTo(targetRoute, targetView);
+        eventBusApi.emit('mode_changed', 'app');
+        eventBusApi.emit('view_changed', targetView, targetRoute);
+      } else {
+        if (activeView && activeView !== 'ide') {
+          setLastAppView(activeView);
+          safeStorage.setItem('gaw_last_app_view', activeView);
+        }
+
+        // If user was inspecting a specific object in App mode, open its corresponding tab in IDE
+        let targetToOpen: TargetTabInfo | undefined;
+        if (activeView.startsWith('plugin:')) {
+          const pId = activeView.replace('plugin:', '');
+          const p = plugins.find((x) => x.id === pId);
+          targetToOpen = { type: 'plugin', id: pId, name: p?.name || pId, timestamp: Date.now() };
+        } else if (activeView.startsWith('table:')) {
+          targetToOpen = { type: 'table', name: activeView.replace('table:', ''), timestamp: Date.now() };
+        } else if (activeView.startsWith('query:')) {
+          const qId = activeView.replace('query:', '');
+          const q = queries.find((x) => x.id === qId);
+          targetToOpen = { type: 'query', id: qId, name: q?.name || activeQueryTitle || 'Query', timestamp: Date.now() };
+        } else if (activeView.startsWith('report:')) {
+          const rId = activeView.replace('report:', '');
+          const r = reports.find((x) => x.id === rId);
+          targetToOpen = { type: 'report', id: rId, name: r?.name || 'Report', timestamp: Date.now() };
+        } else if (activeView === 'spreadsheet' && spreadsheetSource) {
+          if (spreadsheetSource.type === 'table') {
+            targetToOpen = { type: 'table', name: spreadsheetSource.name, timestamp: Date.now() };
+          } else {
+            targetToOpen = {
+              type: 'query',
+              id: spreadsheetSource.id,
+              name: spreadsheetSource.name,
+              timestamp: Date.now(),
+            };
+          }
+        }
+
+        if (targetToOpen) {
+          setIdeTargetTab(targetToOpen);
+        }
+
+        setMode('ide');
+        safeStorage.setItem('gaw_mode', 'ide');
+        setActiveView('ide');
+        setActiveRoute('file');
+        navigateTo('file', 'ide');
+        eventBusApi.emit('mode_changed', 'ide');
+        eventBusApi.emit('view_changed', 'ide', 'file');
+      }
+    },
+    [
+      mode,
+      activeView,
+      lastAppView,
+      plugins,
+      queries,
+      reports,
+      activeQueryTitle,
+      spreadsheetSource,
+      refreshDatabaseState,
+      getInitialAppView,
+      navigateTo,
+      eventBusApi,
+    ]
   );
 
   // Trigger two-stage deletion confirmation
@@ -933,11 +951,11 @@ export default function App() {
     };
   }, [storageEngine, dropboxEngine]);
 
-  // Global Keyboard Shortcuts
+  // Global Keyboard Shortcuts for App Mode (Ctrl+S save database, Ctrl+O open file)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // When in IDE view, let Monaco IDE handle keyboard shortcuts (Ctrl+S, etc.) natively
-      if (activeView === 'ide') {
+      // When in IDE Mode, Monaco IDE handles keyboard shortcuts (Ctrl+S, etc.) natively
+      if (mode === 'ide') {
         return;
       }
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
@@ -951,19 +969,15 @@ export default function App() {
         storageEngine.openFile().then((ok) => {
           if (ok) {
             toastApi.success('Database opened successfully!');
-            setSidebarOpen(true);
             refreshDatabaseState();
           }
         });
-      } else if (isCmdOrCtrl && e.key.toLowerCase() === 'e') {
-        e.preventDefault();
-        setActiveView('ide');
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [storageEngine, toastApi, refreshDatabaseState, activeView, isVSCodeMode]);
+  }, [storageEngine, toastApi, refreshDatabaseState, mode]);
 
   // Navigate to Table View
   const handleSelectTable = useCallback((tableName: string, updateHash: boolean = true) => {
@@ -1005,8 +1019,6 @@ export default function App() {
       }
       setActiveView(`query:${q.id}`);
       setActiveRoute('file');
-      setLastDevView(`query:${q.id}`);
-      safeStorage.setItem('gaw_last_dev_view', `query:${q.id}`);
       if (updateHash) {
         navigateTo('file', `query:${q.id}`);
       }
@@ -1063,7 +1075,7 @@ export default function App() {
       name: queryName,
       code: proFormaSql,
     });
-    toastApi.info(`Opened table creation query "${queryName}" in IDE. Review and click Run or press Ctrl+Shift+F to execute.`);
+    toastApi.info(`Opened table creation query "${queryName}" in IDE. Review and press Ctrl+Enter to execute or Ctrl+Shift+K to view results.`);
   }, [handleOpenInIDE, toastApi]);
 
   // Add New View via pro-forma CREATE VIEW query
@@ -1096,7 +1108,7 @@ export default function App() {
       name: queryName,
       code: proFormaSql,
     });
-    toastApi.info(`Opened view creation query "${queryName}" in IDE. Review and click Run or press Ctrl+Shift+F to execute.`);
+    toastApi.info(`Opened view creation query "${queryName}" in IDE. Review and press Ctrl+Enter to execute or Ctrl+Shift+K to view results.`);
   }, [handleOpenInIDE, toastApi]);
 
   // Add New Query
@@ -1123,7 +1135,7 @@ export default function App() {
     engine.saveQuery(newQuery);
     refreshDatabaseState();
 
-    if (activeView === 'ide') {
+    if (mode === 'ide') {
       handleOpenInIDE({
         type: 'query',
         id: newId,
@@ -1133,36 +1145,8 @@ export default function App() {
     } else {
       handleSelectQuery(newQuery);
     }
-    toastApi.info(`Created query "${baseName}". Edit and click Run or press Ctrl+Shift+F to execute.`);
-  }, [activeView, handleOpenInIDE, handleSelectQuery, refreshDatabaseState, toastApi]);
-
-  // Correspondence: Run query from IDE, execute in SQLite, dynamically update side pane, and show in non-IDE view
-  const handleRunAndExitToNonIDE = useCallback(
-    (info: { id: string; name: string; query: string; results: QueryResult[] }) => {
-      refreshDatabaseState();
-      setActiveQueryResults(info.results);
-      if (info.results.length > 0) {
-        setActiveQueryResult(info.results[0]);
-      } else {
-        setActiveQueryResult(null);
-      }
-      const sq: SavedQuery = {
-        id: info.id,
-        name: info.name,
-        description: `Query ${info.name}`,
-        query: info.query,
-        created_at: new Date().toISOString(),
-      };
-      setActiveSavedQuery(sq);
-      setActiveQueryTitle(info.name);
-      setActiveView(`query:${info.id}`);
-      setActiveRoute('file');
-      setLastDevView(`query:${info.id}`);
-      safeStorage.setItem('gaw_last_dev_view', `query:${info.id}`);
-      navigateTo('file', `query:${info.id}`);
-    },
-    [refreshDatabaseState, navigateTo]
-  );
+    toastApi.info(`Created query "${baseName}". Edit and press Ctrl+Enter to execute or Ctrl+Shift+K to view results.`);
+  }, [mode, handleOpenInIDE, handleSelectQuery, refreshDatabaseState, toastApi]);
 
   // Select Plugin
   const handleSelectPlugin = useCallback((p: PluginRecord, updateHash: boolean = true) => {
@@ -1171,9 +1155,6 @@ export default function App() {
     if (mode === 'app') {
       setLastAppView(`plugin:${p.id}`);
       safeStorage.setItem('gaw_last_app_view', `plugin:${p.id}`);
-    } else {
-      setLastDevView(`plugin:${p.id}`);
-      safeStorage.setItem('gaw_last_dev_view', `plugin:${p.id}`);
     }
     if (updateHash) {
       navigateTo('plugins', `plugin:${p.id}`);
@@ -1184,132 +1165,10 @@ export default function App() {
   const handleSelectReport = useCallback((r: SavedReport, updateHash: boolean = true) => {
     setActiveView(`report:${r.id}`);
     setActiveRoute('file');
-    setLastDevView(`report:${r.id}`);
-    safeStorage.setItem('gaw_last_dev_view', `report:${r.id}`);
     if (updateHash) {
       navigateTo('file', `report:${r.id}`);
     }
   }, [navigateTo]);
-
-  // Correspondence: Exit IDE into non-IDE view of the active item in IDE (or return to Spreadsheet)
-  const handleExitIDE = useCallback(
-    (targetInfo?: TargetTabInfo | null) => {
-      const target = targetInfo !== undefined ? targetInfo : currentIdeTarget;
-      const engine = SQLiteEngine.getInstance();
-
-      // Check if opened from Spreadsheet and still on the same definition tab
-      if (
-        spreadsheetReturnTargetRef.current &&
-        target &&
-        ((spreadsheetReturnTargetRef.current.type === 'table' && target.type === 'table' && target.name === spreadsheetReturnTargetRef.current.name) ||
-         (spreadsheetReturnTargetRef.current.type === 'query' && target.type === 'query' &&
-          (target.id === spreadsheetReturnTargetRef.current.id || target.name === spreadsheetReturnTargetRef.current.name)))
-      ) {
-        spreadsheetReturnTargetRef.current = null;
-        setActiveView('spreadsheet');
-        setActiveRoute('file');
-        navigateTo('file', 'spreadsheet');
-        return;
-      }
-
-      spreadsheetReturnTargetRef.current = null;
-
-      if (target) {
-        if (target.type === 'plugin') {
-          const allPlugins = engine.getPlugins();
-          const p = (target.id ? allPlugins.find((x) => x.id === target.id) : null) ||
-            allPlugins.find((x) => x.name === target.name);
-          if (p) {
-            handleSelectPlugin(p);
-            return;
-          }
-          if (target.id) {
-            setActiveView(`plugin:${target.id}`);
-            setActiveRoute('plugins');
-            navigateTo('plugins', `plugin:${target.id}`);
-            return;
-          }
-        } else if (target.type === 'table' && target.name) {
-          handleSelectTable(target.name);
-          return;
-        } else if (target.type === 'query') {
-          const allQueries = engine.getSavedQueries();
-          const q = (target.id ? allQueries.find((x) => x.id === target.id) : null) ||
-            allQueries.find((x) => x.name === target.name);
-          if (q) {
-            handleSelectQuery(q);
-            return;
-          }
-          if (target.code) {
-            try {
-              const results = engine.exec(target.code);
-              setActiveQueryResults(results);
-              if (results.length > 0) setActiveQueryResult(results[0]);
-              setActiveQueryTitle(target.name || 'Ad-hoc Query');
-              setActiveView('query:adhoc');
-              setActiveRoute('file');
-              return;
-            } catch (err: any) {
-              toastApi.error('Error running query: ' + err.message);
-            }
-          }
-        } else if (target.type === 'report') {
-          const allReports = engine.getSavedReports();
-          const r = (target.id ? allReports.find((x) => x.id === target.id) : null) ||
-            allReports.find((x) => x.name === target.name);
-          if (r) {
-            handleSelectReport(r);
-            return;
-          }
-        }
-      }
-
-      // Default fallback if no specific target item
-      const returnView = lastDevView && lastDevView !== 'ide' && lastDevView !== 'view' && lastDevView !== 'app_hub'
-        ? lastDevView
-        : 'plugin:plugin_file_manager';
-      setActiveView(returnView);
-      if (returnView.startsWith('plugin:')) {
-        setActiveRoute('plugins');
-        navigateTo('plugins', returnView);
-      } else {
-        setActiveRoute('file');
-        navigateTo('file', returnView);
-      }
-    },
-    [currentIdeTarget, lastDevView, handleSelectPlugin, handleSelectTable, handleSelectQuery, handleSelectReport, navigateTo, toastApi]
-  );
-
-  // Correspondence: Enter full-screen IDE displaying the current active non-IDE item
-  const handleEnterIDEFromCurrentView = useCallback(() => {
-    let targetToOpen: TargetTabInfo | undefined = undefined;
-
-    if (activeView.startsWith('plugin:')) {
-      const pId = activeView.replace('plugin:', '');
-      const p = plugins.find((x) => x.id === pId);
-      targetToOpen = { type: 'plugin', id: pId, name: p?.name || pId };
-    } else if (activeView.startsWith('table:')) {
-      const tName = activeView.replace('table:', '');
-      targetToOpen = { type: 'table', name: tName };
-    } else if (activeView.startsWith('query:')) {
-      const qId = activeView.replace('query:', '');
-      const q = queries.find((x) => x.id === qId);
-      targetToOpen = { type: 'query', id: qId, name: q?.name || activeQueryTitle || 'Query' };
-    } else if (activeView.startsWith('report:')) {
-      const rId = activeView.replace('report:', '');
-      const r = reports.find((x) => x.id === rId);
-      targetToOpen = { type: 'report', id: rId, name: r?.name || 'Report' };
-    }
-
-    setLastDevView(activeView);
-    safeStorage.setItem('gaw_last_dev_view', activeView);
-
-    if (targetToOpen) {
-      handleOpenInIDE(targetToOpen);
-    } else {
-      handleOpenInIDE();
-    }
-  }, [activeView, plugins, queries, reports, activeQueryTitle, handleOpenInIDE]);
 
   // Open Spreadsheet with specific data & track source item
   const handleOpenSpreadsheet = useCallback((
@@ -1348,9 +1207,10 @@ export default function App() {
 
   // Return to Query or Table view from Spreadsheet View
   const handleReturnFromSpreadsheet = useCallback(() => {
+    const fallbackView = getInitialAppView(plugins, appSettings.initialPlugin);
     if (!spreadsheetSource) {
-      setActiveView('plugin:plugin_file_manager');
-      navigateTo('file', 'plugin:plugin_file_manager');
+      setActiveView(fallbackView);
+      navigateTo('plugins', fallbackView);
       return;
     }
     const engine = SQLiteEngine.getInstance();
@@ -1363,40 +1223,16 @@ export default function App() {
       if (q) {
         handleSelectQuery(q);
       } else {
-        setActiveView('plugin:plugin_file_manager');
-        navigateTo('file', 'plugin:plugin_file_manager');
+        setActiveView(fallbackView);
+        navigateTo('plugins', fallbackView);
       }
     } else {
-      setActiveView('plugin:plugin_file_manager');
-      navigateTo('file', 'plugin:plugin_file_manager');
+      setActiveView(fallbackView);
+      navigateTo('plugins', fallbackView);
     }
-  }, [spreadsheetSource, handleSelectTable, handleSelectQuery, navigateTo]);
+  }, [spreadsheetSource, handleSelectTable, handleSelectQuery, navigateTo, plugins, appSettings.initialPlugin, getInitialAppView]);
 
-  // Open definition in IDE from Spreadsheet View
-  const handleOpenDefinitionFromSpreadsheet = useCallback(() => {
-    if (!spreadsheetSource) {
-      handleOpenInIDE();
-      return;
-    }
-    spreadsheetReturnTargetRef.current = spreadsheetSource;
-    if (spreadsheetSource.type === 'table') {
-      handleOpenInIDE({ type: 'table', name: spreadsheetSource.name });
-    } else if (spreadsheetSource.type === 'query') {
-      const engine = SQLiteEngine.getInstance();
-      const q = (spreadsheetSource.id ? engine.getSavedQueries().find((x) => x.id === spreadsheetSource.id) : null) ||
-        engine.getSavedQueries().find((x) => x.name === spreadsheetSource.name);
-      handleOpenInIDE({
-        type: 'query',
-        id: spreadsheetSource.id || q?.id,
-        name: spreadsheetSource.name || q?.name,
-        code: q?.query,
-      });
-    } else {
-      handleOpenInIDE();
-    }
-  }, [spreadsheetSource, handleOpenInIDE]);
-
-  // Global Ctrl+Shift+F toggle between Full Screen Monaco IDE, Spreadsheet view, and corresponding non-IDE view
+  // Global Ctrl+Shift+F toggle directly between IDE Mode and App Mode (auto-saves dirty tabs when leaving IDE)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1406,26 +1242,23 @@ export default function App() {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        if (activeView === 'spreadsheet') {
-          handleOpenDefinitionFromSpreadsheet();
-        } else if (activeView === 'ide') {
-          handleExitIDE(currentIdeTarget);
-        } else {
-          handleEnterIDEFromCurrentView();
+        if (typeof e.stopImmediatePropagation === 'function') {
+          e.stopImmediatePropagation();
         }
+        handleToggleMode(mode === 'ide' ? 'app' : 'ide');
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [activeView, currentIdeTarget, handleExitIDE, handleEnterIDEFromCurrentView, handleOpenDefinitionFromSpreadsheet]);
+  }, [mode, handleToggleMode]);
 
-  // Global Shift+Ctrl+D shortcut: In Dev Mode, toggle Components List navigation pane (or IDE sidebar in IDE mode)
+  // Global Shift+Ctrl+D shortcut: In IDE Mode, toggle IDE Primary Side Bar (pass through in App Mode)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isD = (e.key && e.key.toLowerCase() === 'd') || e.code === 'KeyD' || e.keyCode === 68;
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
       if (isCtrlOrCmd && e.shiftKey && isD) {
-        if (mode !== 'dev') {
+        if (mode !== 'ide') {
           // Pass-through in App Mode to browser or user plugin
           return;
         }
@@ -1434,11 +1267,7 @@ export default function App() {
         if (typeof e.stopImmediatePropagation === 'function') {
           e.stopImmediatePropagation();
         }
-        if (activeView === 'ide') {
-          eventBusApi.emit('ide_toggle_sidebar');
-        } else {
-          handleToggleSidebar();
-        }
+        eventBusApi.emit('ide_toggle_sidebar');
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
@@ -1447,7 +1276,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [mode, activeView, handleToggleSidebar, eventBusApi]);
+  }, [mode, eventBusApi]);
 
   const isEngineReadyRef = useRef(isEngineReady);
   useEffect(() => {
@@ -1571,6 +1400,36 @@ export default function App() {
           eventBusApi.emit('view_changed', route, route);
         },
         selectView: (v: string) => {
+          if (mode === 'ide') {
+            if (v.startsWith('plugin:')) {
+              const pId = v.replace('plugin:', '');
+              const p = SQLiteEngine.getInstance().getPlugins().find((x) => x.id === pId);
+              handleOpenInIDE({ type: 'plugin', id: pId, name: p?.name || pId, openInView: true });
+              return;
+            }
+            if (v.startsWith('table:')) {
+              const tName = v.replace('table:', '');
+              handleOpenInIDE({ type: 'table', name: tName, openInView: true });
+              return;
+            }
+            if (v.startsWith('query:')) {
+              const qId = v.replace('query:', '');
+              const q = SQLiteEngine.getInstance().getSavedQueries().find((x) => x.id === qId);
+              handleOpenInIDE({ type: 'query', id: qId, name: q?.name || qId, openInView: true });
+              return;
+            }
+            if (v.startsWith('report:')) {
+              const rId = v.replace('report:', '');
+              const r = SQLiteEngine.getInstance().getSavedReports().find((x) => x.id === rId);
+              handleOpenInIDE({ type: 'report', id: rId, name: r?.name || rId, openInView: true });
+              return;
+            }
+            if (v === 'spreadsheet') {
+              handleOpenInIDE({ type: 'plugin', id: 'plugin_spreadsheet_studio', name: 'Spreadsheet Studio', openInView: true });
+              return;
+            }
+          }
+
           if (v.startsWith('query:')) {
             const qId = v.replace('query:', '');
             const engine = SQLiteEngine.getInstance();
@@ -1619,18 +1478,27 @@ export default function App() {
             eventBusApi.emit('view_changed', v, activeRoute);
           }
         },
-        openQuery: (sql: string) => {
-          setActiveView('ide');
-          eventBusApi.emit('view_changed', 'ide', activeRoute);
+        openQuery: (sql?: string) => {
+          handleOpenInIDE(sql ? { type: 'sql', code: sql } : { type: 'sql' });
         },
         openSpreadsheet: (data?: any, sheetName?: string) => handleOpenSpreadsheet(data, sheetName),
         openReport: (repId: string) => {
+          if (mode === 'ide') {
+            const r = SQLiteEngine.getInstance().getSavedReports().find((x) => x.id === repId);
+            handleOpenInIDE({ type: 'report', id: repId, name: r?.name || repId, openInView: true });
+            return;
+          }
           setActiveView(`report:${repId}`);
           setActiveRoute('file');
           navigateTo('file', `report:${repId}`);
           eventBusApi.emit('view_changed', `report:${repId}`, 'file');
         },
         openPlugin: (plgId: string) => {
+          if (mode === 'ide') {
+            const p = SQLiteEngine.getInstance().getPlugins().find((x) => x.id === plgId);
+            handleOpenInIDE({ type: 'plugin', id: plgId, name: p?.name || plgId, openInView: true });
+            return;
+          }
           setActiveView(`plugin:${plgId}`);
           setActiveRoute('plugins');
           navigateTo('plugins', `plugin:${plgId}`);
@@ -1639,15 +1507,17 @@ export default function App() {
         openIDE: (tab?: any) => handleOpenInIDE(tab),
         openAI: () => setShowAIModal(true),
         openSettings: () => {
-          setActiveView('plugin:plugin_settings');
-          setActiveRoute('plugins');
-          navigateTo('plugins', 'plugin:plugin_settings');
-          eventBusApi.emit('view_changed', 'plugin:plugin_settings', 'plugins');
+          if (mode === 'ide') {
+            handleOpenInIDE({ type: 'plugin', id: 'plugin_settings', name: 'Settings & Workspace Preferences', openInView: true });
+          } else {
+            setActiveView('plugin:plugin_settings');
+            setActiveRoute('plugins');
+            navigateTo('plugins', 'plugin:plugin_settings');
+            eventBusApi.emit('view_changed', 'plugin:plugin_settings', 'plugins');
+          }
         },
         toggleTheme: handleToggleTheme,
-        setMode: (m: 'dev' | 'app') => handleToggleMode(m),
-        toggleVSCodeMode: handleToggleVSCodeMode,
-        isVSCodeMode: () => isVSCodeMode,
+        setMode: (m: 'ide' | 'app' | 'dev') => handleToggleMode(m),
       },
       eventBus: eventBusApi,
       plugin: activePluginRecord,
@@ -1877,6 +1747,9 @@ export default function App() {
   }, [
     plugins,
     activeView,
+    activeRoute,
+    mode,
+    appSettings,
     sidebarOpen,
     toastApi,
     dialogApi,
@@ -1886,8 +1759,18 @@ export default function App() {
     dropboxEngine,
     handleOpenInIDE,
     handleOpenSpreadsheet,
+    handleToggleMode,
+    handleToggleTheme,
     refreshDatabaseState,
   ]);
+
+  // Helper for returning to the initial App Hub / primary App view (declared before early returns per Rules of Hooks)
+  const handleBackToAppHub = useCallback(() => {
+    const hubView = getInitialAppView(plugins, appSettings.initialPlugin);
+    setActiveView(hubView);
+    setActiveRoute('plugins');
+    navigateTo('plugins', hubView);
+  }, [getInitialAppView, plugins, appSettings.initialPlugin, navigateTo]);
 
   if (initError) {
     return (
@@ -1994,13 +1877,11 @@ export default function App() {
       : undefined);
   const currentReport = reports.find((r) => activeView === `report:${r.id}`);
 
-  const isFullVSCode = activeView === 'ide';
+  const isFullIDE = mode === 'ide';
 
-
-
-  // 1. Top Area Content: Active top plugin if present (default: Header and Navbar plugin)
+  // 1. Top Area Content: Active top plugin if present in App Mode (default: Header and Navbar plugin)
   const topPlugin = activePluginsByArea.top;
-  const topContent = !isFullVSCode && topPlugin ? (
+  const topContent = !isFullIDE && topPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden">
       <PluginHost
         code={topPlugin.code}
@@ -2013,9 +1894,9 @@ export default function App() {
     </div>
   ) : null;
 
-  // 2. Left Area Content: Active left plugin if present (default: Components List plugin)
+  // 2. Left Area Content: Active left plugin if present in App Mode
   const leftPlugin = activePluginsByArea.left;
-  const leftContent = !isFullVSCode && sidebarOpen && leftPlugin ? (
+  const leftContent = !isFullIDE && sidebarOpen && leftPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden">
       <PluginHost
         code={leftPlugin.code}
@@ -2028,9 +1909,9 @@ export default function App() {
     </div>
   ) : null;
 
-  // 3. Right Area Content: Active right plugin if present
+  // 3. Right Area Content: Active right plugin if present in App Mode
   const rightPlugin = activePluginsByArea.right;
-  const rightContent = !isFullVSCode && rightPlugin ? (
+  const rightContent = !isFullIDE && rightPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden bg-slate-900 border-l border-slate-800">
       <PluginHost
         code={rightPlugin.code}
@@ -2043,220 +1924,265 @@ export default function App() {
     </div>
   ) : null;
 
-  // 4. Middle Area Content: Active view / workspace output
+  // Check whether any explicit App Mode view matched
+  const isPluginView = activeView.startsWith('plugin:') && Boolean(currentPlugin);
+  const isQueryView = activeView.startsWith('query:');
+  const isTableView = activeView.startsWith('table:') && Boolean(activeQueryResult);
+  const isReportView = activeView.startsWith('report:') && Boolean(currentReport);
+  const isSpreadsheetView = activeView === 'spreadsheet';
+  const showAppHub =
+    !isFullIDE &&
+    (activeView === 'app_hub' || (!isPluginView && !isQueryView && !isTableView && !isReportView && !isSpreadsheetView));
+
+  // 4. Middle Area Content: IDE Mode (Full Screen) OR App Mode Views
   const middleContent = (
     <main
       className={`flex-1 flex flex-col overflow-hidden min-w-0 h-full w-full select-text ${
         theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'
       }`}
     >
-      {/* Pane 3: Database Hub */}
-      {activeRoute === 'database' && activeView === 'database' && (
-        <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading database view...</div>}>
-          <DatabasePane
-            theme={theme}
-            tables={tables}
-            onOpenIDE={handleOpenInIDE}
-            onOpenSettings={() => gawContext.navigation?.openSettings?.()}
-            onResetDefault={() => {
-              SQLiteEngine.getInstance().createNorthwindDemoDatabase();
-              toastApi.success('Loaded Northwind Modern Commerce template.');
-              setSidebarOpenWithStorage(true);
-              refreshDatabaseState();
-              setActiveView('plugin:plugin_crm');
-              setActiveRoute('plugins');
-              navigateTo('plugins', 'plugin:plugin_crm');
-            }}
-            onSelectView={(v) => {
-              setActiveView(v);
-              if (v.startsWith('plugin:')) navigateTo('plugins', v);
-              else navigateTo('file', v);
-            }}
-            onToast={addToast}
-          />
-        </Suspense>
-      )}
-
-      {/* Pane 4: Plugins Marketplace / Hub */}
-      {activeRoute === 'plugins' && activeView === 'plugins' && (
-        <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading components...</div>}>
-          <PluginsPane
-            theme={theme}
-            plugins={plugins}
-            onOpenIDE={handleOpenInIDE}
-            onAddPlugin={() => setShowAddPluginModal(true)}
-            onSelectView={(v) => {
-              setActiveView(v);
-              navigateTo('plugins', v);
-            }}
-            onTogglePlugin={(plugin) => {
-              const newEnabled = plugin.enabled === 1 ? false : true;
-              SQLiteEngine.getInstance().setPluginEnabled(plugin.id, newEnabled);
-              refreshDatabaseState();
-              toastApi.info(`${plugin.name} is now ${newEnabled ? 'enabled' : 'disabled'}.`);
-            }}
-          />
-        </Suspense>
-      )}
-
-      {/* Pane 5: Help Route (Dynamic Help & System Guide Plugin) */}
-      {activeRoute === 'help' && activeView === 'help' && (
-        <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
-          <PluginHost
-            code={currentPlugin?.code || DEFAULT_HELP_PLUGIN_CODE}
-            pluginName="Help & System Guide"
-            pluginId="plugin_help"
-            theme={theme}
-            gawContext={gawContext}
-            onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: 'plugin_help', name: 'Help & System Guide' })}
-          />
-        </div>
-      )}
-
-      {/* View 1: Active Dynamic TSX Plugin */}
-      {activeView.startsWith('plugin:') && currentPlugin && (
-        <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
-          <PluginHost
-            code={currentPlugin.code}
-            pluginName={currentPlugin.name}
-            pluginId={currentPlugin.id}
-            theme={theme}
-            gawContext={gawContext}
-            onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: currentPlugin.id, name: currentPlugin.name })}
-          />
-        </div>
-      )}
-
-      {/* View 2a: Saved Query with Multi-Statement Results */}
-      {activeView.startsWith('query:') && (
-        <MultiQueryResultsView
-          savedQuery={activeSavedQuery}
-          results={activeQueryResults}
-          title={activeQueryTitle || 'Query Results'}
-          theme={theme}
-          onOpenInIDE={handleOpenInIDE}
-          onOpenSpreadsheet={handleOpenSpreadsheet}
-          onBackToView={() => {
-            setActiveView('view');
-            navigateTo('view', 'view');
-          }}
-          onRerunQuery={handleRerunActiveQuery}
-        />
-      )}
-
-      {/* View 2b: Table Grid */}
-      {activeView.startsWith('table:') && activeQueryResult && (
-        <div className={`flex-1 flex flex-col overflow-hidden select-text ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
-          <div className={`px-4 py-2 border-b flex items-center justify-between text-xs flex-shrink-0 ${
-            theme === 'vs-dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
-          }`}>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setActiveView('view');
-                  navigateTo('view', 'view');
-                }}
-                className={`transition ${theme === 'vs-dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'}`}
-                title="Back to View Hub"
-              >
-                ← View
-              </button>
-              <span className="text-slate-500">/</span>
-              <span className={`font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>{activeQueryTitle}</span>
-            </div>
-            <button
-              onClick={() => {
-                const tName = activeView.replace('table:', '');
-                handleOpenInIDE({ type: 'table', name: tName });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
-              title="Edit table DDL in Monaco IDE (Ctrl+Shift+F)"
-            >
-              <Code2 className="w-3.5 h-3.5" />
-              <span>Edit Structure in IDE</span>
-              <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
-                Ctrl+Shift+F
-              </kbd>
-            </button>
-          </div>
-          <div className="flex-1 min-h-0">
-            <QueryGrid
-              result={activeQueryResult}
-              onOpenInSpreadsheet={handleOpenSpreadsheet}
-              title={activeQueryTitle}
-              theme={theme}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* View 3: Publication Report Viewer */}
-      {activeView.startsWith('report:') && currentReport && (
-        <div className="flex-1 overflow-hidden select-text">
-          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading report...</div>}>
-            <ReportViewer
-              report={currentReport}
-              onEdit={() => {
-                setReportToEdit(currentReport);
-                setShowReportBuilder(true);
-              }}
-              onOpenInIDE={handleOpenInIDE}
-              onBack={() => {
-                setActiveView('view');
-                navigateTo('view', 'view');
-              }}
-              theme={theme}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      {/* View 4: Embedded Spreadsheet Studio */}
-      {activeView === 'spreadsheet' && (
-        <div className="flex-1 overflow-hidden select-text">
-          <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading spreadsheet studio...</div>}>
-            <SpreadsheetView
-              initialSheets={spreadsheetInitialSheets}
-              sourceInfo={spreadsheetSource}
-              onReturnToSource={handleReturnFromSpreadsheet}
-              onClose={() => {
-                setActiveView('view');
-                navigateTo('view', 'view');
-              }}
-              theme={theme}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      {/* View 5: Internal Monaco Editor IDE (Full Screen) */}
-      {activeView === 'ide' && (
+      {/* IDE Mode: Full Monaco IDE Workspace */}
+      {isFullIDE ? (
         <div className="flex-1 overflow-hidden select-text">
           <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading IDE...</div>}>
             <GAWIDE
+              initialTab={ideTargetTab || undefined}
               targetTab={ideTargetTab}
               onClearTargetTab={() => setIdeTargetTab(null)}
               onOpenSpreadsheet={handleOpenSpreadsheet}
               onOpenAI={() => setShowAIModal(true)}
+              onOpenAddPluginModal={() => setShowAddPluginModal(true)}
+              onEditReportVisual={(rep) => {
+                setReportToEdit(rep);
+                setShowReportBuilder(true);
+              }}
+              onNewReportVisual={() => {
+                setReportToEdit(null);
+                setShowReportBuilder(true);
+              }}
+              onRegisterSaveDirtyHandler={(fn) => {
+                ideSaveDirtyRef.current = fn;
+              }}
               theme={theme}
               onToggleTheme={handleToggleTheme}
               mode={mode}
               onToggleMode={handleToggleMode}
               gawContext={gawContext}
-              onExitIDE={handleExitIDE}
               onActiveTabChange={(target) => setCurrentIdeTarget(target)}
-              onRunAndExitToNonIDE={handleRunAndExitToNonIDE}
               onDeleteObject={handleDeleteObject}
             />
           </Suspense>
         </div>
+      ) : (
+        <>
+          {/* App Mode View 0: App Hub / Launcher when multiple or zero user plugins exist */}
+          {showAppHub && (
+            <div className="flex-1 overflow-y-auto p-6 sm:p-10 select-text">
+              <div className="max-w-5xl mx-auto space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700/40 pb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 flex-shrink-0">
+                      <LayoutGrid className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h1 className={`text-xl font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>
+                        {appSettings.appName || appTitle || 'Application Hub'}
+                      </h1>
+                      <p className={`text-xs mt-0.5 ${theme === 'vs-dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                        {appSettings.appDescription || 'Select an enabled user component below to launch it in App Mode.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMode('ide')}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-sm transition cursor-pointer"
+                    title="Switch to IDE Mode (Ctrl+Shift+F)"
+                  >
+                    <Code2 className="w-4 h-4" />
+                    <span>Open IDE Mode</span>
+                    <kbd className="opacity-80 text-[10px] px-1.5 py-0.5 bg-black/25 rounded border border-white/20 font-mono ml-0.5">
+                      Ctrl+Shift+F
+                    </kbd>
+                  </button>
+                </div>
+
+                {userPlugins.length === 0 ? (
+                  <div className={`p-8 rounded-2xl border text-center space-y-3 ${
+                    theme === 'vs-dark' ? 'bg-slate-950/60 border-slate-800' : 'bg-white border-slate-200 shadow-xs'
+                  }`}>
+                    <div className="w-12 h-12 mx-auto rounded-xl bg-emerald-600/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <h2 className={`text-base font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>
+                      No Enabled User Components Yet
+                    </h2>
+                    <p className={`text-xs max-w-md mx-auto leading-relaxed ${theme === 'vs-dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Switch to IDE Mode with Ctrl+Shift+F to build or enable custom TSX components, queries, and reports for this application.
+                    </p>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMode('ide')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition cursor-pointer"
+                      >
+                        <Code2 className="w-4 h-4" />
+                        <span>Switch to IDE Mode (Ctrl+Shift+F)</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {userPlugins.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleSelectPlugin(p)}
+                        className={`group text-left p-5 rounded-xl border transition flex flex-col justify-between gap-4 cursor-pointer ${
+                          theme === 'vs-dark'
+                            ? 'bg-slate-950/80 border-slate-800 hover:border-blue-500/60 hover:bg-slate-900'
+                            : 'bg-white border-slate-200 hover:border-blue-500 shadow-xs'
+                        }`}
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-600/15 border border-emerald-500/30 text-emerald-400">
+                              <Sparkles className="w-4 h-4" />
+                            </span>
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-blue-600/15 text-blue-400 border border-blue-500/25">
+                              v{p.version || '1.0.0'}
+                            </span>
+                          </div>
+                          <h3 className={`text-sm font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>
+                            {p.name}
+                          </h3>
+                          <p className={`text-xs line-clamp-2 ${theme === 'vs-dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                            {p.description || 'Custom TSX user component'}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between text-xs font-semibold text-blue-400 group-hover:text-blue-300 pt-2 border-t border-slate-800/30">
+                          <span>Open Component</span>
+                          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* App Mode View 1: Active Dynamic TSX Plugin */}
+          {isPluginView && currentPlugin && (
+            <div className="flex-1 min-h-0 h-full w-full overflow-hidden flex flex-col select-text">
+              <PluginHost
+                code={currentPlugin.code}
+                pluginName={currentPlugin.name}
+                pluginId={currentPlugin.id}
+                theme={theme}
+                gawContext={gawContext}
+                onOpenInIDE={() => handleOpenInIDE({ type: 'plugin', id: currentPlugin.id, name: currentPlugin.name })}
+              />
+            </div>
+          )}
+
+          {/* App Mode View 2a: Saved Query with Multi-Statement Results */}
+          {isQueryView && (
+            <MultiQueryResultsView
+              savedQuery={activeSavedQuery}
+              results={activeQueryResults}
+              title={activeQueryTitle || 'Query Results'}
+              theme={theme}
+              onOpenInIDE={handleOpenInIDE}
+              onOpenSpreadsheet={handleOpenSpreadsheet}
+              onBackToView={handleBackToAppHub}
+              onRerunQuery={handleRerunActiveQuery}
+            />
+          )}
+
+          {/* App Mode View 2b: Table Grid */}
+          {isTableView && activeQueryResult && (
+            <div className={`flex-1 flex flex-col overflow-hidden select-text ${theme === 'vs-dark' ? 'bg-slate-900 text-slate-100' : 'bg-slate-100 text-slate-900'}`}>
+              <div className={`px-4 py-2 border-b flex items-center justify-between text-xs flex-shrink-0 ${
+                theme === 'vs-dark' ? 'bg-slate-950 border-slate-800' : 'bg-white border-slate-200'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleBackToAppHub}
+                    className={`transition cursor-pointer ${theme === 'vs-dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-black'}`}
+                    title="Back to Application Hub"
+                  >
+                    ← App Hub
+                  </button>
+                  <span className="text-slate-500">/</span>
+                  <span className={`font-bold ${theme === 'vs-dark' ? 'text-white' : 'text-slate-900'}`}>{activeQueryTitle}</span>
+                </div>
+                <button
+                  onClick={() => {
+                    const tName = activeView.replace('table:', '');
+                    handleOpenInIDE({ type: 'table', name: tName });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95 cursor-pointer"
+                  title="Edit table DDL in IDE Mode (Ctrl+Shift+F)"
+                >
+                  <Code2 className="w-3.5 h-3.5" />
+                  <span>Edit Structure in IDE</span>
+                  <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
+                    Ctrl+Shift+F
+                  </kbd>
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <QueryGrid
+                  result={activeQueryResult}
+                  onOpenInSpreadsheet={handleOpenSpreadsheet}
+                  title={activeQueryTitle}
+                  theme={theme}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* App Mode View 3: Publication Report Viewer */}
+          {isReportView && currentReport && (
+            <div className="flex-1 overflow-hidden select-text">
+              <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading report...</div>}>
+                <ReportViewer
+                  report={currentReport}
+                  onEdit={() => {
+                    setReportToEdit(currentReport);
+                    setShowReportBuilder(true);
+                  }}
+                  onOpenInIDE={handleOpenInIDE}
+                  onBack={handleBackToAppHub}
+                  theme={theme}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {/* App Mode View 4: Embedded Spreadsheet Studio */}
+          {isSpreadsheetView && (
+            <div className="flex-1 overflow-hidden select-text">
+              <Suspense fallback={<div className="p-6 text-xs text-slate-400">Loading spreadsheet studio...</div>}>
+                <SpreadsheetView
+                  initialSheets={spreadsheetInitialSheets}
+                  sourceInfo={spreadsheetSource}
+                  onReturnToSource={handleReturnFromSpreadsheet}
+                  onClose={handleBackToAppHub}
+                  theme={theme}
+                />
+              </Suspense>
+            </div>
+          )}
+        </>
       )}
     </main>
   );
 
-  // 5. Bottom Area Content: Active bottom plugin if present (default: Footer and Status plugin)
+  // 5. Bottom Area Content: Active bottom plugin if present in App Mode
   const bottomPlugin = activePluginsByArea.bottom;
-  const bottomContent = !isFullVSCode && bottomPlugin ? (
+  const bottomContent = !isFullIDE && bottomPlugin ? (
     <div className="w-full h-full flex flex-col overflow-hidden">
       <PluginHost
         code={bottomPlugin.code}
@@ -2349,7 +2275,7 @@ export default function App() {
             onPluginAdded={(newPlugin, openInIDE) => {
               toastApi.success(`Installed dynamic plugin "${newPlugin.name}" into SQLite!`);
               refreshDatabaseState();
-              if (openInIDE) {
+              if (openInIDE || mode === 'ide') {
                 handleOpenInIDE({ type: 'plugin', id: newPlugin.id, name: newPlugin.name });
               } else {
                 setActiveView(`plugin:${newPlugin.id}`);
@@ -2357,7 +2283,11 @@ export default function App() {
             }}
             onOpenDropboxSettings={() => {
               setShowAddPluginModal(false);
-              setActiveView('plugin:plugin_dropbox_sync');
+              if (mode === 'ide') {
+                handleOpenInIDE({ type: 'plugin', id: 'plugin_dropbox_sync', name: 'Dropbox Cloud Sync' });
+              } else {
+                setActiveView('plugin:plugin_dropbox_sync');
+              }
             }}
             theme={theme}
           />
@@ -2376,9 +2306,14 @@ export default function App() {
                 'INSERT OR REPLACE INTO t_gaw_plugins (id, name, version, enabled, icon, menu_category, route, description, code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [plg.id, plg.name, '1.0.0', 1, plg.icon, plg.menu_category, plg.route, plg.description, plg.code, now, now]
               );
+              engine.notifyChange(true);
               toastApi.success(`Installed plugin "${plg.name}" into SQLite!`);
               refreshDatabaseState();
-              setActiveView(`plugin:${plg.id}`);
+              if (mode === 'ide') {
+                handleOpenInIDE({ type: 'plugin', id: plg.id, name: plg.name });
+              } else {
+                setActiveView(`plugin:${plg.id}`);
+              }
             }}
             theme={theme}
           />
@@ -2394,7 +2329,11 @@ export default function App() {
               toastApi.success(`Report "${savedRep.name}" saved!`);
               refreshDatabaseState();
               setShowReportBuilder(false);
-              setActiveView(`report:${savedRep.id}`);
+              if (mode === 'ide') {
+                handleOpenInIDE({ type: 'report', id: savedRep.id, name: savedRep.name });
+              } else {
+                setActiveView(`report:${savedRep.id}`);
+              }
             }}
             onClose={() => setShowReportBuilder(false)}
           />

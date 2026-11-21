@@ -1,3 +1,8 @@
+/**
+ * Official Documentation:
+ * - React useMemo & useState: https://react.dev/reference/react/useMemo
+ * - CSS Paged Media (@media print): https://developer.mozilla.org/en-US/docs/Web/CSS/@media#print
+ */
 import React, { useMemo, useState } from 'react';
 import { Printer, Download, Edit3, RefreshCw, ChevronLeft, Sparkles, Code2 } from 'lucide-react';
 import { SQLiteEngine } from '../engine/sqliteEngine';
@@ -102,7 +107,7 @@ export const ReportViewer: React.FC<ReportViewerProps> = ({
             <button
               onClick={() => onOpenInIDE({ type: 'report', id: report.id, name: report.name })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow-sm transition active:scale-95"
-              title="Edit report definition in Monaco IDE (Ctrl+Shift+F)"
+              title="Edit report definition in IDE Mode (Ctrl+Shift+F)"
             >
               <Code2 className="w-3.5 h-3.5" />
               <span>Edit in IDE</span>

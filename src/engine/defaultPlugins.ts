@@ -1,3 +1,9 @@
+/**
+ * Official Documentation:
+ * - React Components & Hooks: https://react.dev/reference/react
+ * - Lucide React Icons: https://lucide.dev/guide/packages/lucide-react
+ * - sql.js (SQLite WebAssembly): https://sql.js.org/
+ */
 export const DEFAULT_CRM_PLUGIN_CODE = `import React, { useState, useEffect, useMemo } from 'react';
 
 export default function CustomerCrmPlugin({ gaw }) {
@@ -2863,20 +2869,22 @@ export default function HelpPlugin({ gaw }) {
               isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
             )}>
               <div className="flex items-center gap-2 pb-3 border-b border-slate-800/40">
-                <Keyboard className="w-4 h-4 text-indigo-400" />
-                <h3 className={'text-xs font-bold uppercase tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
+                <Keyboard className="w-4 h-4 text-blue-400" />
+                <h3 className={'text-xs font-bold tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
                   Keyboard Shortcuts Reference
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 @[450px]:grid-cols-2 gap-2.5 pt-3 text-xs cq-stack">
                 {[
-                  ['Ctrl + Shift + F', 'Toggle Full Monaco IDE Mode / Gawkyy Shell'],
+                  ['Ctrl + Shift + F', 'Toggle between IDE Mode and App Mode (auto-saves edits)'],
+                  ['Ctrl + Shift + K', 'Switch Tab between Code Editor and Live View in IDE'],
+                  ['Ctrl + Shift + D', 'Toggle IDE Primary Side Bar'],
                   ['Ctrl + O', 'Open Local SQLite Database File'],
-                  ['Ctrl + S', 'Save Active Database to Disk / Cloud'],
+                  ['Ctrl + S', 'Save Active Tab (IDE) or Database (App)'],
                   ['Ctrl + Enter', 'Run SQL Query / Test Plugin in IDE'],
                   ['Shift + Alt + F', 'Format Document (Prettier Auto-format)'],
-                  ['Ctrl + B', 'Toggle Navigation Side Bar'],
+                  ['Ctrl + B', 'Toggle Primary Side Bar in IDE'],
                 ].map(([shortcut, desc], idx) => (
                   <div
                     key={idx}
@@ -5555,7 +5563,7 @@ export default function HeaderNavbarPlugin({ gaw }) {
 
   const currentTheme = gaw.theme || 'vs-dark';
   const isDark = currentTheme === 'vs-dark';
-  const mode = gaw.mode || 'dev';
+  const mode = gaw.mode === 'app' ? 'app' : 'ide';
   const activeRoute = gaw.activeRoute || 'file';
   const activeView = gaw.activeView || '';
 
@@ -5592,7 +5600,11 @@ export default function HeaderNavbarPlugin({ gaw }) {
     if (item.isView) {
       gaw.navigation?.selectView(item.id);
     } else if (item.id === 'file') {
-      gaw.navigation?.selectView('plugin:plugin_file_manager');
+      if (mode === 'app') {
+        gaw.navigation?.selectView('app_hub');
+      } else {
+        gaw.navigation?.setMode?.('ide');
+      }
     } else if (item.id === 'help') {
       gaw.navigation?.selectView('plugin:plugin_help');
     } else if (item.id === 'database') {
@@ -5610,22 +5622,16 @@ export default function HeaderNavbarPlugin({ gaw }) {
   };
 
   return (
-    <header className={'w-full h-full flex flex-wrap items-center justify-between px-3 py-2 border-b select-none transition-colors ' + (
+    <header className={'w-full h-full flex flex-wrap items-center justify-between px-3 py-2 border-b select-text transition-colors ' + (
       isDark ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
     )}>
-      {/* Brand & Sidebar Toggle */}
+      {/* Brand & App Launcher */}
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => gaw.workspace?.toggleSidebar()}
-          className={'p-1.5 rounded-lg transition active:scale-95 ' + (
-            isDark ? 'hover:bg-slate-800 text-slate-300 hover:text-white' : 'hover:bg-slate-100 text-slate-600 hover:text-slate-900'
-          )}
-          title="Toggle Navigation Sidebar"
+        <div
+          className="flex items-center gap-2.5 cursor-pointer"
+          onClick={() => handleNavClick({ id: 'file' })}
+          title={mode === 'app' ? 'Open App Components Hub' : 'Open IDE Mode'}
         >
-          <LucideIcons.Menu className="w-4 h-4" />
-        </button>
-
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => handleNavClick({ id: 'file' })}>
           <div className="w-7 h-7 rounded-lg overflow-hidden ring-1 ring-sky-400/50 bg-slate-900 flex items-center justify-center p-0.5 flex-shrink-0">
             <img src="/gawkyy-cat-256x256.png" alt="Gawkyy Logo" className="w-full h-full object-cover" />
           </div>
@@ -5633,11 +5639,11 @@ export default function HeaderNavbarPlugin({ gaw }) {
             <span className={'text-xs font-bold leading-tight flex items-center gap-1.5 ' + (isDark ? 'text-white' : 'text-slate-900')}>
               {brandTitle}
               <span className={'text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded border ' + (
-                mode === 'dev'
-                  ? (isDark ? 'bg-amber-400/10 border-amber-400/30 text-amber-400' : 'bg-amber-50 border-amber-300 text-amber-700')
-                  : (isDark ? 'bg-indigo-400/10 border-indigo-400/30 text-indigo-400' : 'bg-indigo-50 border-indigo-300 text-indigo-700')
+                mode === 'ide'
+                  ? (isDark ? 'bg-blue-500/15 border-blue-400/40 text-blue-300' : 'bg-blue-50 border-blue-300 text-blue-700')
+                  : (isDark ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-emerald-700')
               )}>
-                {mode === 'dev' ? 'DEV' : 'APP'}
+                {mode === 'ide' ? 'IDE' : 'App'}
               </span>
             </span>
             {brandSubtitle && (
@@ -5700,26 +5706,28 @@ export default function HeaderNavbarPlugin({ gaw }) {
 
       {/* Right Controls: Mode Toggle, Theme Toggle, Settings */}
       <div className="flex items-center gap-2">
-        {/* Dev / App Mode Switcher */}
+        {/* IDE / App Mode Switcher */}
         <div className={'flex items-center p-0.5 rounded-lg border text-[11px] font-medium ' + (
           isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
         )}>
           <button
-            onClick={() => gaw.navigation?.setMode('dev')}
-            className={'px-2 py-0.5 rounded-md transition ' + (
-              mode === 'dev'
-                ? (isDark ? 'bg-amber-400 text-slate-950 font-bold shadow' : 'bg-white text-slate-900 font-bold shadow-sm')
-                : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+            onClick={() => gaw.navigation?.setMode('ide')}
+            title="Switch to IDE Mode (Ctrl+Shift+F)"
+            className={'px-2 py-0.5 rounded-md transition cursor-pointer ' + (
+              mode === 'ide'
+                ? 'bg-blue-600 text-white font-bold shadow'
+                : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900')
             )}
           >
-            Dev Mode
+            IDE Mode
           </button>
           <button
             onClick={() => gaw.navigation?.setMode('app')}
-            className={'px-2 py-0.5 rounded-md transition ' + (
+            title="Switch to App Mode (Ctrl+Shift+F)"
+            className={'px-2 py-0.5 rounded-md transition cursor-pointer ' + (
               mode === 'app'
-                ? (isDark ? 'bg-indigo-600 text-white font-bold shadow' : 'bg-indigo-600 text-white font-bold shadow-sm')
-                : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+                ? 'bg-emerald-600 text-white font-bold shadow'
+                : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900')
             )}
           >
             App Mode
@@ -6326,18 +6334,16 @@ export default function FooterStatusPlugin({ gaw }) {
         </div>
       </div>
 
-      {/* Center: Full-Screen Monaco IDE Toggle */}
+      {/* Center: Switch to IDE Mode */}
       <button
-        onClick={() => gaw.navigation?.toggleVSCodeMode()}
-        className={'flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-sans font-medium transition border cursor-pointer active:scale-95 ' + (
-          gaw.navigation?.isVSCodeMode?.()
-            ? 'bg-blue-600 text-white border-blue-400 shadow-sm'
-            : (isDark ? 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700/80 hover:text-white' : 'bg-white hover:bg-slate-50 text-cyan-700 border-slate-300')
+        onClick={() => gaw.navigation?.setMode('ide')}
+        className={'flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-sans font-semibold transition border cursor-pointer active:scale-95 ' + (
+          isDark ? 'bg-blue-600/20 hover:bg-blue-600/35 text-blue-300 border-blue-500/40 hover:text-white' : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300'
         )}
-        title="Toggle between standard Gawkyy shell and full Monaco IDE layout"
+        title="Switch to IDE Mode (Ctrl+Shift+F)"
       >
-        <LucideIcons.Code2 className="w-3.5 h-3.5 text-cyan-400" />
-        <span>Open Monaco IDE</span>
+        <LucideIcons.Code2 className="w-3.5 h-3.5 text-blue-400" />
+        <span>IDE Mode (Ctrl+Shift+F)</span>
       </button>
 
       {/* Right Sync Diagnostics */}
@@ -6684,7 +6690,7 @@ export default function SettingsPlugin({ gaw }) {
           <div className={'p-3 rounded-xl border text-[11px] leading-relaxed ' + (
             isDark ? 'bg-sky-950/30 border-sky-800/40 text-sky-300' : 'bg-sky-50 border-sky-200 text-sky-900'
           )}>
-            <strong>Shortcut Note:</strong> The Workspace Side Navigation Pane can also be toggled anytime using the keyboard shortcut <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Shift+Ctrl+D</kbd> (or <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Ctrl+Shift+D</kbd>).
+            <strong>Shortcut Note:</strong> Press <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Ctrl+Shift+F</kbd> anywhere to switch between IDE Mode and App Mode. Inside IDE Mode, press <kbd className="px-1.5 py-0.5 rounded bg-sky-900/60 text-white font-mono text-[10px]">Ctrl+Shift+D</kbd> to toggle the IDE Side Bar.
           </div>
         </div>
 
@@ -7650,7 +7656,7 @@ export default function SpreadsheetStudioPlugin({ gaw }) {
 
       {/* Main Grid View */}
       <div className="flex-1 overflow-auto relative min-h-0">
-        <table className="w-full border-collapse text-xs select-none">
+        <table className="w-full border-collapse text-xs select-text">
           <thead className="sticky top-0 z-10">
             <tr className={isDark ? 'bg-slate-950 text-slate-400 border-b border-slate-800' : 'bg-slate-200 text-slate-700 border-b border-slate-300'}>
               <th className="w-12 py-1.5 px-2 text-center font-mono font-bold border-r border-slate-800 bg-slate-950">#</th>

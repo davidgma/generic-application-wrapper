@@ -1,3 +1,8 @@
+/**
+ * Official Documentation:
+ * - sql.js (SQLite compiled to WebAssembly): https://sql.js.org/
+ * - SQLite SQL Syntax & PRAGMA Statements: https://www.sqlite.org/lang.html
+ */
 import rawInitSqlJs, { Database, SqlJsStatic } from 'sql.js';
 
 const initSqlJs = (config?: Parameters<typeof rawInitSqlJs>[0]): Promise<SqlJsStatic> => {
@@ -1900,7 +1905,7 @@ export class SQLiteEngine {
       '--',
       '-- How to use this editor:',
       '-- • Press Ctrl+/ to toggle comments ON or OFF for any selected lines.',
-      `-- • Press Ctrl+Shift+F to switch to the ${isView ? 'view' : 'table'} data view without running any SQL.`,
+      `-- • Press Ctrl+Shift+K to switch to the ${isView ? 'view' : 'table'} data grid inside the IDE without running any SQL.`,
       '-- • Click the Save icon to save this SQL as a new user query in Queries.',
       `-- • Note: The Run icon is disabled in ${isView ? 'View' : 'Table'} view to protect your database.`,
     ];
@@ -1951,7 +1956,7 @@ export class SQLiteEngine {
       '-- 1. Highlight all text below (or press Ctrl+A to select all).',
       '-- 2. Press Ctrl+/ to uncomment the DROP statement.',
       '-- 3. Click the Save icon to save this as a new query and move to it in Queries.',
-      '-- 4. Click the Run icon or press Ctrl+Shift+F in the query to execute the drop.',
+      '-- 4. Click the Run icon or press Ctrl+Enter (or Ctrl+Shift+K) in the query to execute the drop.',
     ];
 
     if (isSystem) {

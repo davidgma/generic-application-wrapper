@@ -1,3 +1,9 @@
+/**
+ * Official Documentation:
+ * - Monaco Editor React: https://github.com/suren-atoyan/monaco-editor-react
+ * - React Hooks (useState, useEffect, useCallback, useMemo, useRef): https://react.dev/reference/react
+ * - sql.js (SQLite WebAssembly): https://sql.js.org/
+ */
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import {
@@ -42,19 +48,24 @@ import {
   Trash2,
   Copy,
   Pencil,
+  Upload,
+  Wand2,
+  HardDrive,
 } from 'lucide-react';
 
 const SaveAsIcon: React.FC<{ className?: string }> = ({ className = 'w-3.5 h-3.5' }) => (
   <span className="relative inline-flex items-center justify-center flex-shrink-0">
     <Save className={className} />
-    <Pencil className="w-2 h-2 absolute -bottom-0.5 -right-0.5 text-amber-400 stroke-[2.5] bg-slate-900 rounded-full p-[0.5px]" />
+    <Pencil className="w-2 h-2 absolute -bottom-0.5 -right-0.5 text-sky-400 stroke-[2.5] bg-slate-900 rounded-full p-[0.5px]" />
   </span>
 );
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
+import { FileStorageEngine } from '../../engine/fileStorage';
 import { QueryResult, SavedQuery, TableSchema } from '../../types/sqlite';
 import { PluginRecord, SYSTEM_PLUGIN_IDS, isSystemPlugin } from '../../types/plugin';
 import { SavedReport } from '../../types/report';
+import { StorageMetadata } from '../../types/storage';
 import { safeStorage } from '../../utils/storage';
 import { QueryGrid } from '../QueryGrid';
 import { PluginHost } from '../PluginHost';
@@ -83,6 +94,7 @@ export interface TargetTabInfo {
   name?: string;
   code?: string;
   timestamp?: number;
+  openInView?: boolean;
 }
 
 interface GAWIDEProps {
@@ -91,25 +103,20 @@ interface GAWIDEProps {
   onClearTargetTab?: () => void;
   onOpenSpreadsheet?: (data: { columns: string[]; values: any[][] }, sheetName?: string) => void;
   onOpenAI?: () => void;
+  onOpenAddPluginModal?: () => void;
+  onEditReportVisual?: (report: SavedReport) => void;
+  onNewReportVisual?: () => void;
+  onRegisterSaveDirtyHandler?: (fn: () => Promise<void>) => void;
   theme?: 'vs-dark' | 'vs-light';
   onToggleTheme?: () => void;
-  mode?: 'dev' | 'app';
-  onToggleMode?: (mode: 'dev' | 'app') => void;
+  mode?: 'ide' | 'app';
+  onToggleMode?: (mode: 'ide' | 'app') => void;
   gawContext?: any;
-  isVSCodeMode?: boolean;
-  onToggleVSCodeMode?: () => void;
-  onExitIDE?: (target?: TargetTabInfo | null) => void;
   onActiveTabChange?: (target: TargetTabInfo | null) => void;
-  onRunAndExitToNonIDE?: (info: {
-    id: string;
-    name: string;
-    query: string;
-    results: QueryResult[];
-  }) => void;
   onDeleteObject?: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
 }
 
-export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Help';
+export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Tools' | 'Help';
 
 type ActivityBarTab = 'explorer' | 'search' | 'extensions' | 'settings';
 
@@ -119,21 +126,33 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   onClearTargetTab,
   onOpenSpreadsheet,
   onOpenAI,
+  onOpenAddPluginModal,
+  onEditReportVisual,
+  onNewReportVisual,
+  onRegisterSaveDirtyHandler,
   theme = 'vs-dark',
   onToggleTheme,
-  mode = 'dev',
+  mode = 'ide',
   onToggleMode,
   gawContext,
-  isVSCodeMode = true,
-  onToggleVSCodeMode,
-  onExitIDE,
   onActiveTabChange,
-  onRunAndExitToNonIDE,
   onDeleteObject,
 }) => {
   const engine = SQLiteEngine.getInstance();
+  const storageEngine = useMemo(() => FileStorageEngine.getInstance(), []);
+  const [storageMeta, setStorageMeta] = useState<StorageMetadata>(() => storageEngine.getMetadata());
   const editorRef = useRef<any>(null);
   const isDark = theme === 'vs-dark';
+
+  // Subscribe to storage metadata updates for live database filename, size, and sync indicator
+  useEffect(() => {
+    const unsub = storageEngine.onStatusChange((meta) => {
+      setStorageMeta(meta);
+    });
+    return () => {
+      unsub();
+    };
+  }, [storageEngine]);
 
   // Monaco IDE Layout state
   const [activeActivity, setActiveActivity] = useState<ActivityBarTab>('explorer');
@@ -155,7 +174,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const menubarRef = useRef<HTMLDivElement>(null);
   const monacoRef = useRef<any>(null);
   const handleSaveActiveTabRef = useRef<() => void>(() => {});
-  const handleRunAndShowInNonIDERef = useRef<() => void>(() => {});
+  const saveDirtyTabsRef = useRef<() => Promise<void>>(async () => {});
   const handleDeleteActiveItemRef = useRef<() => void>(() => {});
   const handleToggleCommentsRef = useRef<() => void>(() => {});
   const handleToggleViewInIDERef = useRef<() => void>(() => {});
@@ -428,16 +447,11 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   }, [currentTargetInfo, onActiveTabChange]);
 
-  const handleExitIDE = useCallback(() => {
-    if (onExitIDE) {
-      onExitIDE(currentTargetInfo);
-    } else if (onToggleVSCodeMode) {
-      onToggleVSCodeMode();
-    }
-  }, [onExitIDE, currentTargetInfo, onToggleVSCodeMode]);
-
-  const handleExitIDERef = useRef(handleExitIDE);
-  handleExitIDERef.current = handleExitIDE;
+  // Switch from IDE mode to App mode after auto-saving any dirty editor tabs
+  const handleSwitchToAppMode = useCallback(async () => {
+    await saveDirtyTabsRef.current?.();
+    onToggleMode?.('app');
+  }, [onToggleMode]);
 
   // Execution outputs for SQL
   const [queryResults, setQueryResults] = useState<QueryResult[]>([]);
@@ -816,9 +830,26 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
       if (!tabId) return;
 
+      const cleanTableName = item.type === 'table' && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
+      const cleanQueryName = (item.type === 'query' || item.type === 'sql') && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
+      const existingMatch = tabs.find(
+        (t) =>
+          t.id === tabId ||
+          (item.type === 'plugin' && item.id && t.pluginId === item.id) ||
+          (item.type === 'table' && cleanTableName && (t.tableName === cleanTableName || t.title.replace(/\.sql$/i, '') === cleanTableName)) ||
+          (item.type === 'query' && ((item.id && t.queryId === item.id) || (!item.id && cleanQueryName && t.title.replace(/\.sql$/i, '') === cleanQueryName))) ||
+          (item.type === 'report' && item.id && t.reportId === item.id)
+      );
+      const resolvedTabId = existingMatch ? existingMatch.id : tabId;
+
+      if ((item as TargetTabInfo).openInView && resolvedTabId) {
+        setToggledTabIds((prev) => ({
+          ...prev,
+          [resolvedTabId]: true,
+        }));
+      }
+
       setTabs((prev) => {
-        const cleanTableName = item.type === 'table' && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
-        const cleanQueryName = (item.type === 'query' || item.type === 'sql') && item.name ? item.name.replace(/\.sql$/i, '') : undefined;
         const existing = prev.find(
           (t) =>
             t.id === tabId ||
@@ -982,13 +1013,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         return;
       }
 
-      // Ctrl+Shift+F: Save, run query automatically and show results in non-IDE
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
-        e.preventDefault();
-        e.stopPropagation();
-        handleRunAndShowInNonIDERef.current?.();
-        return;
-      }
+      // Note: Ctrl+Shift+F is handled globally in App.tsx (capture phase) to toggle IDE Mode <-> App Mode
 
       // Ctrl+Shift+K: Toggle view in IDE (Code <-> Preview/Data/Results/Report)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
@@ -1009,7 +1034,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [showCommandPalette, activeMenu, showAboutModal, handleCloseCommandPalette, handleExitIDE]);
+  }, [showCommandPalette, activeMenu, showAboutModal, showSaveAsModal, handleCloseCommandPalette]);
 
   // Sync external targetTab request (from Sidebar edit options)
   const lastProcessedTargetKeyRef = useRef<string | null>(null);
@@ -1188,10 +1213,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       // ignore
     }
 
-    // Keybinding: Ctrl+Shift+F to automatically save changes, run query, and show results in non-IDE view
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
-      handleRunAndShowInNonIDERef.current?.();
-    });
+    // Note: Ctrl+Shift+F is captured globally in App.tsx to toggle IDE Mode <-> App Mode cleanly without double-firing.
 
     // Keybinding: Ctrl+Shift+K to toggle view inside IDE
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyK, () => {
@@ -1548,7 +1570,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         code: contentToSave,
       });
 
-      if (!silent) gawContext?.toast?.success?.(`Created new query "${baseQueryName}" with table SQL. Use Run or Ctrl+Shift+F in query to execute.`);
+      if (!silent) gawContext?.toast?.success?.(`Created new query "${baseQueryName}" with table SQL. Press Ctrl+Enter to run or Ctrl+Shift+K to view results.`);
       return;
     } else if (currentTab.type === 'report' && currentTab.reportId) {
       try {
@@ -1597,105 +1619,114 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   };
 
-  // Run active query or table SQL, auto-save any changes, execute, and switch to non-IDE results view
-  const handleRunAndShowInNonIDE = useCallback(async () => {
-    const currentTab = tabs.find((t) => t.id === activeTabId) || activeTab;
-    if (!currentTab) return;
+  // Auto-save all dirty editable tabs (plugin, query, sql, report) to in-memory SQLite before switching to App mode
+  const saveDirtyTabs = useCallback(async () => {
+    const activeEditorVal =
+      editorRef.current && !isViewToggled ? editorRef.current.getValue() : null;
 
-    const currentEditorVal = editorRef.current ? editorRef.current.getValue() : currentTab.content;
-    const cleanTitle = (currentTab.type === 'table' ? (currentTab.tableName || currentTab.title) : currentTab.title).replace(/\.sql$/i, '');
+    let anyUserMutation = false;
+    let savedCount = 0;
+    const updatedQueryIds = new Map<string, string>();
+    const updatedContents = new Map<string, string>();
 
-    if (currentTab.type === 'table') {
-      // When in a table in the IDE and ctrl+shift+f is pressed, automatically switch to the non-IDE view
-      // of the data in the table but don't automatically save the query or run any of the sql.
-      if (onExitIDE) {
-        onExitIDE({ type: 'table', name: cleanTitle });
-      } else {
-        handleExitIDE();
-      }
-      return;
-    }
+    const existingQueries = engine.getSavedQueries();
+    const now = new Date().toISOString();
 
-    if (currentTab.type === 'sql' || currentTab.type === 'query') {
-      let queryId = currentTab.queryId;
-      const now = new Date().toISOString();
+    for (const tab of tabs) {
+      const latestContent =
+        tab.id === activeTabId && activeEditorVal !== null ? activeEditorVal : tab.content;
+      const savedBaseline = tab.savedContent !== undefined ? tab.savedContent : tab.content;
+      const dirty = Boolean(tab.isDirty) || latestContent !== savedBaseline;
+      if (!dirty) continue;
 
-      if (currentTab.type === 'sql' || currentTab.type === 'query') {
-        const existingQueries = engine.getSavedQueries();
-        const existing = existingQueries.find((q) => q.id === queryId || q.name === cleanTitle);
-        queryId = existing ? existing.id : (queryId || `q_${Date.now()}`);
+      if (tab.type === 'plugin' && tab.pluginId) {
+        const isSystem = SYSTEM_PLUGIN_IDS.has(tab.pluginId);
+        if (isSystem) {
+          engine.savePlugin({
+            id: tab.pluginId,
+            name: tab.title.replace(/\.(tsx|jsx|ts|js)$/i, ''),
+            code: latestContent,
+          });
+        } else {
+          engine.run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?', [
+            latestContent,
+            now,
+            tab.pluginId,
+          ]);
+          anyUserMutation = true;
+        }
+        PluginEngine.clearCache(tab.pluginId);
+        updatedContents.set(tab.id, latestContent);
+        savedCount++;
+      } else if (tab.type === 'query' || tab.type === 'sql') {
+        const queryName = tab.title.replace(/\.sql$/i, '');
+        const existing = existingQueries.find((q) => q.id === tab.queryId || q.name === queryName);
+        const queryId = tab.queryId || (existing ? existing.id : `q_${Date.now()}_${savedCount}`);
         engine.saveQuery({
           id: queryId,
-          name: cleanTitle,
-          description: existing?.description || `Query ${cleanTitle}`,
-          query: currentEditorVal,
+          name: queryName,
+          description: existing?.description || 'Custom Query saved from IDE',
+          query: latestContent,
           params: existing?.params || '{}',
           layout: existing?.layout || '{}',
           created_at: existing?.created_at || now,
         });
-      }
-
-      // Mark tab as saved / not dirty
-      setTabs((prev) =>
-        prev.map((t) =>
-          t.id === currentTab.id
-            ? { ...t, content: currentEditorVal, savedContent: currentEditorVal, isDirty: false, queryId }
-            : t
-        )
-      );
-
-      // Execute query in SQLite
-      try {
-        const results = engine.exec(currentEditorVal);
-        setQueryResults(results);
-        setActiveResultIndex(0);
-
-        // Dynamically notify engine of changes (e.g. if CREATE TABLE or DROP TABLE executed)
-        engine.notifyChange(true);
-        setDbVersion((v) => v + 1);
-
-        // Switch to non-IDE and show results
-        if (onRunAndExitToNonIDE) {
-          onRunAndExitToNonIDE({
-            id: queryId || currentTab.id,
-            name: cleanTitle,
-            query: currentEditorVal,
-            results,
+        updatedQueryIds.set(tab.id, queryId);
+        updatedContents.set(tab.id, latestContent);
+        anyUserMutation = true;
+        savedCount++;
+      } else if (tab.type === 'report' && tab.reportId) {
+        try {
+          const parsed = JSON.parse(latestContent);
+          engine.saveReport({
+            id: tab.reportId,
+            name: parsed.name || tab.title.replace(/\.json$/i, ''),
+            description: parsed.description || '',
+            query_id: parsed.query_id || '',
+            custom_sql: parsed.custom_sql || '',
+            config: typeof parsed.config === 'string' ? parsed.config : JSON.stringify(parsed.config || {}),
+            created_at: parsed.created_at || now,
           });
-        } else if (onExitIDE) {
-          onExitIDE({
-            type: 'query',
-            id: queryId,
-            name: cleanTitle,
-            code: currentEditorVal,
-          });
+          updatedContents.set(tab.id, latestContent);
+          anyUserMutation = true;
+          savedCount++;
+        } catch (err: any) {
+          gawContext?.toast?.warning?.(`Skipped auto-saving report "${tab.title}": invalid JSON (${err.message})`);
         }
-      } catch (err: any) {
-        gawContext?.toast?.error?.(`Query execution error: ${err.message}`);
-        setQueryResults([
-          {
-            columns: ['error'],
-            values: [[err.message || String(err)]],
-            error: err.message || String(err),
-          },
-        ]);
-      }
-    } else if (currentTab.type === 'plugin') {
-      await handleSaveActiveTab(true);
-      if (onExitIDE) {
-        onExitIDE({ type: 'plugin', id: currentTab.pluginId, name: cleanTitle });
-      } else {
-        handleExitIDE();
-      }
-    } else if (currentTab.type === 'report') {
-      await handleSaveActiveTab(true);
-      if (onExitIDE) {
-        onExitIDE({ type: 'report', id: currentTab.reportId, name: cleanTitle });
-      } else {
-        handleExitIDE();
       }
     }
-  }, [tabs, activeTabId, activeTab, engine, gawContext, onRunAndExitToNonIDE, onExitIDE, handleExitIDE]);
+
+    if (savedCount > 0) {
+      setTabs((prev) =>
+        prev.map((t) => {
+          if (!updatedContents.has(t.id)) return t;
+          const nextContent = updatedContents.get(t.id)!;
+          return {
+            ...t,
+            content: nextContent,
+            savedContent: nextContent,
+            isDirty: false,
+            queryId: updatedQueryIds.get(t.id) || t.queryId,
+          };
+        })
+      );
+      if (anyUserMutation) {
+        engine.notifyChange(true);
+      }
+      gawContext?.toast?.info?.(`Auto-saved ${savedCount} modified IDE ${savedCount === 1 ? 'tab' : 'tabs'} to SQLite.`);
+    }
+  }, [tabs, activeTabId, isViewToggled, engine, gawContext]);
+
+  saveDirtyTabsRef.current = saveDirtyTabs;
+
+  // Register stable auto-save callback with App.tsx so Ctrl+Shift+F always saves dirty IDE edits first
+  useEffect(() => {
+    if (onRegisterSaveDirtyHandler) {
+      onRegisterSaveDirtyHandler(async () => {
+        await saveDirtyTabsRef.current();
+      });
+    }
+  }, [onRegisterSaveDirtyHandler]);
 
   // Handle Undo (Restores deleted query if available, otherwise editor undo)
   const handleUndo = useCallback(() => {
@@ -1952,7 +1983,6 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   }, [saveAsName, saveAsDescription, saveAsTarget, activeTab, activeTabId, engine, gawContext, openOrActivateItem]);
 
   handleSaveActiveTabRef.current = handleSaveActiveTab;
-  handleRunAndShowInNonIDERef.current = handleRunAndShowInNonIDE;
   handleDeleteActiveItemRef.current = handleDeleteActiveItem;
   handleToggleViewInIDERef.current = handleToggleViewInIDE;
   handleOpenSaveAsRef.current = handleOpenSaveAs;
@@ -2085,7 +2115,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       return next;
     });
     openOrActivateItem({ type: 'query', id: newId, name: queryName, code: proFormaSql });
-    gawContext?.toast?.info?.(`Opened table creation query "${queryName}". Review and click Run or press Ctrl+Shift+F to execute.`);
+    gawContext?.toast?.info?.(`Opened table creation query "${queryName}". Review and press Ctrl+Enter to execute or Ctrl+Shift+K to view results.`);
   }, [engine, gawContext, openOrActivateItem]);
 
   // Handler: Add New View via pro-forma SQL query
@@ -2119,7 +2149,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       return next;
     });
     openOrActivateItem({ type: 'query', id: newId, name: queryName, code: proFormaSql });
-    gawContext?.toast?.info?.(`Opened view creation query "${queryName}". Review and click Run or press Ctrl+Shift+F to execute.`);
+    gawContext?.toast?.info?.(`Opened view creation query "${queryName}". Review and press Ctrl+Enter to execute or Ctrl+Shift+K to view results.`);
   }, [engine, gawContext, openOrActivateItem]);
 
   // Handler: Add New Query
@@ -2362,10 +2392,10 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => setIsPrimarySidebarOpen((prev) => !prev),
       },
       {
-        id: 'cmd_exit_ide',
-        title: 'View: Exit Monaco IDE to Application View',
+        id: 'cmd_switch_app_mode',
+        title: 'View: Switch to App Mode (Auto-saves dirty tabs)',
         shortcut: 'Ctrl+Shift+F',
-        action: () => handleExitIDE(),
+        action: () => handleSwitchToAppMode(),
       },
       {
         id: 'cmd_toggle_view',
@@ -2378,6 +2408,24 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         title: 'File: New SQL Query File',
         shortcut: 'Alt+N',
         action: () => addSqlTab(),
+      },
+      {
+        id: 'cmd_new_visual_report',
+        title: 'Report: Open Visual Report Builder...',
+        shortcut: '',
+        action: () => onNewReportVisual?.(),
+      },
+      {
+        id: 'cmd_import_component',
+        title: 'Component: Import Component Wizard...',
+        shortcut: '',
+        action: () => onOpenAddPluginModal?.(),
+      },
+      {
+        id: 'cmd_ai_spec',
+        title: 'Tools: AI Specification Generator...',
+        shortcut: '',
+        action: () => onOpenAI?.(),
       },
       {
         id: 'cmd_toggle_minimap',
@@ -2393,9 +2441,51 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         id: 'cmd_file_manager',
-        title: 'File: Open File & Workspace Manager',
+        title: 'System UI: Open File & Workspace Manager',
         shortcut: '',
         action: () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
+      },
+      {
+        id: 'cmd_db_management',
+        title: 'System UI: Open Database Management',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_database_management', 'Database Management'),
+      },
+      {
+        id: 'cmd_components_manager',
+        title: 'System UI: Open Components Manager',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_manager', 'Components Manager'),
+      },
+      {
+        id: 'cmd_dropbox_sync',
+        title: 'System UI: Open Dropbox Cloud Sync',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_dropbox_sync', 'Dropbox Cloud Sync'),
+      },
+      {
+        id: 'cmd_local_storage',
+        title: 'System UI: Open Local Storage & Persistence',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_local_storage', 'Local Storage & Persistence'),
+      },
+      {
+        id: 'cmd_spreadsheet_studio',
+        title: 'System UI: Open Spreadsheet Studio',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_spreadsheet_studio', 'Spreadsheet Studio'),
+      },
+      {
+        id: 'cmd_app_settings',
+        title: 'System UI: Open Application Settings',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
+      },
+      {
+        id: 'cmd_debugging',
+        title: 'System UI: Open Startup Debugging & Diagnostics',
+        shortcut: '',
+        action: () => openAndTogglePlugin('plugin_debugging', 'Debugging & Diagnostics'),
       },
       {
         id: 'cmd_help',
@@ -2439,7 +2529,20 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const q = commandPaletteQuery.toLowerCase().trim();
     if (!q) return list;
     return list.filter((item) => item.title.toLowerCase().includes(q));
-  }, [allPlugins, allTables, isVSCodeMode, onToggleVSCodeMode, commandPaletteQuery, isDark, onToggleTheme]);
+  }, [
+    allPlugins,
+    allTables,
+    commandPaletteQuery,
+    isDark,
+    onToggleTheme,
+    handleSwitchToAppMode,
+    handleToggleViewInIDE,
+    onNewReportVisual,
+    onOpenAddPluginModal,
+    onOpenAI,
+    openAndTogglePlugin,
+    openOrActivateItem,
+  ]);
 
   // Tab editor language
   const editorLanguage = useMemo(() => {
@@ -2472,7 +2575,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         divider: true,
       },
       {
-        label: 'Settings & Keybindings...',
+        label: 'Editor Settings & Keybindings...',
         shortcut: 'Ctrl+,',
         action: () => {
           setActiveActivity('settings');
@@ -2480,20 +2583,24 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         },
       },
       {
+        label: 'Application Settings UI',
+        action: () => openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
+      },
+      {
         label: 'Command Palette...',
         shortcut: 'Ctrl+Shift+P',
         action: () => setShowCommandPalette(true),
       },
       {
-        label: 'Exit Monaco IDE',
+        label: 'Switch to App Mode',
         shortcut: 'Ctrl+Shift+F',
-        action: () => handleExitIDE(),
+        action: () => handleSwitchToAppMode(),
         divider: true,
       },
     ],
     File: [
       {
-        label: 'File Manager',
+        label: 'File & Workspace Manager',
         action: () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
         divider: true,
       },
@@ -2501,6 +2608,19 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         label: 'New SQL Query Tab',
         shortcut: 'Alt+N',
         action: () => addSqlTab(),
+      },
+      {
+        label: 'New Component (.tsx)',
+        action: () => handleAddNewPlugin(),
+      },
+      {
+        label: 'New Visual Report (Report Builder)...',
+        action: () => onNewReportVisual?.(),
+      },
+      {
+        label: 'Import Component Wizard...',
+        action: () => onOpenAddPluginModal?.(),
+        divider: true,
       },
       {
         label: 'Open Object / File...',
@@ -2518,21 +2638,9 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => handleOpenSaveAsRef.current?.(),
       },
       {
-        label: 'Save All Tabs',
+        label: 'Save All Dirty Tabs',
         action: () => {
-          tabs.forEach((tab) => {
-            if (tab.isDirty && tab.type === 'plugin' && tab.pluginId) {
-              try {
-                engine.run('UPDATE t_gaw_plugins SET code = ?, updated_at = ? WHERE id = ?;', [
-                  tab.content,
-                  new Date().toISOString(),
-                  tab.pluginId,
-                ]);
-              } catch (e) {}
-            }
-          });
-          setTabs((prev) => prev.map((t) => ({ ...t, savedContent: t.content, isDirty: false })));
-          engine.notifyChange(true);
+          saveDirtyTabsRef.current?.();
         },
       },
       {
@@ -2559,8 +2667,9 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         divider: true,
       },
       {
-        label: 'Exit Monaco IDE Mode',
-        action: () => onToggleVSCodeMode?.(),
+        label: 'Switch to App Mode',
+        shortcut: 'Ctrl+Shift+F',
+        action: () => handleSwitchToAppMode(),
       },
     ],
     Edit: [
@@ -2822,6 +2931,49 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => setQueryResults([]),
       },
     ],
+    Tools: [
+      {
+        label: 'AI Specification Generator...',
+        action: () => onOpenAI?.(),
+      },
+      {
+        label: 'Visual Report Builder...',
+        action: () => onNewReportVisual?.(),
+      },
+      {
+        label: 'Import Component Wizard...',
+        action: () => onOpenAddPluginModal?.(),
+        divider: true,
+      },
+      {
+        label: 'Database Management UI',
+        action: () => openAndTogglePlugin('plugin_database_management', 'Database Management'),
+      },
+      {
+        label: 'Components Manager UI',
+        action: () => openAndTogglePlugin('plugin_manager', 'Components Manager'),
+      },
+      {
+        label: 'Spreadsheet Studio UI',
+        action: () => openAndTogglePlugin('plugin_spreadsheet_studio', 'Spreadsheet Studio'),
+      },
+      {
+        label: 'Dropbox Cloud Sync UI',
+        action: () => openAndTogglePlugin('plugin_dropbox_sync', 'Dropbox Cloud Sync'),
+      },
+      {
+        label: 'Local Storage & Persistence UI',
+        action: () => openAndTogglePlugin('plugin_local_storage', 'Local Storage & Persistence'),
+      },
+      {
+        label: 'Startup Debugging & Benchmarks UI',
+        action: () => openAndTogglePlugin('plugin_debugging', 'Debugging & Diagnostics'),
+      },
+      {
+        label: 'Application Settings UI',
+        action: () => openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
+      },
+    ],
     Help: [
       {
         label: 'Help & System Guide',
@@ -2924,7 +3076,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             </div>
 
             <div className="flex items-center gap-0.5 font-medium text-[11px]">
-              {(['File', 'Edit', 'Selection', 'View', 'Go', 'Run', 'Terminal', 'Help'] as MenuKey[]).map((mKey) => (
+              {(['File', 'Edit', 'Selection', 'View', 'Go', 'Run', 'Terminal', 'Tools', 'Help'] as MenuKey[]).map((mKey) => (
                 <div key={mKey} className="relative">
                   <button
                     onClick={() => setActiveMenu((prev) => (prev === mKey ? null : mKey))}
@@ -2981,47 +3133,65 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 className={`flex items-center rounded border p-0.5 text-xs font-semibold ${
                   isDark ? 'bg-[#1e1e1e] border-[#3c3c3c]' : 'bg-slate-200 border-slate-300'
                 }`}
+                title="Switch between IDE Mode and App Mode (Ctrl+Shift+F)"
               >
                 <button
                   type="button"
-                  onClick={() => onToggleMode('dev')}
+                  onClick={() => onToggleMode('ide')}
                   className={`px-2 py-0.5 rounded transition text-[11px] font-bold cursor-pointer ${
-                    mode === 'dev'
+                    mode === 'ide'
                       ? isDark
                         ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-white text-blue-700 shadow-xs'
+                        : 'bg-blue-600 text-white shadow-xs'
                       : isDark
                       ? 'text-slate-400 hover:text-white'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
-                  title="Developer Mode"
+                  title="IDE Mode (Ctrl+Shift+F)"
                 >
-                  Dev
+                  IDE Mode
                 </button>
                 <button
                   type="button"
-                  onClick={() => onToggleMode('app')}
-                  className={`px-2 py-0.5 rounded transition text-[11px] font-bold cursor-pointer ${
+                  onClick={() => handleSwitchToAppMode()}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded transition text-[11px] font-bold cursor-pointer ${
                     mode === 'app'
-                      ? isDark
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'bg-emerald-600 text-white shadow-xs'
+                      ? 'bg-emerald-600 text-white shadow-xs'
                       : isDark
-                      ? 'text-slate-400 hover:text-white'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'text-emerald-300 hover:text-white hover:bg-emerald-700/60'
+                      : 'text-emerald-700 hover:text-slate-900 hover:bg-emerald-100'
                   }`}
-                  title="App Mode"
+                  title="Auto-save dirty tabs and switch to App Mode (Ctrl+Shift+F)"
                 >
-                  App
+                  <span>App Mode</span>
+                  <kbd className="opacity-80 text-[9px] px-1 bg-black/25 rounded border border-white/15 font-mono">
+                    Ctrl+Shift+F
+                  </kbd>
                 </button>
               </div>
+            )}
+
+            {onOpenAI && (
+              <button
+                type="button"
+                onClick={onOpenAI}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer ${
+                  isDark
+                    ? 'hover:bg-[#3c3c3c] text-sky-300'
+                    : 'hover:bg-slate-200 text-blue-700'
+                }`}
+                title="Open AI Specification Generator"
+              >
+                <Sparkles className="w-3 h-3 text-sky-400" />
+                <span>AI Spec</span>
+              </button>
             )}
 
             {onToggleTheme && (
               <button
                 onClick={onToggleTheme}
-                className={`p-1.5 rounded transition ${
-                  isDark ? 'text-amber-400 hover:bg-[#3c3c3c]' : 'text-slate-700 hover:bg-slate-200'
+                className={`p-1.5 rounded transition cursor-pointer ${
+                  isDark ? 'text-sky-300 hover:bg-[#3c3c3c]' : 'text-slate-700 hover:bg-slate-200'
                 }`}
                 title={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
               >
@@ -3032,37 +3202,25 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             <button
               onClick={handleFormatDocument}
               disabled={isFormatting}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] transition cursor-pointer ${
                 isDark
-                  ? 'hover:bg-[#3c3c3c] text-indigo-300'
-                  : 'hover:bg-slate-200 text-indigo-700'
+                  ? 'hover:bg-[#3c3c3c] text-sky-300'
+                  : 'hover:bg-slate-200 text-blue-700'
               }`}
               title="Format Document with Prettier (Shift+Alt+F)"
             >
-              <Sparkles className="w-3 h-3 text-indigo-400" />
+              <Sparkles className="w-3 h-3 text-sky-400" />
               <span>Prettier</span>
             </button>
 
             <button
               onClick={() => setIsPrimarySidebarOpen(!isPrimarySidebarOpen)}
-              className={`p-1.5 rounded transition ${
+              className={`p-1.5 rounded transition cursor-pointer ${
                 isDark ? 'hover:bg-[#3c3c3c] text-slate-300' : 'hover:bg-slate-200 text-slate-700'
               }`}
               title="Toggle Primary Side Bar (Ctrl+B)"
             >
               <Files className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              onClick={handleExitIDE}
-              className="flex items-center gap-1.5 px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs shadow transition active:scale-95 ml-1"
-              title="Exit Monaco IDE and return to application view (Ctrl+Shift+F)"
-            >
-              <Minimize2 className="w-3.5 h-3.5" />
-              <span>Exit IDE</span>
-              <kbd className="opacity-80 text-[10px] px-1 bg-black/30 rounded border border-white/20 font-mono ml-0.5">
-                Ctrl+Shift+F
-              </kbd>
             </button>
           </div>
         </div>
@@ -3136,7 +3294,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
           >
             {/* Header of Primary Sidebar */}
             <div
-              className={`flex items-center justify-between px-4 py-2.5 uppercase tracking-wider text-[11px] font-bold border-b ${
+              className={`flex items-center justify-between px-4 py-2.5 tracking-wide text-[11px] font-bold border-b ${
                 isDark ? 'text-slate-300 border-[#333333]' : 'text-slate-950 border-slate-200 bg-slate-100/90'
               }`}
             >
@@ -3179,19 +3337,36 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         <Folder className="w-3.5 h-3.5 text-blue-500" />
                         <span>components ({allPlugins.length})</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddNewPlugin();
-                        }}
-                        className={`p-0.5 rounded transition ${
-                          isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
-                        }`}
-                        title="Add New Component (.tsx)"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {onOpenAddPluginModal && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenAddPluginModal();
+                            }}
+                            className={`p-0.5 rounded transition cursor-pointer ${
+                              isDark ? 'hover:bg-slate-700 text-sky-400 hover:text-white' : 'hover:bg-slate-200 text-blue-600 hover:text-black'
+                            }`}
+                            title="Import Component Wizard (Local File, Folder, or Dropbox)"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddNewPlugin();
+                          }}
+                          className={`p-0.5 rounded transition cursor-pointer ${
+                            isDark ? 'hover:bg-slate-700 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                          }`}
+                          title="Add New Component (.tsx)"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     {expandedFolders.plugins && (
@@ -3228,8 +3403,9 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                               {systemPlugins.map((p) => (
                                 <div
                                   key={p.id}
-                                  onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                                  onClick={() => openAndTogglePlugin(p.id, p.name)}
+                                  title={`Open "${p.name}" in Interactive UI View (Ctrl+Shift+K for Code)`}
+                                  className={`group flex items-center justify-between gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
                                     'plugin',
                                     p.id,
                                     p.name,
@@ -3237,8 +3413,24 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                     'text-sky-600'
                                   )}`}
                                 >
-                                  <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
-                                  <span className="truncate">{p.name}.tsx</span>
+                                  <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                    <Play className={`w-3 h-3 flex-shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-500'}`} />
+                                    <span className="truncate">{p.name}</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openOrActivateItem({ type: 'plugin', id: p.id, name: p.name });
+                                      setToggledTabIds((prev) => ({ ...prev, [`tab_plugin_${p.id}`]: false }));
+                                    }}
+                                    className={`p-0.5 rounded opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-pointer ${
+                                      isDark ? 'hover:bg-slate-700 text-slate-300 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-black'
+                                    }`}
+                                    title="Open TSX Source Code"
+                                  >
+                                    <Code2 className="w-3 h-3" />
+                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -3281,7 +3473,8 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                 <div
                                   key={p.id}
                                   onClick={() => openOrActivateItem({ type: 'plugin', id: p.id, name: p.name })}
-                                  className={`flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
+                                  title={`Open "${p.name}.tsx" Code View (Ctrl+Shift+K for Live UI)`}
+                                  className={`group flex items-center justify-between gap-1.5 px-2 py-1 rounded cursor-pointer transition truncate ${getItemClass(
                                     'plugin',
                                     p.id,
                                     p.name,
@@ -3289,8 +3482,23 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                     'text-emerald-600'
                                   )}`}
                                 >
-                                  <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
-                                  <span className="truncate">{p.name}.tsx</span>
+                                  <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                    <FileCode className={`w-3.5 h-3.5 flex-shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
+                                    <span className="truncate">{p.name}.tsx</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openAndTogglePlugin(p.id, p.name);
+                                    }}
+                                    className={`p-0.5 rounded opacity-0 group-hover:opacity-100 transition flex-shrink-0 cursor-pointer ${
+                                      isDark ? 'hover:bg-emerald-800 text-emerald-300 hover:text-white' : 'hover:bg-emerald-100 text-emerald-700 hover:text-black'
+                                    }`}
+                                    title="Run / Open Live UI View (Ctrl+Shift+K)"
+                                  >
+                                    <Play className="w-3 h-3" />
+                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -3368,7 +3576,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                 return (
                                   <div key={t.name} className="space-y-0.5">
                                     <div
-                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-text group ${getItemClass(
                                         'table',
                                         undefined,
                                         t.name,
@@ -3495,7 +3703,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                   return (
                                     <div key={t.name} className="space-y-0.5">
                                       <div
-                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-text group ${getItemClass(
                                           'table',
                                           undefined,
                                           t.name,
@@ -3658,7 +3866,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                 return (
                                   <div key={v.name} className="space-y-0.5">
                                     <div
-                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                      className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-text group ${getItemClass(
                                         'table',
                                         undefined,
                                         v.name,
@@ -3776,7 +3984,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                                   return (
                                     <div key={v.name} className="space-y-0.5">
                                       <div
-                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-none group ${getItemClass(
+                                        className={`flex items-center justify-between gap-1 px-1.5 py-1 rounded cursor-pointer transition select-text group ${getItemClass(
                                           'table',
                                           undefined,
                                           v.name,
@@ -3895,7 +4103,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           <div
                             key={q.id}
                             onClick={() => openOrActivateItem({ type: 'query', id: q.id, name: q.name })}
-                            className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition select-none ${getItemClass(
+                            className={`group flex items-center justify-between px-2 py-1 rounded cursor-pointer transition select-text ${getItemClass(
                               'query',
                               q.id,
                               q.name,
@@ -3939,19 +4147,36 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         <Folder className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-500'}`} />
                         <span>reports ({allReports.length})</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddNewReport();
-                        }}
-                        className={`p-0.5 rounded transition ${
-                          isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
-                        }`}
-                        title="Add New Report (.json)"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {onNewReportVisual && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNewReportVisual();
+                            }}
+                            className={`p-0.5 rounded transition cursor-pointer ${
+                              isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
+                            }`}
+                            title="New Visual Report (Report Builder)"
+                          >
+                            <Wand2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddNewReport();
+                          }}
+                          className={`p-0.5 rounded transition cursor-pointer ${
+                            isDark ? 'hover:bg-slate-700 text-emerald-400 hover:text-white' : 'hover:bg-emerald-100 text-emerald-600 hover:text-black'
+                          }`}
+                          title="Add New Report (.json)"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     {expandedFolders.reports && (
                       <div className={`pl-6 space-y-0.5 mt-0.5 border-l ml-3 ${isDark ? 'border-emerald-500/30' : 'border-emerald-300'}`}>
@@ -4127,7 +4352,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-950'}`}>Keyboard Shortcuts:</span>
                     <div className="space-y-1.5">
                       {[
-                        ['Ctrl + Shift + F', 'Toggle Monaco IDE / Gawkyy Shell'],
+                        ['Ctrl + Shift + F', 'Toggle IDE Mode / App Mode (auto-saves edits)'],
                         ['Ctrl + Shift + K', 'Toggle View (Code <-> Preview/Data/Report)'],
                         ['Shift + Alt + F', 'Format Document (Prettier)'],
                         ['Ctrl + Enter', 'Run Query / Test Component'],
@@ -4214,7 +4439,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
           </div>
         )}
         {isResizingSidebar && (
-          <div className="fixed inset-0 z-50 cursor-col-resize select-none pointer-events-auto" />
+          <div className="fixed inset-0 z-50 cursor-col-resize pointer-events-auto" />
         )}
 
         {/* 3. CENTER MONACO EDITOR CANVAS & TABS */}
@@ -4467,7 +4692,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                           results={resList}
                           title={queryName}
                           theme={theme}
-                          onOpenInIDE={() => {}}
+                          onOpenInIDE={undefined}
                           onOpenSpreadsheet={(data, sheetName) => handleIDEOpenSpreadsheet(data || { columns: [], values: [] }, sheetName)}
                           onBackToView={handleToggleViewInIDE}
                         />
@@ -4527,21 +4752,35 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                         <FileText className="w-4 h-4 text-emerald-400" />
                         <span>Report Display: {currentReportObj.name}</span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleToggleViewInIDE}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
-                          isDark ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 border-slate-300 text-blue-700 hover:bg-slate-200'
-                        }`}
-                        title="Toggle View (ctrl+shift+K)"
-                      >
-                        Switch to Report JSON Code (Ctrl+Shift+K)
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {onEditReportVisual && (
+                          <button
+                            type="button"
+                            onClick={() => onEditReportVisual(currentReportObj!)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition cursor-pointer"
+                            title="Customize report visually in Report Builder"
+                          >
+                            <Wand2 className="w-3.5 h-3.5" />
+                            <span>Visual Builder</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleToggleViewInIDE}
+                          className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer ${
+                            isDark ? 'bg-slate-800 border-slate-700 text-blue-300 hover:bg-slate-700 hover:text-white' : 'bg-slate-100 border-slate-300 text-blue-700 hover:bg-slate-200'
+                          }`}
+                          title="Toggle View (ctrl+shift+K)"
+                        >
+                          Switch to Report JSON Code (Ctrl+Shift+K)
+                        </button>
+                      </div>
                     </div>
                     <div className="flex-1 overflow-auto p-4">
                       <ReportViewer
                         report={currentReportObj}
                         theme={theme}
+                        onEdit={onEditReportVisual ? () => onEditReportVisual(currentReportObj!) : undefined}
                         onBack={handleToggleViewInIDE}
                       />
                     </div>
@@ -4606,17 +4845,32 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     }`}
                   >
                     <div
-                      className={`flex items-center justify-between px-3 py-1 border-b text-xs ${
+                      className={`flex flex-wrap items-center justify-between gap-2 px-3 py-1 border-b text-xs ${
                         isDark ? 'bg-[#252526] border-[#333333] text-slate-200' : 'bg-[#f3f3f3] border-[#e5e5e5] text-slate-800'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Terminal className="w-3.5 h-3.5 text-blue-400" />
                         <span className="font-semibold">Terminal / SQL Output</span>
                         {queryResults.length > 1 && (
-                          <span className={`text-[10px] font-mono ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                            ({queryResults.length} statement outputs)
-                          </span>
+                          <div className="flex items-center gap-1 ml-1">
+                            {queryResults.map((_, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setActiveResultIndex(idx)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono transition cursor-pointer ${
+                                  idx === activeResultIndex
+                                    ? 'bg-blue-600 text-white font-semibold'
+                                    : isDark
+                                    ? 'bg-[#1e1e1e] text-slate-300 hover:bg-slate-700'
+                                    : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                                }`}
+                              >
+                                Stmt {idx + 1}
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
                       <button
@@ -4693,8 +4947,31 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="font-semibold flex items-center gap-1 flex-shrink-0">
             <Code2 className="w-3.5 h-3.5" />
-            <span>main</span>
+            <span>IDE</span>
           </span>
+
+          {/* Active Database File & Sync Status (replaces legacy footer bar) */}
+          <div className="hidden lg:flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-900/50 border border-blue-400/30 text-white font-mono text-[10px] flex-shrink-0">
+            <HardDrive className="w-3 h-3 text-sky-300" />
+            <span className="font-semibold">{storageMeta.fileName || 'new_database.sqlite'}</span>
+            <span className="opacity-75">({((storageMeta.fileSize || 0) / 1024).toFixed(1)} KB)</span>
+            {storageMeta.syncStatus === 'dirty' ? (
+              <button
+                type="button"
+                onClick={() => gawContext?.storage?.save?.()}
+                className="inline-flex items-center gap-1 ml-1 px-1.5 py-0.2 rounded bg-red-600/90 hover:bg-red-500 text-white font-bold transition cursor-pointer"
+                title="Unsaved database changes — click to save database file"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                <span>DB Unsaved</span>
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 ml-1 text-emerald-200 font-semibold" title="Database synchronized">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                <span>DB Synced</span>
+              </span>
+            )}
+          </div>
 
           {/* Full name of currently-active item being edited */}
           {activeTab && (() => {
@@ -4709,7 +4986,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 {activeTab.type === 'plugin' ? (
                   <FileCode className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
                 ) : activeTab.type === 'table' ? (
-                  <TableIcon className="w-3.5 h-3.5 text-amber-300 flex-shrink-0" />
+                  <TableIcon className="w-3.5 h-3.5 text-sky-300 flex-shrink-0" />
                 ) : activeTab.type === 'report' ? (
                   <FileText className="w-3.5 h-3.5 text-emerald-300 flex-shrink-0" />
                 ) : (
@@ -4717,19 +4994,19 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 )}
                 {/* Full name without truncation */}
                 <span
-                  className="font-bold whitespace-nowrap overflow-x-auto max-w-[260px] sm:max-w-[420px] md:max-w-[550px] scrollbar-none"
+                  className="font-bold whitespace-nowrap overflow-x-auto max-w-[240px] sm:max-w-[380px] md:max-w-[500px] scrollbar-none"
                   title={displayTitle}
                 >
                   {displayTitle}
                 </span>
                 {/* Saved / Unsaved Status */}
                 {activeTab.isDirty ? (
-                  <span className="inline-flex items-center gap-1 ml-1 text-amber-300 font-bold text-[10px] flex-shrink-0" title="Unsaved changes in active tab">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+                  <span className="inline-flex items-center gap-1 ml-1 text-red-200 font-bold text-[10px] flex-shrink-0" title="Unsaved changes in active tab">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-300 animate-pulse" />
                     Unsaved
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 ml-1 text-emerald-200 text-[10px] flex-shrink-0" title="File is saved">
+                  <span className="inline-flex items-center gap-1 ml-1 text-emerald-200 text-[10px] flex-shrink-0" title="Tab saved">
                     <Check className="w-3 h-3 text-emerald-300" />
                     Saved
                   </span>
@@ -4752,8 +5029,8 @@ export default function ${componentName}({ gawContext }: PluginProps) {
               {markerStats.errors} {markerStats.errors === 1 ? 'error' : 'errors'}
             </span>
             <span>,</span>
-            <span className={markerStats.warnings > 0 ? "text-amber-200 font-bold flex items-center gap-1" : "flex items-center gap-1 opacity-90"}>
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-200" />
+            <span className={markerStats.warnings > 0 ? "text-sky-100 font-bold flex items-center gap-1" : "flex items-center gap-1 opacity-90"}>
+              <AlertTriangle className="w-3.5 h-3.5 text-sky-200" />
               {markerStats.warnings} {markerStats.warnings === 1 ? 'warning' : 'warnings'}
             </span>
           </button>
@@ -4777,12 +5054,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
           <span className="capitalize">{editorLanguage}</span>
 
           <button
-            onClick={handleExitIDE}
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-700 hover:bg-blue-600 text-white font-medium text-[10px] cursor-pointer"
-            title="Exit Monaco IDE and return to application view (Ctrl+Shift+F)"
+            type="button"
+            onClick={() => handleSwitchToAppMode()}
+            className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[10px] cursor-pointer shadow-xs transition"
+            title="Auto-save dirty tabs and switch to App Mode (Ctrl+Shift+F)"
           >
             <Code2 className="w-3 h-3" />
-            <span>Exit IDE (Ctrl+Shift+F)</span>
+            <span>App Mode (Ctrl+Shift+F)</span>
           </button>
         </div>
       </div>
