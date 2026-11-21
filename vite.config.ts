@@ -1,3 +1,10 @@
+/**
+ * Official Documentation:
+ * - Vite Configuration Reference: https://vite.dev/config/
+ * - Rolldown Code Splitting Options: https://rolldown.rs/reference/OutputOptions.codeSplitting
+ * - vite-plugin-pwa Configuration: https://vite-pwa-org.netlify.app/guide/
+ * - Tailwind CSS Vite Plugin: https://tailwindcss.com/docs/installation/using-vite
+ */
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
@@ -12,6 +19,7 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       {
+        // Copy dist/index.html to dist/404.html so static hosts (e.g. GitHub Pages) serve the SPA on deep links
         name: 'generate-spa-404',
         closeBundle() {
           const indexHtml = path.resolve('dist/index.html');
@@ -56,6 +64,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          // Match all built assets emitted into dist/ (requires glob >= 14.0.2 when minimatch >= 11 is installed)
           globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         },
@@ -65,21 +74,24 @@ export default defineConfig(() => {
       }),
     ],
     build: {
+      // Allow the intact lucide-react chunk (~620 kB minified, ~160 kB gzipped) required by dynamic TSX plugins
+      chunkSizeWarningLimit: 700,
       rolldownOptions: {
         output: {
-          // Split large vendor packages into separate cacheable chunks under 500 kB
-          // Official Rolldown docs: https://rolldown.rs/reference/OutputOptions.codeSplitting
+          // Split large vendor libraries into separate cacheable chunks without maxSize slicing.
+          // Note: Do NOT set maxSize on lucide-react or general vendor groups—forcing Rolldown to
+          // slice a single package across multiple chunks can introduce circular ES module imports
+          // that evaluate before createLucideIcon is initialized (causing a blank-page runtime crash).
+          // Prettier is already dynamically imported per-module in src/engine/formatter.ts and splits naturally.
           codeSplitting: {
             groups: [
               { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
-              { name: 'vendor-lucide', test: /node_modules[\\/]lucide-react[\\/]/, maxSize: 350000 },
+              { name: 'vendor-lucide', test: /node_modules[\\/]lucide-react[\\/]/ },
               { name: 'vendor-sucrase', test: /node_modules[\\/]sucrase[\\/]/ },
-              { name: 'vendor-prettier', test: /node_modules[\\/]prettier[\\/]/, maxSize: 350000 },
               { name: 'vendor-excel', test: /node_modules[\\/](read-excel-file|write-excel-file|fflate)[\\/]/ },
               { name: 'vendor-motion', test: /node_modules[\\/](motion|framer-motion)[\\/]/ },
               { name: 'vendor-monaco', test: /node_modules[\\/](@monaco-editor|monaco-editor)[\\/]/ },
               { name: 'vendor-sqljs', test: /node_modules[\\/]sql\.js[\\/]/ },
-              { name: 'vendor', test: /node_modules[\\/]/, maxSize: 400000 },
             ],
           },
         },
