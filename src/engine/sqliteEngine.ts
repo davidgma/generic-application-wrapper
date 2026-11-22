@@ -12,7 +12,7 @@ const initSqlJs = (config?: Parameters<typeof rawInitSqlJs>[0]): Promise<SqlJsSt
   return fn(config);
 };
 import { ColumnInfo, QueryResult, TableSchema, SavedQuery } from '../types/sqlite';
-import { PluginRecord, SYSTEM_PLUGIN_IDS } from '../types/plugin';
+import { PluginRecord, SYSTEM_PLUGIN_IDS, DEPRECATED_SYSTEM_PLUGIN_IDS } from '../types/plugin';
 import { SavedReport } from '../types/report';
 import { logDebugStage } from '../utils/debugLogger';
 import {
@@ -20,7 +20,7 @@ import {
   DEFAULT_INVENTORY_PLUGIN_CODE,
   DEFAULT_EXECUTIVE_PLUGIN_CODE,
   DEFAULT_HELLO_WORLD_PLUGIN_CODE,
-  DEFAULT_DROPBOX_PLUGIN_CODE,
+  DEFAULT_CLOCKIE_H2_PLUGIN_CODE,
   DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
   DEFAULT_HELP_PLUGIN_CODE,
   DEFAULT_PLUGIN_MANAGER_CODE,
@@ -190,15 +190,15 @@ export class SQLiteEngine {
     const now = new Date().toISOString();
     const defaults: PluginRecord[] = [
       {
-        id: 'plugin_dropbox_sync',
-        name: 'Dropbox Cloud Sync',
-        version: '1.0.0',
+        id: 'plugin_clockie_h2',
+        name: 'Clockie H2 Drives',
+        version: '1.5.0',
         enabled: 1,
         icon: 'Cloud',
-        menu_category: 'System & Cloud',
-        route: '/dropbox-sync',
-        description: 'Connect to Dropbox, monitor cloud sync status, configure auto-sync interval, push/pull databases, and browse remote files.',
-        code: DEFAULT_DROPBOX_PLUGIN_CODE,
+        menu_category: 'System & Storage',
+        route: '/clockie-h2',
+        description: 'Connect to Clockie H2 Bridge v1.5 to browse pCloud, Google Drive, Dropbox, and Local drives with real-time file observation and clash-free saving.',
+        code: DEFAULT_CLOCKIE_H2_PLUGIN_CODE,
         created_at: now,
         updated_at: now,
         is_system: true,
@@ -208,13 +208,13 @@ export class SQLiteEngine {
       },
       {
         id: 'plugin_local_storage',
-        name: 'Local Storage & Disk Sync',
+        name: 'Local File Storage',
         version: '1.0.0',
         enabled: 1,
         icon: 'HardDrive',
         menu_category: 'System & Storage',
         route: '/local-storage',
-        description: 'Manage local disk database saving, File System Access API handles, auto-save timers, direct exports, and file opening.',
+        description: 'Standalone manual Open, Save, Save As, and .db binary export for browsers without the Clockie H2 extension.',
         code: DEFAULT_LOCAL_STORAGE_PLUGIN_CODE,
         created_at: now,
         updated_at: now,
@@ -231,7 +231,7 @@ export class SQLiteEngine {
         icon: 'Puzzle',
         menu_category: 'System & Components',
         route: '/plugin-manager',
-        description: 'Manage dynamic TSX components: toggle active/inactive, import new components from disk/Dropbox/blank, open in IDE, and remove components safely.',
+        description: 'Manage dynamic TSX components: toggle active/inactive, import new components from Clockie H2 drives, local disk, or blank template, open in IDE, and remove components safely.',
         code: DEFAULT_PLUGIN_MANAGER_CODE,
         created_at: now,
         updated_at: now,
@@ -248,7 +248,7 @@ export class SQLiteEngine {
         icon: 'FolderOpen',
         menu_category: 'System & Storage',
         route: '/files',
-        description: 'Manage file openings and closings, Dropbox cloud sync status, recent files log, and workspace templates.',
+        description: 'Manage active SQLite databases, Clockie H2 multi-drive sync, standalone local files, recent files log, and workspace templates.',
         code: DEFAULT_FILE_MANAGER_PLUGIN_CODE,
         created_at: now,
         updated_at: now,
@@ -1463,7 +1463,11 @@ export class SQLiteEngine {
     return bin;
   }
 
-  public loadBinary(data: Uint8Array, dbName?: string): void {
+  public loadBinary(
+    data: Uint8Array,
+    dbName?: string,
+    options?: { preserveExternalBinding?: boolean }
+  ): void {
     if (!this.sqlJs) throw new Error('SQL.js not initialized');
     if (this.db) {
       try {
@@ -1477,8 +1481,12 @@ export class SQLiteEngine {
     if (dbName) {
       this.activeDbName = dbName;
     }
+    // Always refresh built-in system plugins from the current app bundle and purge legacy embedded copies
+    this.resetSystemPlugins();
     this.ensureSystemTables();
-    this.notifyDatabaseReset(this.activeDbName);
+    if (!options?.preserveExternalBinding) {
+      this.notifyDatabaseReset(this.activeDbName);
+    }
     this.notifyChange(false);
   }
 
@@ -1561,9 +1569,20 @@ export class SQLiteEngine {
         }
       } catch (e) {}
 
-      // Clean out system core plugins from DB if present
+      // Automatically purge any older/deprecated embedded system plugins from opened databases
+      // so Gawkyy always serves the latest built-in system plugins fresh from memory
+      const allSystemIds = [
+        ...Array.from(SYSTEM_PLUGIN_IDS),
+        ...Array.from(DEPRECATED_SYSTEM_PLUGIN_IDS),
+      ];
+      if (allSystemIds.length > 0) {
+        const placeholders = allSystemIds.map(() => '?').join(', ');
+        this.db.run(`DELETE FROM t_gaw_ext_plugins WHERE id IN (${placeholders});`, allSystemIds);
+      }
+
+      // Migrate legacy initial_plugin setting if it pointed to the removed Dropbox plugin
       this.db.run(
-        "DELETE FROM t_gaw_ext_plugins WHERE id IN ('plugin_dropbox_sync', 'plugin_local_storage', 'plugin_manager', 'plugin_file_manager', 'plugin_database_management', 'plugin_help', 'plugin_settings', 'plugin_header_navbar', 'plugin_components_list', 'plugin_footer_status', 'plugin_debugging');"
+        "UPDATE t_gaw_ext_settings SET value = 'plugin_clockie_h2' WHERE key = 'initial_plugin' AND value = 'plugin_dropbox_sync';"
       );
 
       // Ensure default settings exist
@@ -1607,7 +1626,7 @@ export class SQLiteEngine {
     try {
       const tbl = this.getSysTableName('plugins');
       const userList = this.queryObjects<PluginRecord>(`SELECT * FROM ${tbl} ORDER BY name ASC;`)
-        .filter((p) => !SYSTEM_PLUGIN_IDS.has(p.id))
+        .filter((p) => !SYSTEM_PLUGIN_IDS.has(p.id) && !DEPRECATED_SYSTEM_PLUGIN_IDS.has(p.id))
         .map((p) => ({
           ...p,
           target_area: p.target_area || (p as any).targetArea || 'middle',
@@ -1623,7 +1642,14 @@ export class SQLiteEngine {
 
   public setPluginEnabled(pluginId: string, enabled: boolean): void {
     if (SYSTEM_PLUGIN_IDS.has(pluginId)) {
-      if ((pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager' || pluginId === 'plugin_database_management') && !enabled) {
+      if (
+        (pluginId === 'plugin_manager' ||
+          pluginId === 'plugin_local_storage' ||
+          pluginId === 'plugin_clockie_h2' ||
+          pluginId === 'plugin_file_manager' ||
+          pluginId === 'plugin_database_management') &&
+        !enabled
+      ) {
         console.warn('Cannot disable core system plugin:', pluginId);
         return;
       }

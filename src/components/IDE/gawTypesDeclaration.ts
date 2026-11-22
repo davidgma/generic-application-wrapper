@@ -1,6 +1,11 @@
+/**
+ * Official Documentation:
+ * - Monaco Editor TypeScript Extra Libs: https://microsoft.github.io/monaco-editor/typedoc/interfaces/languages.typescript.LanguageServiceDefaults.html
+ */
+
 export const GAW_TYPES_DECLARATION = `
 /**
- * Generic Application Wrapper (gawkyy) Plugin API Definitions
+ * Generic Application Wrapper (Gawkyy) Plugin API Definitions
  */
 export interface ColumnInfo {
   cid: number;
@@ -27,6 +32,8 @@ export interface QueryResult {
   sqlQuery?: string;
   error?: string;
 }
+
+export type H2Provider = 'pcloud' | 'gdrive' | 'dropbox' | 'local';
 
 export interface GAWToastApi {
   /** Display a success notification */
@@ -85,6 +92,41 @@ export interface GAWEventBusApi {
   emit: (event: string, ...args: any[]) => void;
 }
 
+export interface GAWBridgeApi {
+  /** Get current Clockie H2 Bridge v1.5 connection, drives, and active observed file state */
+  getState: () => any;
+  /** Subscribe to Clockie H2 state changes */
+  subscribe: (listener: (state: any) => void) => () => void;
+  /** Reconnect to Clockie H2 extension */
+  reconnect: () => Promise<boolean>;
+  /** List a folder on any connected drive ('pcloud' | 'gdrive' | 'dropbox' | 'local') */
+  listFolder: (opts?: { provider?: H2Provider | 'all'; driveRoot?: boolean; basePath?: string; maxDepth?: number }) => Promise<any>;
+  /** Check file metadata and revision without downloading file bytes */
+  statFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string }) => Promise<any>;
+  /** Read a UTF-8 or Base64 file from a Clockie H2 drive */
+  readFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; encoding?: 'utf-8' | 'base64' }) => Promise<any>;
+  /** Read a binary file as Uint8Array from a Clockie H2 drive */
+  readBinaryFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string }) => Promise<any>;
+  /** Save a text or binary file with optional expectedRevision optimistic concurrency check */
+  saveFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; content: string; contentType?: 'text' | 'binary'; encoding?: 'utf-8' | 'base64'; mimeType?: string; expectedRevision?: string }) => Promise<any>;
+  /** Save binary Uint8Array bytes to a Clockie H2 drive */
+  saveBinaryFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; bytes: Uint8Array; mimeType?: string; expectedRevision?: string }) => Promise<any>;
+  /** Subscribe to live file change push events via Clockie H2 v1.5 */
+  observeFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; pollIntervalMs?: number; debounceMs?: number }) => Promise<any>;
+  /** Subscribe to live folder change push events via Clockie H2 v1.5 */
+  observeFolder: (opts: { provider: H2Provider; relativePath?: string; driveRoot?: boolean; folderId?: string; recursive?: boolean }) => Promise<any>;
+  /** Cancel one observation by ID or all observations */
+  unobserve: (observationIdOrOptions?: string | { observationId?: string; all?: boolean }) => Promise<any>;
+  /** Listen for incoming H2_FILE_CHANGED_EVENT notifications */
+  onFileChanged: (handler: (event: any) => void) => () => void;
+  /** Listen for incoming H2_FOLDER_CHANGED_EVENT notifications */
+  onFolderChanged: (handler: (event: any) => void) => () => void;
+  /** Open a SQLite database stored on any Clockie H2 drive */
+  openDatabase: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; name?: string }) => Promise<boolean>;
+  /** Save the active SQLite database back to Clockie H2 with conflict protection */
+  saveDatabase: () => Promise<boolean>;
+}
+
 export interface GAWContext {
   /** Full SQLite database operations */
   db: GAWDatabaseApi;
@@ -96,6 +138,8 @@ export interface GAWContext {
   navigation: GAWNavigationApi;
   /** Inter-plugin pub-sub event bus */
   eventBus: GAWEventBusApi;
+  /** Clockie H2 Extension Bridge v1.5 (pCloud, Google Drive, Dropbox, Local) */
+  bridge: GAWBridgeApi;
   /** Active UI color scheme ('vs-dark' or 'vs-light') */
   theme: 'vs-dark' | 'vs-light';
 }

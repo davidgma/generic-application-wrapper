@@ -7,7 +7,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { SQLiteEngine } from './engine/sqliteEngine';
 import { FileStorageEngine } from './engine/fileStorage';
-import { DropboxSyncEngine } from './engine/dropboxSync';
+import { H2BridgeEngine, formatProviderLabel } from './engine/h2Bridge';
 import { PluginEngine } from './engine/pluginEngine';
 import { TableSchema, SavedQuery, QueryResult } from './types/sqlite';
 import { PluginRecord, GAWContext, isSystemPlugin } from './types/plugin';
@@ -33,7 +33,6 @@ const ReportViewer = lazy(() => import('./components/ReportViewer').then((m) => 
 const ReportBuilder = lazy(() => import('./components/ReportBuilder').then((m) => ({ default: m.ReportBuilder })));
 const AIAssistant = lazy(() => import('./components/AIAssistant').then((m) => ({ default: m.AIAssistant })));
 const AddPluginModal = lazy(() => import('./components/AddPluginModal').then((m) => ({ default: m.AddPluginModal })));
-const DropboxModal = lazy(() => import('./components/DropboxModal').then((m) => ({ default: m.DropboxModal })));
 const SettingsModal = lazy(() => import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal })));
 
 import {
@@ -41,7 +40,6 @@ import {
   CheckCircle,
   Info,
   AlertTriangle,
-  Cloud,
   Code2,
   Sparkles,
   LayoutGrid,
@@ -218,21 +216,18 @@ export default function App() {
   const [activeSavedQuery, setActiveSavedQuery] = useState<SavedQuery | null>(null);
   const [activeQueryTitle, setActiveQueryTitle] = useState<string>('');
 
-  // Storage and Sync Metadata
+  // Storage and Clockie H2 Extension Bridge Engines
   const storageEngine = useMemo(() => FileStorageEngine.getInstance(), []);
-  const dropboxEngine = useMemo(() => DropboxSyncEngine.getInstance(), []);
+  const h2Engine = useMemo(() => H2BridgeEngine.getInstance(), []);
   const [storageMeta, setStorageMeta] = useState<StorageMetadata>(storageEngine.getMetadata());
   const [activeConflict, setActiveConflict] = useState<ConflictDetails | null>(null);
 
   // Modals
-  const [showDropboxModal, setShowDropboxModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showReportBuilder, setShowReportBuilder] = useState(false);
   const [reportToEdit, setReportToEdit] = useState<SavedReport | null>(null);
   const [showAddPluginModal, setShowAddPluginModal] = useState(false);
-  const [oauthCallbackStatus, setOauthCallbackStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
-  const [oauthCallbackError, setOauthCallbackError] = useState<string>('');
 
   // Target tab to open and edit in IDE
   const [ideTargetTab, setIdeTargetTab] = useState<TargetTabInfo | null>(null);
@@ -425,7 +420,7 @@ export default function App() {
     };
   }, []);
 
-  // Subscribe to storage status and conflicts
+  // Subscribe to storage status, Clockie H2 bridge updates, and unified conflict notifications
   useEffect(() => {
     const unsubStatus = storageEngine.onStatusChange((meta) => {
       setStorageMeta(meta);
@@ -435,10 +430,18 @@ export default function App() {
       setActiveConflict(conflict);
     });
 
+    h2Engine.onConflict((conflict) => {
+      setActiveConflict(conflict);
+    });
+
+    h2Engine.onNotify((level, message) => {
+      addToast(level, message);
+    });
+
     return () => {
       unsubStatus();
     };
-  }, [storageEngine]);
+  }, [storageEngine, h2Engine, addToast]);
 
   // Synchronize layout dimensions with t_settings if a database is currently active
   const syncLayoutWithDatabase = useCallback((active: boolean) => {
@@ -582,123 +585,78 @@ export default function App() {
     storageEngine.markSaved();
   }, [storageEngine]);
 
-  // Automatically connect to previous active storage target on startup (remember local or dropbox)
+  // Wire remote Clockie H2 file reloads so React state and compiled plugin modules refresh cleanly
   useEffect(() => {
-    dropboxEngine.autoConnectIfActive().then((connected) => {
-      if (connected) {
-        refreshDatabaseState();
+    h2Engine.onRemoteReload(() => {
+      PluginEngine.clearCache();
+      refreshDatabaseState();
+      syncLayoutWithDatabase(true);
+      eventBusApi.emit('storage_changed');
+    });
+  }, [h2Engine, refreshDatabaseState, syncLayoutWithDatabase, eventBusApi]);
+
+  // Connect to Clockie H2 Extension Bridge v1.5 once SQLite is ready (non-blocking 2.5s probe)
+  // If this tab was launched directly from Clockie H2 File Manager on a .db/.sqlite file, open it automatically.
+  const hasAttemptedH2BootRef = useRef(false);
+  useEffect(() => {
+    if (!isEngineReady || hasAttemptedH2BootRef.current) return;
+    hasAttemptedH2BootRef.current = true;
+
+    let cancelled = false;
+    h2Engine.connect(2500).then(async (connected) => {
+      if (cancelled || !connected) return;
+      const state = h2Engine.getState();
+      const scope = state.launchedScope;
+      if (state.sessionMode === 'launched' && scope) {
+        if (
+          scope.launchedItemType === 'file' &&
+          scope.primaryRelativePath &&
+          /\.(db|sqlite|sqlite3)$/i.test(scope.primaryRelativePath)
+        ) {
+          try {
+            const ok = await h2Engine.openDatabase({
+              provider: scope.provider,
+              relativePath: scope.primaryRelativePath,
+              driveRoot: false,
+            });
+            if (!cancelled && ok) {
+              PluginEngine.clearCache();
+              setIsDbActive(true);
+              safeStorage.setItem('gaw_db_active', 'true');
+              setSidebarOpen(true);
+              refreshDatabaseState();
+              syncLayoutWithDatabase(true);
+              eventBusApi.emit('storage_changed');
+              addToast('success', `Opened ${scope.primaryRelativePath} via Clockie H2 (${formatProviderLabel(scope.provider)}).`);
+            }
+          } catch (err: any) {
+            if (!cancelled) {
+              addToast('error', `Failed to open launched Clockie H2 file: ${err?.message || 'Unknown error'}`);
+            }
+          }
+        } else if (scope.launchedItemType === 'folder') {
+          addToast('info', `Clockie H2 launched folder "${scope.rootName || scope.provider}". Select a database in Clockie H2 Drives.`);
+          if (mode === 'ide') {
+            setIdeTargetTab({
+              type: 'plugin',
+              id: 'plugin_clockie_h2',
+              name: 'Clockie H2 Drives',
+              openInView: true,
+              timestamp: Date.now(),
+            });
+          } else {
+            setActiveView('plugin:plugin_clockie_h2');
+            setActiveRoute('file');
+            navigateTo('file', 'plugin:plugin_clockie_h2');
+          }
+        }
       }
     });
-  }, [dropboxEngine, refreshDatabaseState]);
 
-  // Handle OAuth callback (Dropbox PKCE) and listen for popup messages
-  useEffect(() => {
-    // 1. Check if the current window was loaded as the OAuth callback redirect
-    const searchParams = new URLSearchParams(window.location.search);
-    const code = searchParams.get('code');
-    const isAuthCallback = window.location.pathname.startsWith('/auth/callback') || searchParams.has('code');
-
-    if (code && isAuthCallback) {
-      setOauthCallbackStatus('processing');
-      if (window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage({ type: 'DROPBOX_OAUTH_CODE', code }, '*');
-        } catch (e) {
-          console.error('Failed to postMessage to opener:', e);
-        }
-      }
-      safeStorage.setItem('dropbox_pending_code', code);
-
-      // Exchange code in current window (handles both popup and direct redirect)
-      const dropbox = DropboxSyncEngine.getInstance();
-      const storedRedirect =
-        sessionStorage.getItem('dropbox_redirect_uri') ||
-        safeStorage.getItem('dropbox_redirect_uri') ||
-        `${window.location.origin}/`;
-
-      dropbox
-        .exchangeCode(code, storedRedirect)
-        .then((success) => {
-          if (success) {
-            dropbox.setActiveTarget('dropbox');
-            storageEngine.setActiveTarget('dropbox');
-            setOauthCallbackStatus('success');
-            setTimeout(() => {
-              try {
-                window.close();
-              } catch (e) {}
-            }, 800);
-          } else {
-            setOauthCallbackStatus('error');
-            setOauthCallbackError('Token validation failed after code exchange.');
-          }
-        })
-        .catch((err: any) => {
-          setOauthCallbackStatus('error');
-          setOauthCallbackError(err.message || 'Dropbox connection failed');
-        })
-        .finally(() => {
-          window.history.replaceState({}, '', window.location.pathname || '/');
-        });
-    }
-
-    // 2. Main window listener: receive OAuth code from popup window
-    const handleOAuthMessage = async (event: MessageEvent) => {
-      if (event.data?.type === 'DROPBOX_OAUTH_CODE' && event.data.code) {
-        const dropbox = DropboxSyncEngine.getInstance();
-        const storedRedirect =
-          sessionStorage.getItem('dropbox_redirect_uri') ||
-          safeStorage.getItem('dropbox_redirect_uri') ||
-          `${window.location.origin}/`;
-        try {
-          const success = await dropbox.exchangeCode(event.data.code, storedRedirect);
-          if (success) {
-            dropbox.setActiveTarget('dropbox');
-            storageEngine.setActiveTarget('dropbox');
-            addToast('success', 'Connected to Dropbox successfully!');
-            refreshDatabaseState();
-          }
-        } catch (err: any) {
-          addToast('error', `Dropbox connection failed: ${err.message}`);
-        }
-      }
-    };
-
-    // 3. Fallback & Cross-tab sync: storage event listener
-    const handleStorageEvent = async (e: StorageEvent) => {
-      if (e.key === 'gaw_dropbox_auth_broadcast' || e.key === 'gaw_dropbox_config') {
-        dropboxEngine.reloadFromStorage();
-        refreshDatabaseState();
-      }
-      if (e.key === 'dropbox_pending_code' && e.newValue) {
-        const pendingCode = e.newValue;
-        safeStorage.removeItem('dropbox_pending_code');
-        const dropbox = DropboxSyncEngine.getInstance();
-        const storedRedirect =
-          sessionStorage.getItem('dropbox_redirect_uri') ||
-          safeStorage.getItem('dropbox_redirect_uri') ||
-          `${window.location.origin}/`;
-        try {
-          const success = await dropbox.exchangeCode(pendingCode, storedRedirect);
-          if (success) {
-            dropbox.setActiveTarget('dropbox');
-            storageEngine.setActiveTarget('dropbox');
-            addToast('success', 'Connected to Dropbox successfully!');
-            refreshDatabaseState();
-          }
-        } catch (err: any) {
-          // If already exchanged, ignore gracefully
-        }
-      }
-    };
-
-    window.addEventListener('message', handleOAuthMessage);
-    window.addEventListener('storage', handleStorageEvent);
     return () => {
-      window.removeEventListener('message', handleOAuthMessage);
-      window.removeEventListener('storage', handleStorageEvent);
+      cancelled = true;
     };
-  }, [addToast, refreshDatabaseState, storageEngine, dropboxEngine]);
+  }, [isEngineReady, h2Engine, refreshDatabaseState, syncLayoutWithDatabase, eventBusApi, addToast, mode, navigateTo]);
 
   // Open any object in IDE Mode
   const handleOpenInIDE = useCallback(
@@ -763,7 +721,7 @@ export default function App() {
         if (targetView.startsWith('plugin:')) {
           const pId = targetView.replace('plugin:', '');
           targetRoute =
-            pId === 'plugin_file_manager' || pId === 'plugin_local_storage'
+            pId === 'plugin_file_manager' || pId === 'plugin_local_storage' || pId === 'plugin_clockie_h2'
               ? 'file'
               : pId === 'plugin_database_management'
               ? 'database'
@@ -857,7 +815,10 @@ export default function App() {
           return;
         }
       }
-      if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage' || id === 'plugin_file_manager')) {
+      if (
+        type === 'plugin' &&
+        (id === 'plugin_manager' || id === 'plugin_local_storage' || id === 'plugin_file_manager' || id === 'plugin_clockie_h2')
+      ) {
         toastApi.warning(`"${name}" is a core system plugin and cannot be removed to maintain application operation.`);
         return;
       }
@@ -889,7 +850,10 @@ export default function App() {
   const executeDeleteObject = useCallback(() => {
     if (!deleteTarget) return;
     const { type, id, name } = deleteTarget;
-    if (type === 'plugin' && (id === 'plugin_manager' || id === 'plugin_local_storage' || id === 'plugin_file_manager')) {
+    if (
+      type === 'plugin' &&
+      (id === 'plugin_manager' || id === 'plugin_local_storage' || id === 'plugin_file_manager' || id === 'plugin_clockie_h2')
+    ) {
       toastApi.warning(`Cannot delete core system plugin "${name}".`);
       setDeleteTarget(null);
       return;
@@ -925,31 +889,29 @@ export default function App() {
     }
   }, [deleteTarget, toastApi, refreshDatabaseState, activeView]);
 
-  // Subscribe to SQLiteEngine internal changes
+  // Subscribe to SQLiteEngine internal changes (notify local storage + optional H2 debounced auto-save)
   useEffect(() => {
     const engine = SQLiteEngine.getInstance();
     const unsub = engine.subscribe((isUserMutation?: boolean) => {
       if (isUserMutation && isEngineReady) {
         storageEngine.markDirty(true);
+        h2Engine.notifyLocalMutation();
       }
       refreshDatabaseState();
     });
     return unsub;
-  }, [storageEngine, refreshDatabaseState, isEngineReady]);
+  }, [storageEngine, h2Engine, refreshDatabaseState, isEngineReady]);
 
-  // Sync real-time storage & sync target changes
+  // Sync Clockie H2 bridge state updates into storage metadata and plugin event bus
   useEffect(() => {
-    const unsubStorage = storageEngine.onStatusChange((meta) => {
-      setStorageMeta(meta);
-    });
-    const unsubDropbox = dropboxEngine.subscribe(() => {
+    const unsubH2 = h2Engine.subscribe(() => {
       setStorageMeta(storageEngine.getMetadata());
+      eventBusApi.emit('storage_changed');
     });
     return () => {
-      unsubStorage();
-      unsubDropbox();
+      unsubH2();
     };
-  }, [storageEngine, dropboxEngine]);
+  }, [storageEngine, h2Engine, eventBusApi]);
 
   // Global Keyboard Shortcuts for App Mode (Ctrl+S save database, Ctrl+O open file)
   useEffect(() => {
@@ -961,13 +923,20 @@ export default function App() {
       const isCmdOrCtrl = e.metaKey || e.ctrlKey;
       if (isCmdOrCtrl && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        storageEngine.save().then((ok) => {
-          if (ok) toastApi.success('Database saved successfully!');
-        });
+        if (h2Engine.hasActiveFile()) {
+          h2Engine.saveDatabase().catch((err: any) => {
+            toastApi.error(err?.message || 'Clockie H2 save failed.');
+          });
+        } else {
+          storageEngine.save().then((ok) => {
+            if (ok) toastApi.success('Database saved successfully!');
+          });
+        }
       } else if (isCmdOrCtrl && e.key.toLowerCase() === 'o') {
         e.preventDefault();
         storageEngine.openFile().then((ok) => {
           if (ok) {
+            PluginEngine.clearCache();
             toastApi.success('Database opened successfully!');
             refreshDatabaseState();
           }
@@ -977,7 +946,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [storageEngine, toastApi, refreshDatabaseState, mode]);
+  }, [storageEngine, h2Engine, toastApi, refreshDatabaseState, mode]);
 
   // Navigate to Table View
   const handleSelectTable = useCallback((tableName: string, updateHash: boolean = true) => {
@@ -1340,7 +1309,7 @@ export default function App() {
       } else if (hash.startsWith('plugin/')) {
         const pId = hash.replace('plugin/', '');
         const targetRoute =
-          pId === 'plugin_file_manager' || pId === 'plugin_local_storage'
+          pId === 'plugin_file_manager' || pId === 'plugin_local_storage' || pId === 'plugin_clockie_h2'
             ? 'file'
             : pId === 'plugin_database_management'
             ? 'database'
@@ -1459,7 +1428,7 @@ export default function App() {
           if (v.startsWith('plugin:')) {
             const pId = v.replace('plugin:', '');
             const targetRoute =
-              pId === 'plugin_file_manager' || pId === 'plugin_local_storage'
+              pId === 'plugin_file_manager' || pId === 'plugin_local_storage' || pId === 'plugin_clockie_h2'
                 ? 'file'
                 : pId === 'plugin_database_management'
                 ? 'database'
@@ -1536,6 +1505,7 @@ export default function App() {
         openFile: async () => {
           const ok = await storageEngine.openFile();
           if (ok) {
+            PluginEngine.clearCache();
             setIsDbActive(true);
             safeStorage.setItem('gaw_db_active', 'true');
             toastApi.success('Database opened successfully.');
@@ -1546,11 +1516,8 @@ export default function App() {
           return ok;
         },
         exportDownload: (fileName) => storageEngine.exportDownload(fileName),
-        setAutoSyncInterval: (sec) => storageEngine.setAutoSyncInterval(sec),
-        setAutoSyncEnabled: (en) => storageEngine.setAutoSyncEnabled(en),
         setActiveTarget: (target) => {
           storageEngine.setActiveTarget(target);
-          dropboxEngine.setActiveTarget(target);
           refreshDatabaseState();
         },
         onStatusChange: (listener) => storageEngine.onStatusChange(listener),
@@ -1564,51 +1531,59 @@ export default function App() {
           refreshDatabaseState();
         },
       },
-      dropbox: {
-        getConfig: () => dropboxEngine.getConfig(),
-        setAccessToken: async (token) => {
-          const ok = await dropboxEngine.setAccessToken(token);
-          refreshDatabaseState();
-          return ok;
-        },
-        setClientId: (clientId) => dropboxEngine.setClientId(clientId),
-        disconnect: () => {
-          dropboxEngine.disconnect();
-          refreshDatabaseState();
-        },
-        validateToken: async () => dropboxEngine.validateToken(),
-        initiateOAuthFlow: async (clientId, redirectUri) => dropboxEngine.initiateOAuthFlow(clientId, redirectUri),
-        listDatabaseFiles: async (folderPath) => dropboxEngine.listDatabaseFiles(folderPath),
-        downloadFile: async (fileItem) => {
-          const ok = await dropboxEngine.downloadFile(fileItem);
+      bridge: {
+        getState: () => h2Engine.getState(),
+        subscribe: (listener) => h2Engine.subscribe(listener),
+        connect: () => h2Engine.connect(6000),
+        reconnect: () => h2Engine.reconnect(),
+        disconnect: () => h2Engine.disconnect(),
+        setAutoSaveEnabled: (enabled) => h2Engine.setAutoSaveEnabled(enabled),
+        openDatabase: async (opts) => {
+          const ok = await h2Engine.openDatabase(opts);
           if (ok) {
+            PluginEngine.clearCache();
+            setIsDbActive(true);
+            safeStorage.setItem('gaw_db_active', 'true');
             setSidebarOpen(true);
             refreshDatabaseState();
-            toastApi.success(`Loaded ${fileItem.name} from Dropbox.`);
+            syncLayoutWithDatabase(true);
+            eventBusApi.emit('storage_changed');
+            const label = opts.name || opts.relativePath.split('/').pop() || 'database';
+            toastApi.success(`Loaded ${label} via Clockie H2 (${formatProviderLabel(opts.provider)}).`);
           }
           return ok;
         },
-        save: async () => {
-          const item = await dropboxEngine.save();
-          refreshDatabaseState();
-          return item;
+        saveDatabase: async () => {
+          const ok = await h2Engine.saveDatabase();
+          if (ok) refreshDatabaseState();
+          return ok;
         },
-        saveAs: async (suggestedName?: string) => {
-          const item = await dropboxEngine.saveAs(suggestedName);
-          refreshDatabaseState();
-          return item;
+        saveDatabaseAs: async (opts) => {
+          const ok = await h2Engine.saveDatabaseAs(opts);
+          if (ok) {
+            setIsDbActive(true);
+            safeStorage.setItem('gaw_db_active', 'true');
+            refreshDatabaseState();
+          }
+          return ok;
         },
-        uploadActiveDatabase: async (targetPath) => dropboxEngine.uploadActiveDatabase(targetPath),
-        setAutoSyncInterval: (sec) => dropboxEngine.setAutoSyncInterval(sec),
-        setAutoSyncEnabled: (en) => dropboxEngine.setAutoSyncEnabled(en),
-        setActiveTarget: (target) => {
-          dropboxEngine.setActiveTarget(target);
-          storageEngine.setActiveTarget(target);
-          refreshDatabaseState();
-        },
-        subscribe: (listener) => dropboxEngine.subscribe(listener),
-        getCurrentRemoteFile: () => dropboxEngine.getCurrentRemoteFile(),
-        getLastSyncTime: () => dropboxEngine.getLastSyncTime(),
+        requestTree: (opts) => h2Engine.getClient().requestTree(opts),
+        listFolder: (opts) => h2Engine.getClient().listFolder(opts),
+        statFile: (opts) => h2Engine.getClient().statFile(opts),
+        readFile: (opts) => h2Engine.getClient().readFile(opts),
+        readBinaryFile: (opts) => h2Engine.getClient().readBinaryFile(opts),
+        saveFile: (opts) => h2Engine.getClient().saveFile(opts),
+        saveBinaryFile: (opts) => h2Engine.getClient().saveBinaryFile(opts),
+        createFolder: (opts) => h2Engine.getClient().createFolder(opts),
+        deleteFile: (opts) => h2Engine.getClient().deleteFile(opts),
+        deleteFolder: (opts) => h2Engine.getClient().deleteFolder(opts),
+        moveFile: (opts) => h2Engine.getClient().moveFile(opts),
+        moveFolder: (opts) => h2Engine.getClient().moveFolder(opts),
+        observeFile: (opts) => h2Engine.getClient().observeFile(opts),
+        observeFolder: (opts) => h2Engine.getClient().observeFolder(opts),
+        unobserve: (arg) => h2Engine.getClient().unobserve(arg),
+        onFileChanged: (handler) => h2Engine.getClient().onFileChanged(handler),
+        onFolderChanged: (handler) => h2Engine.getClient().onFolderChanged(handler),
       },
       plugins: {
         getAll: () => SQLiteEngine.getInstance().getPlugins(),
@@ -1618,7 +1593,12 @@ export default function App() {
           eventBusApi.emit('db_changed');
         },
         delete: (pluginId) => {
-          if (pluginId === 'plugin_manager' || pluginId === 'plugin_local_storage' || pluginId === 'plugin_file_manager') {
+          if (
+            pluginId === 'plugin_manager' ||
+            pluginId === 'plugin_local_storage' ||
+            pluginId === 'plugin_file_manager' ||
+            pluginId === 'plugin_clockie_h2'
+          ) {
             toastApi.warning('Core system plugins cannot be deleted.');
             return;
           }
@@ -1722,7 +1702,9 @@ export default function App() {
         closeDatabase: async () => {
           setIsDbActive(false);
           safeStorage.setItem('gaw_db_active', 'false');
+          h2Engine.detachActiveFile();
           storageEngine.closeFile();
+          PluginEngine.clearCache();
           SQLiteEngine.getInstance().createMinimalDatabase('new_database.sqlite', 'New Application', 'None');
           refreshDatabaseState();
 
@@ -1756,12 +1738,13 @@ export default function App() {
     eventBusApi,
     theme,
     storageEngine,
-    dropboxEngine,
+    h2Engine,
     handleOpenInIDE,
     handleOpenSpreadsheet,
     handleToggleMode,
     handleToggleTheme,
     refreshDatabaseState,
+    syncLayoutWithDatabase,
   ]);
 
   // Helper for returning to the initial App Hub / primary App view (declared before early returns per Rules of Hooks)
@@ -1787,55 +1770,6 @@ export default function App() {
           >
             Retry Launch
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (oauthCallbackStatus !== 'idle') {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-slate-100 p-6">
-        <div className="max-w-md w-full p-8 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-4 shadow-2xl animate-fade-in">
-          <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
-            <Cloud className="w-8 h-8" />
-          </div>
-          <h2 className="text-lg font-bold text-white">Dropbox Authentication</h2>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            {oauthCallbackStatus === 'success'
-              ? 'Successfully authenticated with Dropbox!'
-              : oauthCallbackStatus === 'error'
-              ? oauthCallbackError || 'Authentication failed. Please verify your credentials.'
-              : 'Verifying authorization code and securing session...'}
-          </p>
-          {oauthCallbackStatus === 'success' && (
-            <div className="pt-2 space-y-3">
-              <p className="text-[11px] text-emerald-400 font-semibold">
-                ✓ Connected! You can now close this window and return to your application.
-              </p>
-              <button
-                onClick={() => {
-                  try {
-                    window.close();
-                  } catch (e) {
-                    setOauthCallbackStatus('idle');
-                  }
-                }}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition active:scale-95"
-              >
-                Close Window
-              </button>
-            </div>
-          )}
-          {oauthCallbackStatus === 'error' && (
-            <div className="pt-2">
-              <button
-                onClick={() => setOauthCallbackStatus('idle')}
-                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition active:scale-95"
-              >
-                Return to Application
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -2212,43 +2146,46 @@ export default function App() {
       />
 
       {/* Modals & Dialogs */}
-      {/* 1. Conflict Resolution Dialog */}
+      {/* 1. Conflict Resolution Dialog (Local Disk & Clockie H2) */}
       {activeConflict && (
         <ConflictDialog
           conflict={activeConflict}
           onKeepLocal={async () => {
-            await storageEngine.resolveConflictKeepLocal();
-            setActiveConflict(null);
-            toastApi.success('Local state overwritten to disk.');
-          }}
-          onReloadDisk={async () => {
-            await storageEngine.resolveConflictReloadDisk();
+            if (activeConflict.source === 'h2') {
+              await h2Engine.resolveConflictKeepLocal();
+            } else {
+              await storageEngine.resolveConflictKeepLocal();
+              toastApi.success('Local state overwritten to disk.');
+            }
             setActiveConflict(null);
             refreshDatabaseState();
-            toastApi.info('Reloaded from disk.');
+          }}
+          onReloadDisk={async () => {
+            if (activeConflict.source === 'h2') {
+              await h2Engine.resolveConflictReloadRemote();
+              toastApi.info(`Reloaded latest version from ${formatProviderLabel(activeConflict.provider)}.`);
+            } else {
+              await storageEngine.resolveConflictReloadDisk();
+              toastApi.info('Reloaded from disk.');
+            }
+            PluginEngine.clearCache();
+            setActiveConflict(null);
+            refreshDatabaseState();
           }}
           onSaveCopy={async () => {
-            await storageEngine.resolveConflictSaveCopy();
+            if (activeConflict.source === 'h2') {
+              await h2Engine.resolveConflictSaveCopy();
+            } else {
+              await storageEngine.resolveConflictSaveCopy();
+              toastApi.success('Saved local state as new copy.');
+            }
             setActiveConflict(null);
-            toastApi.success('Saved local state as new copy.');
+            refreshDatabaseState();
           }}
         />
       )}
 
-      {/* 2. Dropbox Modal */}
-      {showDropboxModal && (
-        <Suspense fallback={null}>
-          <DropboxModal
-            onClose={() => setShowDropboxModal(false)}
-            onFileLoaded={(fn) => {
-              toastApi.success(`Loaded database ${fn} from Dropbox!`);
-              refreshDatabaseState();
-            }}
-          />
-        </Suspense>
-      )}
-
-      {/* 3. Settings Modal */}
+      {/* 2. Settings Modal */}
       {showSettingsModal && (
         <Suspense fallback={null}>
           <SettingsModal
@@ -2267,7 +2204,7 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* 3b. Add Dynamic Plugin Modal (Local File/Directory, Dropbox, or IDE) */}
+      {/* 3. Add Dynamic Plugin Modal (Local File/Directory, Clockie H2 Drives, or IDE) */}
       {showAddPluginModal && (
         <Suspense fallback={null}>
           <AddPluginModal
@@ -2281,12 +2218,14 @@ export default function App() {
                 setActiveView(`plugin:${newPlugin.id}`);
               }
             }}
-            onOpenDropboxSettings={() => {
+            onOpenBridgeSettings={() => {
               setShowAddPluginModal(false);
               if (mode === 'ide') {
-                handleOpenInIDE({ type: 'plugin', id: 'plugin_dropbox_sync', name: 'Dropbox Cloud Sync' });
+                handleOpenInIDE({ type: 'plugin', id: 'plugin_clockie_h2', name: 'Clockie H2 Drives', openInView: true });
               } else {
-                setActiveView('plugin:plugin_dropbox_sync');
+                setActiveView('plugin:plugin_clockie_h2');
+                setActiveRoute('file');
+                navigateTo('file', 'plugin:plugin_clockie_h2');
               }
             }}
             theme={theme}

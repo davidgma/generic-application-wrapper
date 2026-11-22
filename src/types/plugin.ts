@@ -5,10 +5,24 @@
  */
 import React from 'react';
 import { QueryResult, TableSchema } from './sqlite';
-import { StorageMetadata, DropboxConfig, StorageTarget, RecentFileItem } from './storage';
+import {
+  StorageMetadata,
+  StorageTarget,
+  RecentFileItem,
+  H2BridgeState,
+  H2Provider,
+  H2ProviderFilter,
+  H2StatResponse,
+  H2ReadResponse,
+  H2SaveResponse,
+  H2ObserveFileResponse,
+  H2ObserveFolderResponse,
+  H2FileChangedEvent,
+  H2FolderChangedEvent,
+} from './storage';
 
 export const SYSTEM_PLUGIN_IDS = new Set<string>([
-  'plugin_dropbox_sync',
+  'plugin_clockie_h2',
   'plugin_local_storage',
   'plugin_manager',
   'plugin_file_manager',
@@ -23,9 +37,15 @@ export const SYSTEM_PLUGIN_IDS = new Set<string>([
   'plugin_spreadsheet_studio',
 ]);
 
+// Legacy system plugin IDs removed in newer Gawkyy versions so opened databases are automatically cleaned
+export const DEPRECATED_SYSTEM_PLUGIN_IDS = new Set<string>([
+  'plugin_dropbox_sync',
+]);
+
 export function isSystemPlugin(plugin: { id: string; is_system?: boolean; isSystem?: boolean; menu_category?: string }): boolean {
   return (
     SYSTEM_PLUGIN_IDS.has(plugin.id) ||
+    DEPRECATED_SYSTEM_PLUGIN_IDS.has(plugin.id) ||
     Boolean(plugin.is_system) ||
     Boolean(plugin.isSystem) ||
     (Boolean(plugin.menu_category) && plugin.menu_category!.startsWith('System'))
@@ -98,32 +118,154 @@ export interface GAWStorageApi {
   save: () => Promise<boolean>;
   saveAs: (suggestedName?: string) => Promise<boolean>;
   setFileName?: (fileName: string) => void;
+  markDirty?: () => void;
   openFile: () => Promise<boolean>;
   exportDownload: (fileName?: string) => void;
-  setAutoSyncInterval: (seconds: number) => void;
-  setAutoSyncEnabled: (enabled: boolean) => void;
   setActiveTarget: (target: StorageTarget) => void;
   onStatusChange: (listener: (meta: StorageMetadata) => void) => () => void;
 }
 
-export interface GAWDropboxApi {
-  getConfig: () => DropboxConfig;
-  setAccessToken: (token: string) => Promise<boolean>;
-  setClientId: (clientId: string) => void;
-  disconnect: () => void;
-  validateToken: () => Promise<boolean>;
-  initiateOAuthFlow: (clientId: string, redirectUri: string) => Promise<void>;
-  listDatabaseFiles: (folderPath?: string) => Promise<any[]>;
-  downloadFile: (fileItem: any) => Promise<boolean>;
-  uploadActiveDatabase: (targetPath?: string) => Promise<any>;
-  save: () => Promise<any>;
-  saveAs: (suggestedName?: string) => Promise<any>;
-  setAutoSyncInterval: (seconds: number) => void;
-  setAutoSyncEnabled: (enabled: boolean) => void;
-  setActiveTarget: (target: StorageTarget) => void;
-  subscribe: (listener: (cfg: DropboxConfig) => void) => () => void;
-  getCurrentRemoteFile: () => any;
-  getLastSyncTime: () => Date | null;
+// Clockie H2 Extension Bridge v1.5 API exposed to all Gawkyy plugins & user apps
+export interface GAWBridgeApi {
+  getState: () => H2BridgeState;
+  subscribe: (listener: (state: H2BridgeState) => void) => () => void;
+  connect: () => Promise<boolean>;
+  reconnect: () => Promise<boolean>;
+  disconnect: () => Promise<void>;
+  setAutoSaveEnabled: (enabled: boolean) => void;
+
+  // SQLite Database Operations via Clockie H2
+  openDatabase: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    name?: string;
+  }) => Promise<boolean>;
+  saveDatabase: () => Promise<boolean>;
+  saveDatabaseAs: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    overwrite?: boolean;
+  }) => Promise<boolean>;
+
+  // General File & Folder Operations for user-built Gawkyy apps
+  requestTree: (opts?: {
+    provider?: H2ProviderFilter;
+    driveRoot?: boolean;
+    basePath?: string;
+    baseFolderId?: string;
+    maxDepth?: number;
+  }) => Promise<any>;
+  listFolder: (opts?: {
+    provider?: H2ProviderFilter;
+    driveRoot?: boolean;
+    basePath?: string;
+    baseFolderId?: string;
+    maxDepth?: number;
+  }) => Promise<any>;
+  statFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+  }) => Promise<H2StatResponse>;
+  readFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    encoding?: 'utf-8' | 'base64';
+  }) => Promise<H2ReadResponse>;
+  readBinaryFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+  }) => Promise<H2ReadResponse & { bytes: Uint8Array }>;
+  saveFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    mimeType?: string;
+    contentType?: 'text' | 'binary';
+    encoding?: 'utf-8' | 'base64';
+    content: string;
+    expectedRevision?: string;
+  }) => Promise<H2SaveResponse>;
+  saveBinaryFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    mimeType?: string;
+    bytes: Uint8Array;
+    expectedRevision?: string;
+  }) => Promise<H2SaveResponse>;
+  createFolder: (opts: {
+    provider: H2Provider;
+    relativePath?: string;
+    parentRelativePath?: string;
+    parentFolderId?: string;
+    folderName?: string;
+    driveRoot?: boolean;
+  }) => Promise<any>;
+  deleteFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    permanent?: boolean;
+  }) => Promise<any>;
+  deleteFolder: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    folderId?: string;
+    permanent?: boolean;
+  }) => Promise<any>;
+  moveFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    targetRelativePath?: string;
+    targetParentPath?: string;
+    newName?: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    overwrite?: boolean;
+  }) => Promise<any>;
+  moveFolder: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    targetRelativePath?: string;
+    targetParentPath?: string;
+    newName?: string;
+    driveRoot?: boolean;
+    folderId?: string;
+    overwrite?: boolean;
+  }) => Promise<any>;
+  observeFile: (opts: {
+    provider: H2Provider;
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    pollIntervalMs?: number;
+    debounceMs?: number;
+  }) => Promise<H2ObserveFileResponse>;
+  observeFolder: (opts: {
+    provider: H2Provider;
+    relativePath?: string;
+    driveRoot?: boolean;
+    folderId?: string;
+    recursive?: boolean;
+    pollIntervalMs?: number;
+    debounceMs?: number;
+  }) => Promise<H2ObserveFolderResponse>;
+  unobserve: (observationIdOrOptions?: string | { observationId?: string; all?: boolean }) => Promise<any>;
+  onFileChanged: (handler: (event: H2FileChangedEvent) => void) => () => void;
+  onFolderChanged: (handler: (event: H2FolderChangedEvent) => void) => () => void;
 }
 
 export interface GAWPluginsApi {
@@ -141,6 +283,15 @@ export interface GAWWorkspaceApi {
   openSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   isSidebarOpen: () => boolean;
+  getTables?: () => TableSchema[];
+  getQueries?: () => any[];
+  getReports?: () => any[];
+  getPlugins?: () => PluginRecord[];
+  newTable?: () => void;
+  newView?: () => void;
+  newQuery?: () => void;
+  newReport?: () => void;
+  deleteObject?: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
   getRecentFiles: () => RecentFileItem[];
   addRecentFile: (item: Omit<RecentFileItem, 'id' | 'lastOpened'> & { id?: string; lastOpened?: string }) => void;
   removeRecentFile: (id: string) => void;
@@ -166,7 +317,7 @@ export interface GAWContext {
   appDescription?: string;
   plugin: PluginRecord;
   storage: GAWStorageApi;
-  dropbox: GAWDropboxApi;
+  bridge: GAWBridgeApi;
   plugins: GAWPluginsApi;
   workspace: GAWWorkspaceApi;
 }

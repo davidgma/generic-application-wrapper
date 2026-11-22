@@ -1341,41 +1341,45 @@ export default function DatabaseManagementPlugin({ gaw }) {
 }
 `;
 
-export const DEFAULT_DROPBOX_PLUGIN_CODE = `import React, { useState, useEffect } from 'react';
+export const DEFAULT_CLOCKIE_H2_PLUGIN_CODE = `import React, { useState, useEffect, useCallback } from 'react';
 import {
   Cloud,
+  HardDrive,
   Save,
-  Layers,
+  FolderOpen,
+  FolderPlus,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Key,
-  Lock,
-  Folder,
+  Radio,
   Database,
-  ExternalLink,
-  Clock,
-  Settings,
-  HardDrive,
-  Eye,
-  EyeOff
+  ChevronRight,
+  ArrowUp,
+  Layers,
+  ShieldCheck,
+  Plug,
+  Unplug,
+  FileSearch
 } from 'lucide-react';
 
-export default function DropboxSyncPlugin({ gaw }) {
-  const [config, setConfig] = useState(gaw.dropbox.getConfig());
-  const [storageMeta, setStorageMeta] = useState(gaw.storage.getMetadata());
-  const [tokenInput, setTokenInput] = useState(config.accessToken || '');
-  const [showToken, setShowToken] = useState(false);
-  const [clientIdInput, setClientIdInput] = useState(config.clientId || '');
-  const [autoInterval, setAutoInterval] = useState(config.autoSyncIntervalSec || 60);
-  const [autoEnabled, setAutoEnabled] = useState(config.isAutoSyncEnabled !== false);
-  const [isPushing, setIsPushing] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [remoteFiles, setRemoteFiles] = useState([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-  const [activeTab, setActiveTab] = useState('sync');
+export default function ClockieH2Plugin({ gaw }) {
+  const [bridgeState, setBridgeState] = useState(() => gaw.bridge.getState());
+  const [storageMeta, setStorageMeta] = useState(() => gaw.storage.getMetadata());
+  const [selectedProvider, setSelectedProvider] = useState('pcloud');
+  const [currentPath, setCurrentPath] = useState('');
+  const [currentFolderId, setCurrentFolderId] = useState(undefined);
+  const [pathStack, setPathStack] = useState([]);
+  const [entries, setEntries] = useState([]);
+  const [loadingFolder, setLoadingFolder] = useState(false);
+  const [folderError, setFolderError] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCheckingStat, setIsCheckingStat] = useState(false);
+  const [statSummary, setStatSummary] = useState(null);
+  const [saveAsName, setSaveAsName] = useState('');
+  const [saveAsOverwrite, setSaveAsOverwrite] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [showNewFolderInput, setShowNewFolderInput] = useState(false);
 
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1394,625 +1398,740 @@ export default function DropboxSyncPlugin({ gaw }) {
 
   const isDark = currentTheme === 'vs-dark';
 
-  // Keep state in sync with external changes
   useEffect(() => {
-    const unsubDropbox = gaw.dropbox.subscribe((cfg) => {
-      setConfig(cfg);
-      if (cfg.accessToken) setTokenInput(cfg.accessToken);
-      if (cfg.clientId) setClientIdInput(cfg.clientId);
-      if (cfg.autoSyncIntervalSec !== undefined) setAutoInterval(cfg.autoSyncIntervalSec);
-      if (cfg.isAutoSyncEnabled !== undefined) setAutoEnabled(cfg.isAutoSyncEnabled);
+    const unsubBridge = gaw.bridge.subscribe((st) => {
+      setBridgeState(st);
     });
-
     const unsubStorage = gaw.storage.onStatusChange((meta) => {
       setStorageMeta(meta);
     });
-
     return () => {
-      unsubDropbox();
+      unsubBridge();
       unsubStorage();
     };
   }, []);
 
+  // Default Save As filename to the active DB name
   useEffect(() => {
-    if (config.accessToken && !config.connected) {
-      gaw.dropbox.validateToken();
+    if (!saveAsName && storageMeta.fileName) {
+      setSaveAsName(storageMeta.fileName);
     }
-  }, []);
+  }, [storageMeta.fileName]);
 
-  const loadRemoteFiles = async () => {
-    if (!config.connected) return;
-    setLoadingFiles(true);
+  const providers = [
+    { id: 'pcloud', label: 'pCloud' },
+    { id: 'gdrive', label: 'Google Drive' },
+    { id: 'dropbox', label: 'Dropbox' },
+    { id: 'local', label: 'Local Drive' }
+  ];
+
+  const formatProvider = (p) => {
+    if (p === 'pcloud') return 'pCloud';
+    if (p === 'gdrive') return 'Google Drive';
+    if (p === 'dropbox') return 'Dropbox';
+    if (p === 'local') return 'Local Drive';
+    return p || 'Clockie H2';
+  };
+
+  const formatWatchQuality = (q) => {
+    if (q === 'native_event') return 'Live Native Watcher';
+    if (q === 'extension_bus') return 'Live Extension Bus';
+    if (q === 'polling') return 'Extension Cloud Watcher';
+    return 'Observing';
+  };
+
+  const isConnected = bridgeState.status === 'connected';
+  const activeFile = bridgeState.activeFile;
+
+  // Auto-select the first connected drive once the bridge connects
+  useEffect(() => {
+    if (!isConnected) return;
+    const drives = bridgeState.drives || {};
+    if (activeFile?.provider && drives[activeFile.provider]?.connected) {
+      setSelectedProvider(activeFile.provider);
+      return;
+    }
+    if (!drives[selectedProvider]?.connected) {
+      const firstReady = providers.find((p) => drives[p.id]?.connected);
+      if (firstReady) {
+        setSelectedProvider(firstReady.id);
+      }
+    }
+  }, [isConnected, bridgeState.drives]);
+
+  const loadFolder = useCallback(async (provider, basePath, baseFolderId) => {
+    if (!isConnected) return;
+    setLoadingFolder(true);
+    setFolderError(null);
     try {
-      const files = await gaw.dropbox.listDatabaseFiles('');
-      setRemoteFiles(files);
+      const res = await gaw.bridge.listFolder({
+        provider,
+        driveRoot: true,
+        basePath: basePath || '',
+        baseFolderId: baseFolderId || undefined,
+        maxDepth: 1
+      });
+      const rawChildren = Array.isArray(res?.nodes)
+        ? res.nodes
+        : Array.isArray(res?.tree?.children)
+        ? res.tree.children
+        : Array.isArray(res?.children)
+        ? res.children
+        : [];
+
+      const sorted = [...rawChildren].sort((a, b) => {
+        const aIsDir = a.type === 'folder' || a.type === 'directory';
+        const bIsDir = b.type === 'folder' || b.type === 'directory';
+        if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
+        return (a.name || '').localeCompare(b.name || '');
+      });
+      setEntries(sorted);
     } catch (err) {
-      gaw.toast.error('Failed to list files: ' + (err.message || String(err)));
+      setEntries([]);
+      setFolderError(err?.message || 'Unable to list folder contents.');
     } finally {
-      setLoadingFiles(false);
+      setLoadingFolder(false);
     }
-  };
+  }, [isConnected]);
 
   useEffect(() => {
-    if (activeTab === 'browser' && config.connected) {
-      loadRemoteFiles();
-    }
-  }, [activeTab, config.connected]);
-
-  const [isSaving, setIsSaving] = useState(false);
-  const [selectedIntervalOption, setSelectedIntervalOption] = useState(() => {
-    const std = [5, 10, 30, 60, 300];
-    const sec = config.autoSyncIntervalSec || 60;
-    return std.includes(sec) ? String(sec) : 'custom';
-  });
-  const [customIntervalSeconds, setCustomIntervalSeconds] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('gaw_dropbox_auto_sync_custom');
-      if (saved) return saved;
-    }
-    return String(config.autoSyncIntervalSec || 45);
-  });
-
-  const handleSaveToken = async () => {
-    if (!tokenInput.trim()) {
-      gaw.toast.warning('Please enter a valid Dropbox access token.');
-      return;
-    }
-    const ok = await gaw.dropbox.setAccessToken(tokenInput.trim());
-    if (ok) {
-      gaw.toast.success('Connected to Dropbox successfully!');
+    if (isConnected) {
+      loadFolder(selectedProvider, currentPath, currentFolderId);
     } else {
-      gaw.toast.error('Token validation failed. Please verify your token.');
+      setEntries([]);
     }
+  }, [isConnected, selectedProvider, currentPath, currentFolderId, loadFolder]);
+
+  const handleSelectProvider = (provId) => {
+    setSelectedProvider(provId);
+    setCurrentPath('');
+    setCurrentFolderId(undefined);
+    setPathStack([]);
+    setFolderError(null);
   };
 
-  const handleSave = async () => {
-    if (!config.connected) {
-      gaw.toast.warning('Please connect your Dropbox account in the "Connection & API Keys" tab first.');
-      return;
-    }
-    setIsSaving(true);
+  const handleEnterFolder = (node) => {
+    const nextPath = node.relativePath || (currentPath ? currentPath + '/' + node.name : node.name);
+    setPathStack((prev) => [...prev, { path: currentPath, folderId: currentFolderId, label: node.name }]);
+    setCurrentPath(nextPath);
+    setCurrentFolderId(node.folderId || node.id || undefined);
+  };
+
+  const handleGoUp = () => {
+    if (pathStack.length === 0) return;
+    const prevItem = pathStack[pathStack.length - 1];
+    setPathStack((prev) => prev.slice(0, -1));
+    setCurrentPath(prevItem.path || '');
+    setCurrentFolderId(prevItem.folderId);
+  };
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
     try {
-      const res = await gaw.dropbox.save();
-      gaw.toast.success('Saved active database to Dropbox (' + (res?.name || storageMeta.fileName) + ')');
-    } catch (err: any) {
-      gaw.toast.error('Save failed: ' + (err.message || String(err)));
+      const ok = await gaw.bridge.reconnect();
+      if (ok) {
+        gaw.toast.success('Connected to Clockie H2 Bridge v1.5.');
+      } else {
+        gaw.toast.warning(gaw.bridge.getState().error || 'Clockie H2 extension did not respond.');
+      }
+    } catch (err) {
+      gaw.toast.error('Clockie H2 connection failed: ' + (err?.message || String(err)));
     } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handlePushNow = handleSave;
-
-  const handleSaveAs = async () => {
-    if (!config.connected) {
-      gaw.toast.warning('Please connect your Dropbox account in the "Connection & API Keys" tab first.');
-      return;
-    }
-    const defaultName = storageMeta.fileName || 'new_database.sqlite';
-    const chosen = await gaw.dialog.prompt('Save a copy to Dropbox under new file name:', defaultName);
-    if (!chosen) return;
-    const finalName = chosen.trim().endsWith('.sqlite') || chosen.trim().endsWith('.db') || chosen.trim().endsWith('.sqlite3')
-      ? chosen.trim()
-      : chosen.trim() + '.sqlite';
-
-    setIsSaving(true);
-    try {
-      const res = await gaw.dropbox.saveAs(finalName);
-      gaw.toast.success('Saved new copy to Dropbox as ' + (res?.name || finalName) + '!');
-    } catch (err: any) {
-      gaw.toast.error('Save As failed: ' + (err.message || String(err)));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handlePullNow = async () => {
-    const remote = gaw.dropbox.getCurrentRemoteFile();
-    if (!remote) {
-      gaw.toast.warning('No active remote file selected. Please select a database from the browser tab.');
-      return;
-    }
-    const confirmed = await gaw.dialog.confirm(
-      'Are you sure you want to pull from Dropbox? Any unsaved local edits will be replaced with the remote version.'
-    );
-    if (!confirmed) return;
-
-    setIsPulling(true);
-    try {
-      await gaw.dropbox.downloadFile(remote);
-      gaw.workspace?.setSidebarOpen?.(true);
-      gaw.toast.success('Successfully pulled ' + remote.name + ' from Dropbox!');
-    } catch (err: any) {
-      gaw.toast.error('Pull failed: ' + (err.message || String(err)));
-    } finally {
-      setIsPulling(false);
-    }
-  };
-
-  const handleLoadRemoteFile = async (file: any) => {
-    const confirmed = await gaw.dialog.confirm(
-      'Load ' + file.name + ' into Gawkyy? This will switch your active database.'
-    );
-    if (!confirmed) return;
-
-    try {
-      await gaw.dropbox.downloadFile(file);
-      gaw.workspace?.setSidebarOpen?.(true);
-      gaw.toast.success('Loaded ' + file.name + ' from Dropbox!');
-    } catch (err: any) {
-      gaw.toast.error('Failed to load file: ' + (err.message || String(err)));
+      setIsConnecting(false);
     }
   };
 
   const handleDisconnect = async () => {
-    const confirmed = await gaw.dialog.confirm('Disconnect Dropbox account and stop cloud sync?');
-    if (confirmed) {
-      gaw.dropbox.disconnect();
-      gaw.toast.info('Disconnected from Dropbox.');
+    const confirmed = await gaw.dialog.confirm('Disconnect from Clockie H2 Bridge and stop live file observation?');
+    if (!confirmed) return;
+    await gaw.bridge.disconnect();
+    gaw.toast.info('Disconnected from Clockie H2 Bridge.');
+  };
+
+  const handleOpenDatabase = async (node) => {
+    const relPath = node.relativePath || (currentPath ? currentPath + '/' + node.name : node.name);
+    const confirmed = await gaw.dialog.confirm(
+      'Open "' + node.name + '" from ' + formatProvider(selectedProvider) + '? This will switch the active database.'
+    );
+    if (!confirmed) return;
+
+    try {
+      await gaw.bridge.openDatabase({
+        provider: selectedProvider,
+        relativePath: relPath,
+        driveRoot: true,
+        fileId: node.fileId || node.id,
+        name: node.name
+      });
+    } catch (err) {
+      gaw.toast.error('Failed to open database: ' + (err?.message || String(err)));
     }
   };
 
-  const handleFrequencySelect = (val: string) => {
-    setSelectedIntervalOption(val);
-    if (val === 'custom') {
-      const num = parseInt(customIntervalSeconds, 10) || 45;
-      setAutoInterval(num);
-      gaw.dropbox.setAutoSyncInterval(num);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('gaw_dropbox_auto_sync_custom', String(num));
+  const handleSaveNow = async () => {
+    if (!activeFile) {
+      gaw.toast.warning('No Clockie H2 file is bound yet. Use Save As below to save into a drive.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await gaw.bridge.saveDatabase();
+    } catch (err) {
+      gaw.toast.error('Save failed: ' + (err?.message || String(err)));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveAs = async () => {
+    const trimmed = (saveAsName || '').trim();
+    if (!trimmed) {
+      gaw.toast.warning('Please enter a file name to save.');
+      return;
+    }
+    const cleanFile = /\.(db|sqlite|sqlite3)$/i.test(trimmed) ? trimmed : trimmed + '.sqlite';
+    const fullPath = currentPath ? currentPath.replace(/\/+$/, '') + '/' + cleanFile : cleanFile;
+    setIsSaving(true);
+    try {
+      await gaw.bridge.saveDatabaseAs({
+        provider: selectedProvider,
+        relativePath: fullPath,
+        driveRoot: true,
+        overwrite: saveAsOverwrite
+      });
+      await loadFolder(selectedProvider, currentPath, currentFolderId);
+    } catch (err) {
+      if (err?.reasonCode === 'CONFLICT') {
+        gaw.toast.warning('A file named "' + cleanFile + '" already exists here. Tick "Overwrite existing file" or choose another name.');
+      } else {
+        gaw.toast.error('Save As failed: ' + (err?.message || String(err)));
       }
-      gaw.toast.info('Dropbox auto-sync custom interval set to ' + num + ' seconds');
-    } else {
-      const num = parseInt(val, 10);
-      setAutoInterval(num);
-      gaw.dropbox.setAutoSyncInterval(num);
-      gaw.toast.info('Dropbox auto-sync interval set to ' + num + ' seconds');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleApplyCustomInterval = () => {
-    const num = Math.max(1, parseInt(customIntervalSeconds, 10) || 10);
-    setCustomIntervalSeconds(String(num));
-    setAutoInterval(num);
-    gaw.dropbox.setAutoSyncInterval(num);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gaw_dropbox_auto_sync_custom', String(num));
+  const handleCreateFolder = async () => {
+    const name = newFolderName.trim();
+    if (!name) return;
+    try {
+      await gaw.bridge.createFolder({
+        provider: selectedProvider,
+        driveRoot: true,
+        parentRelativePath: currentPath || '',
+        parentFolderId: currentFolderId,
+        folderName: name
+      });
+      setNewFolderName('');
+      setShowNewFolderInput(false);
+      gaw.toast.success('Created folder "' + name + '".');
+      await loadFolder(selectedProvider, currentPath, currentFolderId);
+    } catch (err) {
+      gaw.toast.error('Failed to create folder: ' + (err?.message || String(err)));
     }
-    gaw.toast.success('Dropbox auto-sync custom interval set to ' + num + ' seconds');
   };
 
-  const handleToggleAuto = (enabled: boolean) => {
-    setAutoEnabled(enabled);
-    gaw.dropbox.setAutoSyncEnabled(enabled);
-    gaw.toast.info('Dropbox cloud auto-sync ' + (enabled ? 'enabled' : 'disabled'));
+  const handleCheckRemoteStat = async () => {
+    if (!activeFile) return;
+    setIsCheckingStat(true);
+    setStatSummary(null);
+    try {
+      const stat = await gaw.bridge.statFile({
+        provider: activeFile.provider,
+        driveRoot: activeFile.driveRoot,
+        relativePath: activeFile.relativePath,
+        fileId: activeFile.fileId
+      });
+      if (!stat.exists) {
+        setStatSummary('Remote file no longer exists on ' + formatProvider(activeFile.provider) + '.');
+        gaw.toast.warning('Remote file was not found.');
+      } else if (stat.revision && activeFile.revision && stat.revision === activeFile.revision) {
+        setStatSummary('Remote matches local revision (' + String(stat.revision).slice(0, 12) + '…).');
+        gaw.toast.success('Remote file is up to date.');
+      } else {
+        setStatSummary('Remote revision differs (' + (stat.revision ? String(stat.revision).slice(0, 12) + '…' : 'updated') + ', ' + ((stat.sizeBytes || 0) / 1024).toFixed(1) + ' KB).');
+        gaw.toast.info('Remote file has a newer revision.');
+      }
+    } catch (err) {
+      gaw.toast.error('Stat check failed: ' + (err?.message || String(err)));
+    } finally {
+      setIsCheckingStat(false);
+    }
   };
 
-  const lastSyncDate = config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleString() : 'Never synced in this session';
+  const handleToggleAutoSave = (enabled) => {
+    gaw.bridge.setAutoSaveEnabled(enabled);
+    gaw.toast.info('Clockie H2 auto-save on edit ' + (enabled ? 'enabled (2.5s debounce).' : 'disabled (manual Ctrl+S).'));
+  };
 
   return (
-    <div className={'p-6 max-w-5xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+    <div className={'p-6 max-w-6xl mx-auto space-y-6 pb-28 select-text ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Top Banner */}
-      <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-xl backdrop-blur border ' + (
+      <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-lg border ' + (
         isDark
-          ? 'bg-gradient-to-r from-blue-950/70 to-indigo-950/70 border-blue-800/50'
-          : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'
+          ? 'bg-gradient-to-r from-blue-950/75 to-slate-900 border-blue-800/50'
+          : 'bg-gradient-to-r from-blue-50 to-sky-50 border-blue-200'
       )}>
         <div className="flex items-center gap-3.5">
           <div className={'w-12 h-12 rounded-xl flex items-center justify-center ' + (
-            isDark ? 'bg-blue-600/30 border border-blue-500/40 text-blue-400' : 'bg-blue-100 border border-blue-300 text-blue-600'
+            isDark ? 'bg-blue-600/30 border border-blue-500/40 text-blue-300' : 'bg-blue-100 border border-blue-300 text-blue-700'
           )}>
             <Cloud className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Dropbox Cloud Synchronization</h1>
-              {config.connected ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Connected
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Clockie H2 Drives</h1>
+              {isConnected ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 inline-flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Bridge v1.5 Connected
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 border border-amber-500/40 text-amber-500 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" /> Disconnected
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-600/15 border border-red-500/40 text-red-400 inline-flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {bridgeState.status === 'connecting' ? 'Connecting...' : 'Extension Offline'}
+                </span>
+              )}
+              {isConnected && bridgeState.accessMode === 'readonly' && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-600/15 border border-red-500/40 text-red-400">
+                  Read-Only Session
                 </span>
               )}
             </div>
             <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
-              Securely synchronize your SQLite database file with your personal or enterprise Dropbox storage.
+              Open, observe in real time, and clash-free save SQLite databases across pCloud, Google Drive, Dropbox, and Local Drive.
             </p>
           </div>
         </div>
 
-        {/* Account / Disconnect */}
-        {config.connected && (
-          <div className="flex items-center gap-3">
-            <div className="text-right text-xs">
-              <p className={'font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{config.accountName || 'Dropbox User'}</p>
-              <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>{config.accountEmail || ''}</p>
-            </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleConnect}
+            disabled={isConnecting}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition active:scale-95 cursor-pointer"
+          >
+            {isConnecting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plug className="w-3.5 h-3.5" />}
+            <span>{isConnected ? 'Reconnect' : 'Connect Extension'}</span>
+          </button>
+          {isConnected && (
             <button
+              type="button"
               onClick={handleDisconnect}
-              className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-medium transition active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-500/40 bg-red-600/10 hover:bg-red-600/20 text-red-400 text-xs font-semibold transition active:scale-95 cursor-pointer"
             >
-              Disconnect
+              <Unplug className="w-3.5 h-3.5" />
+              <span>Disconnect</span>
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Offline / Refused Guidance */}
+      {!isConnected && (
+        <div className={'p-4 rounded-xl border text-xs space-y-2 ' + (
+          isDark ? 'bg-slate-950/80 border-red-800/50 text-slate-300' : 'bg-red-50/70 border-red-200 text-slate-700'
+        )}>
+          <div className="flex items-center gap-2 font-semibold text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{bridgeState.error || 'Clockie H2 Chrome Extension (v1.5) is not currently connected.'}</span>
           </div>
-        )}
-      </div>
+          <p className="leading-relaxed">
+            Ensure the Clockie H2 extension is installed and enabled in Chrome with Bridge Protocol v1.5 active, then click <strong>Connect Extension</strong>.
+            On browsers without Clockie H2 (such as mobile browsers), use{' '}
+            <button
+              type="button"
+              onClick={() => gaw.navigation.openPlugin('plugin_local_storage')}
+              className="text-blue-400 underline font-semibold cursor-pointer"
+            >
+              Local File Storage
+            </button>{' '}
+            to open or export databases directly.
+          </p>
+        </div>
+      )}
 
-      {/* Navigation Tabs */}
-      <div className={'flex items-center gap-2.5 border-b pb-3 text-xs flex-wrap ' + (isDark ? 'border-slate-800' : 'border-slate-200')}>
-        <button
-          type="button"
-          onClick={() => setActiveTab('sync')}
-          className={'px-4 py-2 rounded-xl font-bold transition flex items-center gap-2 border-2 cursor-pointer active:scale-95 ' + (
-            activeTab === 'sync'
-              ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-              : isDark
-              ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
-              : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
-          )}
-        >
-          Database Sync & Telemetry
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('browser')}
-          className={'px-4 py-2 rounded-xl font-bold transition flex items-center gap-2 border-2 cursor-pointer active:scale-95 ' + (
-            activeTab === 'browser'
-              ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-              : isDark
-              ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
-              : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
-          )}
-        >
-          Dropbox File Browser ({remoteFiles.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('settings')}
-          className={'px-4 py-2 rounded-xl font-bold transition flex items-center gap-2 border-2 cursor-pointer active:scale-95 ' + (
-            activeTab === 'settings'
-              ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-              : isDark
-              ? 'bg-slate-800/90 text-slate-200 border-slate-700 hover:bg-slate-700 hover:border-slate-600 hover:text-white'
-              : 'bg-slate-200/90 text-slate-800 border-slate-300 hover:bg-slate-300 hover:border-slate-400 hover:text-black'
-          )}
-        >
-          Connection & API Keys
-        </button>
-      </div>
-
-      {/* Tab 1: Database Sync & Telemetry */}
-      {activeTab === 'sync' && (
-        <div className="grid grid-cols-1 @[650px]:grid-cols-2 gap-5 cq-stack">
-          {/* Card A: Active Database Status */}
-          <div className={'p-5 rounded-xl space-y-4 border shadow-sm ' + (
-            isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
-          )}>
+      {/* Active Observed Database + Auto-Save Card */}
+      <div className="grid grid-cols-1 @[760px]:grid-cols-2 gap-5 cq-stack">
+        {/* Active Observed Database */}
+        <div className={'p-5 rounded-xl border space-y-4 ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <div className="flex items-center justify-between gap-2">
             <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
               <Database className="w-4 h-4 text-blue-500" />
-              <span>Active Database Telemetry</span>
+              <span>Active Clockie H2 Database</span>
             </h2>
-
-            <div className="space-y-2.5 text-xs">
-              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Database Name:</span>
-                <span className={'font-mono font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{storageMeta.fileName}</span>
-              </div>
-              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Remote Dropbox Path:</span>
-                <span className="font-mono text-blue-500 font-medium">
-                  {gaw.dropbox.getCurrentRemoteFile()?.path_display || '/' + storageMeta.fileName}
-                </span>
-              </div>
-              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Database Size:</span>
-                <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{(storageMeta.fileSize / 1024).toFixed(1)} KB</span>
-              </div>
-              <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Last Synced to Dropbox:</span>
-                <span className="font-mono text-emerald-500 font-medium">{lastSyncDate}</span>
-              </div>
-              <div className="flex justify-between items-center py-1">
-                <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Internal State Tally:</span>
-                <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
-                  storageMeta.hasUserModifications
-                    ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
-                    : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30'
-                )}>
-                  {storageMeta.hasUserModifications ? 'Modified' : 'Unchanged'}
-                </span>
-              </div>
-            </div>
-
-            {/* Quick Actions: Save, Save as..., and Pull */}
-            <div className="pt-2 grid grid-cols-1 @[450px]:grid-cols-3 gap-2 cq-stack">
-              <button
-                onClick={handleSave}
-                disabled={isSaving || !config.connected}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
-                title="Save database directly to Dropbox"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>{isSaving ? 'Saving...' : 'Save'}</span>
-              </button>
-              <button
-                onClick={handleSaveAs}
-                disabled={isSaving || !config.connected}
-                className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
-                )}
-                title="Save a copy of the database to Dropbox under a new name"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Save as...</span>
-              </button>
-              <button
-                onClick={handlePullNow}
-                disabled={isPulling || !config.connected}
-                className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
-                  isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
-                )}
-                title="Pull and reconcile remote version from Dropbox"
-              >
-                <ArrowDownLeft className="w-3.5 h-3.5" />
-                <span>{isPulling ? 'Pulling...' : 'Pull'}</span>
-              </button>
-            </div>
+            {activeFile?.observationId && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/15 border border-emerald-500/40 text-emerald-400">
+                <Radio className="w-3 h-3 animate-pulse" />
+                <span>{formatWatchQuality(activeFile.watchQuality)}</span>
+              </span>
+            )}
           </div>
 
-          {/* Card B: Auto-Sync Settings */}
-          <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
-            <h2 className="text-sm font-bold text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-indigo-400" />
-              <span>Automatic Sync Schedule</span>
-            </h2>
-
-            <p className="text-xs text-slate-400">
-              When enabled and connected, background sync periodically checks external metrics, overwriting when internal has changes, reloading remote edits, and reconciling concurrent mutations.
-            </p>
-
-            <div className="space-y-4 pt-2">
-              <label className="flex items-center justify-between p-3 rounded-lg bg-slate-900/80 border border-slate-800 cursor-pointer">
-                <div>
-                  <p className="text-xs font-semibold text-white">Enable Cloud Auto-Sync</p>
-                  <p className="text-[11px] text-slate-400">Periodically upload and reconcile changes while you work</p>
+          {activeFile ? (
+            <>
+              <div className="space-y-2 text-xs">
+                <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Drive Provider:</span>
+                  <span className="font-semibold text-blue-400">{formatProvider(activeFile.provider)}</span>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={autoEnabled}
-                  onChange={(e) => handleToggleAuto(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-0 cursor-pointer"
-                />
-              </label>
+                <div className={'flex justify-between items-center py-1 border-b gap-2 ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Path:</span>
+                  <span className={'font-mono truncate ' + (isDark ? 'text-slate-200' : 'text-slate-800')}>{activeFile.relativePath}</span>
+                </div>
+                <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Revision Token:</span>
+                  <span className={'font-mono text-[11px] ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>
+                    {activeFile.revision ? String(activeFile.revision).slice(0, 18) : 'Pending first save'}
+                  </span>
+                </div>
+                <div className={'flex justify-between items-center py-1 border-b ' + (isDark ? 'border-slate-800/80' : 'border-slate-100')}>
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Last Synced:</span>
+                  <span className="font-mono text-emerald-400">
+                    {bridgeState.lastSyncTime ? new Date(bridgeState.lastSyncTime).toLocaleTimeString() : 'Just opened'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1">
+                  <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>Local Status:</span>
+                  <span className={'px-2 py-0.5 rounded text-[11px] font-semibold border ' + (
+                    storageMeta.syncStatus === 'conflict'
+                      ? 'bg-red-600/15 text-red-400 border-red-500/40'
+                      : storageMeta.hasUserModifications
+                      ? 'bg-blue-600/15 text-blue-400 border-blue-500/40'
+                      : 'bg-emerald-600/15 text-emerald-400 border-emerald-500/40'
+                  )}>
+                    {storageMeta.syncStatus === 'conflict'
+                      ? 'Conflict Pending'
+                      : storageMeta.hasUserModifications
+                      ? 'Unsaved Edits'
+                      : 'Synchronized'}
+                  </span>
+                </div>
+              </div>
 
-              {autoEnabled && (
-                <div className="space-y-2 pt-1">
-                  <label className="text-xs text-slate-300 font-medium">Sync Frequency Interval:</label>
-                  <select
-                    value={selectedIntervalOption}
-                    onChange={(e) => handleFrequencySelect(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="5">Every 5 seconds</option>
-                    <option value="10">Every 10 seconds</option>
-                    <option value="30">Every 30 seconds</option>
-                    <option value="60">Every 60 seconds (1 minute)</option>
-                    <option value="300">Every 5 minutes</option>
-                    <option value="custom">Custom frequency...</option>
-                  </select>
-
-                  {selectedIntervalOption === 'custom' && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="number"
-                        min="1"
-                        max="86400"
-                        value={customIntervalSeconds}
-                        onChange={(e) => setCustomIntervalSeconds(e.target.value)}
-                        placeholder="e.g. 15"
-                        className="w-24 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
-                      />
-                      <span className="text-xs text-slate-400">seconds</span>
-                      <button
-                        onClick={handleApplyCustomInterval}
-                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition active:scale-95"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  )}
+              {statSummary && (
+                <div className={'p-2.5 rounded-lg border text-[11px] ' + (
+                  isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+                )}>
+                  {statSummary}
                 </div>
               )}
 
-              <div className="p-3 bg-blue-950/30 border border-blue-800/40 rounded-lg text-[11px] text-blue-300 flex items-start gap-2">
-                <RefreshCw className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span>
-                  Automatic sync applies seamless overwrite to <code className="text-white font-mono">/{storageMeta.fileName}</code> if internal changes occurred without remote modifications.
-                </span>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveNow}
+                  disabled={isSaving || !isConnected || bridgeState.accessMode === 'readonly'}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition active:scale-95 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSaving ? 'Saving...' : 'Save Now'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCheckRemoteStat}
+                  disabled={isCheckingStat || !isConnected}
+                  className={'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border transition active:scale-95 cursor-pointer ' + (
+                    isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
+                  )}
+                  title="Run lightweight H2_STAT_FILE_REQ without downloading the database"
+                >
+                  <FileSearch className={'w-3.5 h-3.5 ' + (isCheckingStat ? 'animate-pulse' : '')} />
+                  <span>{isCheckingStat ? 'Checking...' : 'Check Remote Stat'}</span>
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tab 2: Remote Dropbox File Browser */}
-      {activeTab === 'browser' && (
-        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Folder className="w-4 h-4 text-amber-400" />
-                <span>Database Files on Dropbox</span>
-              </h2>
-              <p className="text-xs text-slate-400">Browse and open any SQLite database stored in your Dropbox account.</p>
-            </div>
-            <button
-              onClick={loadRemoteFiles}
-              disabled={loadingFiles || !config.connected}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition"
-            >
-              <RefreshCw className={'w-3.5 h-3.5 ' + (loadingFiles ? 'animate-spin' : '')} />
-              <span>Refresh Files</span>
-            </button>
-          </div>
-
-          {!config.connected ? (
-            <div className="p-8 text-center text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl">
-              <Cloud className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p>Connect your Dropbox account in the "Connection & API Keys" tab to browse remote databases.</p>
-            </div>
-          ) : loadingFiles ? (
-            <div className="p-8 text-center text-xs text-slate-400">
-              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-400 mb-2" />
-              <p>Scanning Dropbox for SQLite databases...</p>
-            </div>
-          ) : remoteFiles.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-400 border border-dashed border-slate-800 rounded-xl">
-              <p>No SQLite files (*.db, *.sqlite, *.sqlite3) found in Dropbox root.</p>
-              <button
-                onClick={handlePushNow}
-                className="mt-3 px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-semibold"
-              >
-                Upload Current Database as First File
-              </button>
-            </div>
+            </>
           ) : (
-            <div className="divide-y divide-slate-800/80">
-              {remoteFiles.map((file) => (
-                <div key={file.id} className="py-3 flex items-center justify-between hover:bg-slate-900/50 px-3 rounded-lg transition">
-                  <div className="flex items-center gap-3">
-                    <Database className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-white">{file.name}</p>
-                      <p className="text-[11px] text-slate-400 font-mono">
-                        {(file.size / 1024).toFixed(1)} KB • Modified: {new Date(file.server_modified).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleLoadRemoteFile(file)}
-                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition active:scale-95"
-                  >
-                    Open in Gawkyy
-                  </button>
-                </div>
-              ))}
+            <div className={'p-5 rounded-xl border border-dashed text-xs text-center space-y-2 ' + (
+              isDark ? 'border-slate-800 text-slate-400' : 'border-slate-300 text-slate-600'
+            )}>
+              <Database className="w-7 h-7 mx-auto opacity-50" />
+              <p>No Clockie H2 database file is bound to this workspace yet.</p>
+              <p className="text-[11px]">Open an existing SQLite file from the Multi-Drive Browser below, or use Save As to store the current database.</p>
             </div>
           )}
         </div>
-      )}
 
-      {/* Tab 3: Connection & API Keys */}
-      {activeTab === 'settings' && (
-        <div className="p-5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-5">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Key className="w-4 h-4 text-amber-400" />
-            <span>Dropbox API Credentials & Authentication</span>
+        {/* Live Observation & Auto-Save Policy */}
+        <div className={'p-5 rounded-xl border space-y-4 ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span>Live Observation & Save Policy</span>
           </h2>
 
-          <div className="space-y-4 max-w-xl">
-            {/* Method 1: Personal Access Token */}
-            <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-blue-400" />
-                <span>Method 1: Direct Access Token (Instant)</span>
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Paste your Dropbox App Generated Access Token. This immediately connects Gawkyy directly to your Dropbox app folder without OAuth redirects.
+          <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+            Whenever a database is opened from Clockie H2, Gawkyy automatically subscribes to real-time file change pushes and uses optimistic concurrency (<code className="font-mono">expectedRevision</code>) on every save to prevent silent overwrites.
+          </p>
+
+          <label className={'flex items-center justify-between gap-3 p-3.5 rounded-xl border cursor-pointer ' + (
+            isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+          )}>
+            <div>
+              <p className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>Auto-Save on Edit (2.5s debounce)</p>
+              <p className={'text-[11px] mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                When enabled, local database edits automatically save to Clockie H2 shortly after you pause editing. Leave off for manual Ctrl+S saves.
               </p>
-
-              <div className="relative">
-                <input
-                  type={showToken ? 'text' : 'password'}
-                  placeholder="sl.u.AFlk... or Dropbox Access Token"
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                  className="w-full pr-10 pl-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowToken(!showToken)}
-                  className="absolute right-2.5 top-2 text-slate-400 hover:text-white"
-                >
-                  {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-
-              <button
-                onClick={handleSaveToken}
-                className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow transition active:scale-95"
-              >
-                Save & Validate Access Token
-              </button>
             </div>
+            <input
+              type="checkbox"
+              checked={Boolean(bridgeState.autoSaveEnabled)}
+              onChange={(e) => handleToggleAutoSave(e.target.checked)}
+              className="w-4 h-4 rounded text-emerald-600 focus:ring-0 cursor-pointer flex-shrink-0"
+            />
+          </label>
 
-            {/* Method 2: OAuth 2.0 PKCE */}
-            <div className="p-4 bg-slate-900/80 border border-slate-800 rounded-xl space-y-3">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Method 2: OAuth 2.0 App Key</span>
-              </span>
-              <p className="text-[11px] text-slate-400 leading-relaxed">
-                Enter your Dropbox App Key to authenticate through Dropbox's official popup login screen.
-              </p>
-
-              <input
-                type="text"
-                placeholder="Dropbox App Key (Client ID)"
-                value={clientIdInput}
-                onChange={(e) => {
-                  setClientIdInput(e.target.value);
-                  gaw.dropbox.setClientId(e.target.value);
-                }}
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 font-mono focus:outline-none focus:border-blue-500"
-              />
-
-              <div className="space-y-1">
-                <label className="text-[10px] text-slate-400 font-medium">Redirect URI (add to Dropbox App Console):</label>
-                <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-indigo-300">
-                  <span className="flex-1 truncate select-all">{window.location.origin + '/'}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.origin + '/');
-                      gaw.toast.info('Copied Redirect URI to clipboard!');
-                    }}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-sans transition"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  if (!clientIdInput.trim()) {
-                    gaw.toast.warning('Please enter your Dropbox App Key.');
-                    return;
-                  }
-                  gaw.dropbox.initiateOAuthFlow(clientIdInput.trim(), window.location.origin + '/');
-                }}
-                className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow transition active:scale-95"
-              >
-                Sign In With Dropbox OAuth
-              </button>
-            </div>
-
-            {/* Instructions */}
-            <div className="p-4 bg-slate-900/40 border border-slate-800/80 rounded-xl text-xs space-y-2 text-slate-400">
-              <h3 className="font-semibold text-slate-200">How to get a free Dropbox API Key:</h3>
-              <ol className="list-decimal pl-4 space-y-1 text-[11px]">
-                <li>Go to the <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noreferrer" className="text-blue-400 underline inline-flex items-center gap-0.5">Dropbox App Console <ExternalLink className="w-2.5 h-2.5" /></a>.</li>
-                <li>Click <strong>Create App</strong>, choose <strong>Scoped access</strong> &gt; <strong>App folder</strong>.</li>
-                <li>Under <strong>Permissions</strong>, check <code className="text-slate-300">files.content.write</code> and <code className="text-slate-300">files.content.read</code>.</li>
-                <li>Under the <strong>Settings</strong> tab, click <strong>Generate</strong> under Generated access token, and paste it above!</li>
-              </ol>
-            </div>
+          <div className={'p-3 rounded-xl border text-[11px] space-y-1 ' + (
+            isDark ? 'bg-blue-950/25 border-blue-800/40 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'
+          )}>
+            <p className="font-semibold">Incoming External Updates:</p>
+            <p>
+              If another tab or device updates the file while you have no unsaved edits, Gawkyy reloads it immediately. If you also have local edits, Gawkyy attempts automatic table/row reconciliation and opens the Conflict Resolver only if a merge cannot be resolved automatically.
+            </p>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Multi-Drive Browser & Save As */}
+      <div className={'p-5 rounded-xl border space-y-4 ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+        {/* Drive Selector Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {providers.map((prov) => {
+              const driveInfo = bridgeState.drives?.[prov.id];
+              const isDriveReady = Boolean(driveInfo?.connected);
+              const isSelected = selectedProvider === prov.id;
+              return (
+                <button
+                  key={prov.id}
+                  type="button"
+                  onClick={() => handleSelectProvider(prov.id)}
+                  className={'px-3.5 py-2 rounded-lg text-xs font-semibold border transition flex items-center gap-2 cursor-pointer ' + (
+                    isSelected
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                      : isDark
+                      ? 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                  )}
+                >
+                  {prov.id === 'local' ? <HardDrive className="w-3.5 h-3.5" /> : <Cloud className="w-3.5 h-3.5" />}
+                  <span>{prov.label}</span>
+                  <span className={'w-2 h-2 rounded-full ' + (isDriveReady ? 'bg-emerald-400' : 'bg-slate-500')} />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowNewFolderInput((v) => !v)}
+              disabled={!isConnected || bridgeState.accessMode === 'readonly'}
+              className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer disabled:opacity-40 ' + (
+                isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
+              )}
+            >
+              <FolderPlus className="w-3.5 h-3.5 text-emerald-500" />
+              <span>New Folder</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => loadFolder(selectedProvider, currentPath, currentFolderId)}
+              disabled={!isConnected || loadingFolder}
+              className={'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer disabled:opacity-40 ' + (
+                isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
+              )}
+            >
+              <RefreshCw className={'w-3.5 h-3.5 ' + (loadingFolder ? 'animate-spin' : '')} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Breadcrumb Path Bar */}
+        <div className={'flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs ' + (
+          isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+        )}>
+          <div className="flex items-center gap-1.5 font-mono min-w-0">
+            <span className="font-semibold text-blue-400">{formatProvider(selectedProvider)}</span>
+            <ChevronRight className="w-3.5 h-3.5 opacity-50" />
+            <span className="truncate">{currentPath ? '/' + currentPath : '/ (Drive Root)'}</span>
+          </div>
+          {pathStack.length > 0 && (
+            <button
+              type="button"
+              onClick={handleGoUp}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 text-[11px] font-semibold cursor-pointer"
+            >
+              <ArrowUp className="w-3 h-3" />
+              <span>Up One Level</span>
+            </button>
+          )}
+        </div>
+
+        {/* Inline New Folder Creator */}
+        {showNewFolderInput && (
+          <div className={'flex flex-wrap items-center gap-2 p-3 rounded-lg border ' + (
+            isDark ? 'bg-slate-900 border-slate-700' : 'bg-slate-50 border-slate-300'
+          )}>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="New folder name..."
+              className={'flex-1 min-w-[180px] px-3 py-1.5 rounded-lg border text-xs focus:outline-none focus:border-blue-500 ' + (
+                isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+              )}
+            />
+            <button
+              type="button"
+              onClick={handleCreateFolder}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer"
+            >
+              Create
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowNewFolderInput(false); setNewFolderName(''); }}
+              className={'px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer ' + (
+                isDark ? 'border-slate-700 text-slate-300' : 'border-slate-300 text-slate-700'
+              )}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* Folder Listing */}
+        {!isConnected ? (
+          <div className="p-8 text-center text-xs text-slate-400">
+            Connect to Clockie H2 above to browse folders and SQLite databases.
+          </div>
+        ) : folderError ? (
+          <div className="p-5 rounded-xl border border-red-500/40 bg-red-600/10 text-xs text-red-400">
+            {folderError}
+          </div>
+        ) : loadingFolder ? (
+          <div className="p-8 text-center text-xs text-slate-400">
+            <RefreshCw className="w-5 h-5 animate-spin mx-auto text-blue-400 mb-2" />
+            <span>Loading {formatProvider(selectedProvider)} folder...</span>
+          </div>
+        ) : entries.length === 0 ? (
+          <div className={'p-8 text-center text-xs rounded-xl border border-dashed ' + (
+            isDark ? 'border-slate-800 text-slate-400' : 'border-slate-300 text-slate-500'
+          )}>
+            This folder is empty. Save your current database here using the Save As bar below.
+          </div>
+        ) : (
+          <div className={'divide-y rounded-xl border overflow-hidden ' + (
+            isDark ? 'divide-slate-800/80 border-slate-800' : 'divide-slate-200 border-slate-200'
+          )}>
+            {entries.map((node, idx) => {
+              const isDir = node.type === 'folder' || node.type === 'directory';
+              const isSqlite = !isDir && /\.(db|sqlite|sqlite3)$/i.test(node.name || '');
+              return (
+                <div
+                  key={node.relativePath || node.id || idx}
+                  className={'px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs transition ' + (
+                    isDark ? 'hover:bg-slate-900/70' : 'hover:bg-slate-50'
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {isDir ? (
+                      <FolderOpen className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    ) : isSqlite ? (
+                      <Database className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    ) : (
+                      <Layers className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      {isDir ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEnterFolder(node)}
+                          className={'font-semibold hover:underline text-left truncate block cursor-pointer ' + (
+                            isDark ? 'text-blue-300' : 'text-blue-700'
+                          )}
+                        >
+                          {node.name}
+                        </button>
+                      ) : (
+                        <span className={'font-medium truncate block ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>
+                          {node.name}
+                        </span>
+                      )}
+                      {!isDir && (node.sizeBytes !== undefined || node.size !== undefined) && (
+                        <span className="text-[11px] font-mono text-slate-400">
+                          {(((node.sizeBytes ?? node.size) || 0) / 1024).toFixed(1)} KB
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {isDir ? (
+                    <button
+                      type="button"
+                      onClick={() => handleEnterFolder(node)}
+                      className={'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition cursor-pointer ' + (
+                        isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                      )}
+                    >
+                      Open Folder
+                    </button>
+                  ) : isSqlite ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDatabase(node)}
+                      className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold shadow-sm transition active:scale-95 cursor-pointer"
+                    >
+                      Open Database
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-slate-500">Other file</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Save Current Database As into Current Folder */}
+        <div className={'p-4 rounded-xl border space-y-2.5 ' + (
+          isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+        )}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className={'text-xs font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>
+              Save Active Database into {formatProvider(selectedProvider)} ({currentPath ? '/' + currentPath : '/'})
+            </span>
+            <label className="inline-flex items-center gap-1.5 text-[11px] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={saveAsOverwrite}
+                onChange={(e) => setSaveAsOverwrite(e.target.checked)}
+                className="rounded text-blue-600 cursor-pointer"
+              />
+              <span>Overwrite if file already exists</span>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={saveAsName}
+              onChange={(e) => setSaveAsName(e.target.value)}
+              placeholder="my_app.sqlite"
+              className={'flex-1 min-w-[200px] px-3 py-2 rounded-lg border text-xs font-mono focus:outline-none focus:border-blue-500 ' + (
+                isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+              )}
+            />
+            <button
+              type="button"
+              onClick={handleSaveAs}
+              disabled={!isConnected || isSaving || bridgeState.accessMode === 'readonly'}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition active:scale-95 cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'Saving...' : 'Save As Here'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2024,35 +2143,17 @@ import {
   Save,
   FolderOpen,
   Download,
-  RefreshCw,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
   Database,
   Cloud,
   Layers,
-  FileCheck
+  FileCheck,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function LocalStoragePlugin({ gaw }) {
   const [meta, setMeta] = useState(gaw.storage.getMetadata());
-  const [autoInterval, setAutoInterval] = useState(meta.autoSyncIntervalSec || 30);
-  const [autoEnabled, setAutoEnabled] = useState(meta.isAutoSyncEnabled);
   const [isSaving, setIsSaving] = useState(false);
   const [tableCount, setTableCount] = useState(0);
-
-  const [selectedIntervalOption, setSelectedIntervalOption] = useState(() => {
-    const std = [5, 10, 30, 60, 300];
-    const sec = meta.autoSyncIntervalSec || 30;
-    return std.includes(sec) ? String(sec) : 'custom';
-  });
-  const [customIntervalSeconds, setCustomIntervalSeconds] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('gaw_local_auto_sync_custom');
-      if (saved) return saved;
-    }
-    return String(meta.autoSyncIntervalSec || 15);
-  });
 
   const [currentTheme, setCurrentTheme] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -2074,8 +2175,6 @@ export default function LocalStoragePlugin({ gaw }) {
   useEffect(() => {
     const unsub = gaw.storage.onStatusChange((newMeta) => {
       setMeta(newMeta);
-      setAutoInterval(newMeta.autoSyncIntervalSec);
-      setAutoEnabled(newMeta.isAutoSyncEnabled);
     });
 
     try {
@@ -2091,10 +2190,10 @@ export default function LocalStoragePlugin({ gaw }) {
     try {
       const ok = await gaw.storage.save();
       if (ok) {
-        gaw.toast.success('Saved database changes to local file!');
+        gaw.toast.success('Saved database changes to local file.');
       }
-    } catch (err: any) {
-      gaw.toast.error('Save failed: ' + (err.message || String(err)));
+    } catch (err) {
+      gaw.toast.error('Save failed: ' + (err?.message || String(err)));
     } finally {
       setIsSaving(false);
     }
@@ -2104,10 +2203,10 @@ export default function LocalStoragePlugin({ gaw }) {
     try {
       const ok = await gaw.storage.saveAs();
       if (ok) {
-        gaw.toast.success('Saved new database copy to disk!');
+        gaw.toast.success('Saved new database copy to local disk.');
       }
-    } catch (err: any) {
-      gaw.toast.error('Save As failed: ' + (err.message || String(err)));
+    } catch (err) {
+      gaw.toast.error('Save As failed: ' + (err?.message || String(err)));
     }
   };
 
@@ -2116,10 +2215,10 @@ export default function LocalStoragePlugin({ gaw }) {
       const ok = await gaw.storage.openFile();
       if (ok) {
         gaw.workspace?.setSidebarOpen?.(true);
-        gaw.toast.success('Opened local database file successfully!');
+        gaw.toast.success('Opened local database file.');
       }
-    } catch (err: any) {
-      gaw.toast.error('Failed to open file: ' + (err.message || String(err)));
+    } catch (err) {
+      gaw.toast.error('Failed to open file: ' + (err?.message || String(err)));
     }
   };
 
@@ -2128,47 +2227,12 @@ export default function LocalStoragePlugin({ gaw }) {
     gaw.toast.success('Exported and downloaded SQLite binary file.');
   };
 
-  const handleFrequencySelect = (val: string) => {
-    setSelectedIntervalOption(val);
-    if (val === 'custom') {
-      const num = parseInt(customIntervalSeconds, 10) || 15;
-      setAutoInterval(num);
-      gaw.storage.setAutoSyncInterval(num);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('gaw_local_auto_sync_custom', String(num));
-      }
-      gaw.toast.info('Local auto-sync custom interval set to ' + num + ' seconds');
-    } else {
-      const num = parseInt(val, 10);
-      setAutoInterval(num);
-      gaw.storage.setAutoSyncInterval(num);
-      gaw.toast.info('Local auto-sync interval set to ' + num + ' seconds');
-    }
-  };
-
-  const handleApplyCustomInterval = () => {
-    const num = Math.max(1, parseInt(customIntervalSeconds, 10) || 10);
-    setCustomIntervalSeconds(String(num));
-    setAutoInterval(num);
-    gaw.storage.setAutoSyncInterval(num);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('gaw_local_auto_sync_custom', String(num));
-    }
-    gaw.toast.success('Local auto-sync custom interval set to ' + num + ' seconds');
-  };
-
-  const handleToggleAuto = (enabled: boolean) => {
-    setAutoEnabled(enabled);
-    gaw.storage.setAutoSyncEnabled(enabled);
-    gaw.toast.info('Local file auto-sync ' + (enabled ? 'enabled' : 'disabled'));
-  };
-
   const lastSavedFormatted = meta.lastSavedAt
     ? new Date(meta.lastSavedAt).toLocaleString()
     : 'Not yet saved in this session';
 
   return (
-    <div className={'p-6 max-w-5xl mx-auto space-y-6 pb-28 ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
+    <div className={'p-6 max-w-5xl mx-auto space-y-6 pb-28 select-text ' + (isDark ? 'text-slate-100' : 'text-slate-800')}>
       {/* Top Banner */}
       <div className={'flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl shadow-xl backdrop-blur border ' + (
         isDark
@@ -2182,8 +2246,8 @@ export default function LocalStoragePlugin({ gaw }) {
             <HardDrive className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Local File Storage & Disk Sync</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Local File Storage</h1>
               {meta.hasFileHandle ? (
                 <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 border ' + (
                   isDark ? 'bg-emerald-950 border-emerald-700/60 text-emerald-400' : 'bg-emerald-100 border-emerald-300 text-emerald-700'
@@ -2199,14 +2263,15 @@ export default function LocalStoragePlugin({ gaw }) {
               )}
             </div>
             <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
-              Directly synchronize SQLite changes with your local file system, configure auto-sync intervals, and open databases.
+              Standalone manual Open, Save, Save As, and Export for local .sqlite/.db files without background polling.
             </p>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={handleOpenFile}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow transition active:scale-95"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
         >
           <FolderOpen className="w-4 h-4" />
           <span>Open Local Database...</span>
@@ -2215,11 +2280,11 @@ export default function LocalStoragePlugin({ gaw }) {
 
       {/* Content Grid */}
       <div className="grid grid-cols-1 @[650px]:grid-cols-2 gap-5 cq-stack">
-        {/* Card 1: Storage Telemetry */}
+        {/* Card 1: Local File Status & Manual Actions */}
         <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
           <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
             <Database className="w-4 h-4 text-emerald-500" />
-            <span>Database Storage Telemetry</span>
+            <span>Active Local Database</span>
           </h2>
 
           <div className="space-y-2.5 text-xs">
@@ -2227,26 +2292,8 @@ export default function LocalStoragePlugin({ gaw }) {
               <span>File Name:</span>
               <span className={'font-mono font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{meta.fileName}</span>
             </div>
-            <div className={'flex flex-col gap-1 py-1.5 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
-              <div className="flex justify-between items-center">
-                <span>File Path on Local Drive:</span>
-                <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
-                  meta.hasFileHandle
-                    ? isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    : isDark ? 'bg-slate-900 text-slate-400 border border-slate-800' : 'bg-slate-100 text-slate-600 border border-slate-300'
-                )}>
-                  {meta.hasFileHandle ? 'Disk Handle Attached' : 'Local Drive Storage'}
-                </span>
-              </div>
-              <p className={'text-xs font-mono p-2 rounded border break-all flex items-center gap-1.5 ' + (
-                isDark ? 'bg-slate-900/90 border-slate-800 text-emerald-400' : 'bg-slate-50 border-slate-200 text-emerald-800'
-              )}>
-                <HardDrive className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
-                <span>{meta.filePath || meta.fileName}</span>
-              </p>
-            </div>
             <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
-              <span>File Size on Disk:</span>
+              <span>File Size:</span>
               <span className={'font-mono ' + (isDark ? 'text-slate-200' : 'text-slate-700')}>{(meta.fileSize / 1024).toFixed(1)} KB</span>
             </div>
             <div className={'flex flex-wrap justify-between items-center gap-1 py-1 border-b ' + (isDark ? 'border-slate-800/80 text-slate-400' : 'border-slate-100 text-slate-500')}>
@@ -2258,31 +2305,32 @@ export default function LocalStoragePlugin({ gaw }) {
               <span className="font-mono text-emerald-500">{lastSavedFormatted}</span>
             </div>
             <div className={'flex flex-wrap justify-between items-center gap-1 py-1 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-              <span>Internal State Tally:</span>
-              <span className={'px-2 py-0.5 rounded text-[10px] font-bold uppercase ' + (
+              <span>Local State:</span>
+              <span className={'px-2 py-0.5 rounded text-[11px] font-semibold border ' + (
                 meta.hasUserModifications
-                  ? isDark ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-amber-100 text-amber-800 border border-amber-300'
-                  : isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  ? isDark ? 'bg-blue-950 text-blue-300 border-blue-800' : 'bg-blue-50 text-blue-700 border-blue-300'
+                  : isDark ? 'bg-emerald-950 text-emerald-400 border-emerald-800' : 'bg-emerald-100 text-emerald-800 border-emerald-300'
               )}>
                 {meta.hasUserModifications ? 'Modified' : 'Unchanged'}
               </span>
             </div>
           </div>
 
-          {/* Quick Actions: Save, Save as..., and Export */}
           <div className="pt-2 flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95"
-              title="Save active database to disk without holding a write lock"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-xs shadow transition active:scale-95 cursor-pointer"
+              title="Save active database to disk with pre-save modification safety check"
             >
               <Save className="w-3.5 h-3.5" />
               <span>{isSaving ? 'Saving...' : 'Save'}</span>
             </button>
             <button
+              type="button"
               onClick={handleSaveAs}
-              className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
+              className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 cursor-pointer ' + (
                 isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
               )}
               title="Save a copy of the database to disk under a new name"
@@ -2291,8 +2339,9 @@ export default function LocalStoragePlugin({ gaw }) {
               <span>Save as...</span>
             </button>
             <button
+              type="button"
               onClick={handleExportDownload}
-              className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 ' + (
+              className={'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-xs border transition active:scale-95 cursor-pointer ' + (
                 isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300 shadow-sm'
               )}
               title="Download raw .db binary file directly"
@@ -2303,85 +2352,37 @@ export default function LocalStoragePlugin({ gaw }) {
           </div>
         </div>
 
-        {/* Card 2: Auto-Save Engine Configuration */}
-        <div className={'p-5 rounded-xl space-y-4 border ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
-          <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
-            <Clock className="w-4 h-4 text-emerald-500" />
-            <span>Local Auto-Sync Engine</span>
-          </h2>
-
-          <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-            When enabled and a file handle is attached, Gawkyy periodically checks external file metrics, overwrites when internal has changes, reloads external edits, and reconciles concurrent mutations.
-          </p>
-
-          <div className="space-y-4 pt-2">
-            <label className={'flex items-center justify-between p-3 rounded-lg border cursor-pointer ' + (
-              isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+        {/* Card 2: Pre-Save Safety Check & Clockie H2 Bridge Pointer */}
+        <div className={'p-5 rounded-xl space-y-4 border flex flex-col justify-between ' + (isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm')}>
+          <div className="space-y-3">
+            <h2 className={'text-sm font-bold flex items-center gap-2 ' + (isDark ? 'text-white' : 'text-slate-900')}>
+              <ShieldCheck className="w-4 h-4 text-blue-500" />
+              <span>How Standalone Local Storage Works</span>
+            </h2>
+            <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+              Standalone Local Storage uses manual Open and Save with zero background polling timers. Right before writing, Gawkyy checks whether the file on disk changed since you last opened or saved it and opens the Conflict Resolver if an external edit is detected.
+            </p>
+            <div className={'p-3.5 rounded-xl border space-y-2 text-xs ' + (
+              isDark ? 'bg-blue-950/30 border-blue-800/50 text-blue-200' : 'bg-blue-50 border-blue-200 text-blue-900'
             )}>
-              <div>
-                <p className={'text-xs font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>Enable Local Auto-Sync</p>
-                <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Automatically check and synchronize changes with local disk</p>
+              <div className="flex items-center gap-2 font-semibold">
+                <Cloud className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                <span>Need Real-Time File Observation or Cloud Drives?</span>
               </div>
-              <input
-                type="checkbox"
-                checked={autoEnabled}
-                onChange={(e) => handleToggleAuto(e.target.checked)}
-                className="w-4 h-4 rounded text-emerald-600 focus:ring-0 cursor-pointer"
-              />
-            </label>
-
-            {autoEnabled && (
-              <div className="space-y-2 pt-1">
-                <label className={'text-xs font-medium ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>Sync Frequency Interval:</label>
-                <select
-                  value={selectedIntervalOption}
-                  onChange={(e) => handleFrequencySelect(e.target.value)}
-                  className={'w-full px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-emerald-500 border ' + (
-                    isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-slate-50 border-slate-300 text-slate-900'
-                  )}
-                >
-                  <option value="5">Every 5 seconds</option>
-                  <option value="10">Every 10 seconds</option>
-                  <option value="30">Every 30 seconds</option>
-                  <option value="60">Every 60 seconds (1 minute)</option>
-                  <option value="300">Every 5 minutes</option>
-                  <option value="custom">Custom frequency...</option>
-                </select>
-
-                {selectedIntervalOption === 'custom' && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="number"
-                      min="1"
-                      max="86400"
-                      value={customIntervalSeconds}
-                      onChange={(e) => setCustomIntervalSeconds(e.target.value)}
-                      placeholder="e.g. 15"
-                      className={'w-24 px-2.5 py-1.5 rounded-lg border text-xs font-mono focus:outline-none focus:border-emerald-500 ' + (
-                        isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
-                      )}
-                    />
-                    <span className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>seconds</span>
-                    <button
-                      onClick={handleApplyCustomInterval}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition active:scale-95"
-                    >
-                      Apply
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className={'p-3 rounded-lg text-[11px] space-y-1 border ' + (
-              isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
-            )}>
-              <p className={'font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>PWA File System Access Note:</p>
-              <p>
-                Gawkyy maintains ongoing read-write access to your local database file without holding a persistent write lock, allowing smooth concurrent access and automated 4-way sync.
+              <p className="text-[11px] leading-relaxed">
+                Use <strong>Clockie H2 Drives</strong> (Bridge v1.5) for live file change pushes, optimistic concurrency, and seamless access to pCloud, Google Drive, Dropbox, and Local Drive.
               </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => gaw.navigation.openPlugin('plugin_clockie_h2')}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition active:scale-95 cursor-pointer"
+          >
+            <Cloud className="w-4 h-4" />
+            <span>Open Clockie H2 Drives</span>
+          </button>
         </div>
       </div>
     </div>
@@ -2577,12 +2578,10 @@ export default function HelpPlugin({ gaw }) {
       icon: Cpu,
     },
     {
-      name: 'Dropbox API',
-      badge: 'Cloud Sync',
-      url: 'https://www.dropbox.com/developers',
-      secondaryUrl: 'https://www.dropbox.com/developers/apps',
-      secondaryLabel: 'App Console',
-      desc: 'Secure cloud file storage integration leveraging PKCE OAuth authentication, metadata inspection, and delta file uploads/downloads.',
+      name: 'Clockie H2 Bridge v1.5',
+      badge: 'Multi-Drive Sync',
+      url: 'https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage',
+      desc: 'Extension bridge connecting Gawkyy and user apps to pCloud, Google Drive, Dropbox, and Local Drive with live file/folder observation and clash-free expectedRevision saves.',
       icon: Cloud,
     },
     {
@@ -2854,11 +2853,11 @@ export default function HelpPlugin({ gaw }) {
                     A web-native, offline-first portable application platform and MS Access successor. Built on client-side WebAssembly SQLite,
                     in-browser Sucrase TSX compilation, reactive Excel-compatible spreadsheets, and automated 4-way conflict reconciliation.
                   </p>
-                  <div className="flex flex-wrap gap-2 pt-1 text-[11px] font-mono text-indigo-400">
+                  <div className="flex flex-wrap gap-2 pt-1 text-[11px] font-mono text-blue-400">
                     <span>• sql.js WebAssembly SQLite</span>
                     <span>• Sucrase Fast TSX Compiler</span>
+                    <span>• Clockie H2 Bridge v1.5</span>
                     <span>• PWA File System Access API</span>
-                    <span>• Dropbox PKCE Cloud Sync</span>
                   </div>
                 </div>
               </div>
@@ -2910,17 +2909,17 @@ export default function HelpPlugin({ gaw }) {
                   <Cloud className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Dropbox Cloud Synchronization</h3>
+                  <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Clockie H2 Multi-Drive Bridge</h3>
                   <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
-                    Synchronize SQLite databases across devices using Dropbox OAuth PKCE authentication and 4-way delta reconciliation.
+                    Open, observe in real time, and clash-free save SQLite databases across pCloud, Google Drive, Dropbox, and Local Drive using Clockie H2 Bridge v1.5.
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center gap-1.5 flex-shrink-0"
+                onClick={() => gaw.navigation.openPlugin('plugin_clockie_h2')}
+                className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs shadow transition active:scale-95 flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
               >
-                <span>Open Cloud Sync</span>
+                <span>Open Clockie H2 Drives</span>
                 <ExternalLink className="w-3 h-3" />
               </button>
             </div>
@@ -3069,8 +3068,8 @@ export default function HelpPlugin({ gaw }) {
                   ['gaw.navigation.openIDE(tab)', 'Opens the Internal Monaco IDE focused on a specific plugin or query.'],
                   ['gaw.navigation.openAI()', 'Launches the AI Specification Generator modal.'],
                   ['gaw.eventBus.on(event, cb) / .emit(event, ...args)', 'Decoupled pub/sub event bus for plugin-to-plugin real-time events.'],
-                  ['gaw.storage.save() / .saveAs()', 'Saves active database to local disk without persistent write locks.'],
-                  ['gaw.dropbox.save() / .saveAs()', 'Saves active database to Dropbox cloud account.'],
+                  ['gaw.storage.save() / .saveAs()', 'Manual local disk save with pre-save timestamp conflict guard.'],
+                  ['gaw.bridge.readFile() / .saveFile() / .observeFile()', 'Clockie H2 Bridge v1.5 multi-drive read, clash-free save, and live file/folder observation.'],
                   ['gaw.theme', 'Current theme ("vs-dark" | "vs-light") to match system aesthetics.'],
                 ].map(([api, desc], i) => (
                   <div key={i} className="py-2.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
@@ -3123,7 +3122,7 @@ export default function HelpPlugin({ gaw }) {
                     <span>Export & Share</span>
                   </div>
                   <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
-                    Save your database locally or to Dropbox. Your plugin code travels inside the <code className={'font-mono font-semibold ' + (isDark ? 'text-indigo-300' : 'text-indigo-700')}>.sqlite</code> binary file to any device running Gawkyy!
+                    Save your database locally or to Clockie H2 Drives (pCloud, Google Drive, Dropbox, Local Drive). Your plugin code travels inside the <code className={'font-mono font-semibold ' + (isDark ? 'text-blue-300' : 'text-blue-700')}>.sqlite</code> binary file to any device running Gawkyy!
                   </p>
                 </div>
               </div>
@@ -3397,26 +3396,25 @@ export default function HelpPlugin({ gaw }) {
               </ul>
             </div>
 
-            {/* Feature 4: File Storage & 4-Way Auto-Sync Conflict Reconciliation */}
+            {/* Feature 4: Clockie H2 Bridge v1.5 & Local File Storage */}
             <div className={'p-5 rounded-2xl border space-y-3 ' + (
               isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
               <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
                 <Workflow className="w-5 h-5" />
-                <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>4. File Storage & 4-Way Auto-Sync Reconciliation</h3>
+                <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>4. Clockie H2 Multi-Drive Sync & Conflict Reconciliation</h3>
               </div>
               <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
-                Gawkyy supports independent local disk file synchronization (via PWA File System Access API without persistent write locks) and Dropbox cloud synchronization.
-                When auto-sync is enabled, Gawkyy executes a state-metric check across 4 conditions:
+                Gawkyy connects to pCloud, Google Drive, Dropbox, and Local Drive via the Clockie H2 Extension Bridge v1.5 (with real-time file observation and optimistic concurrency), alongside standalone manual local file open/save:
               </p>
               <div className="space-y-2 text-xs pt-1">
                 <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
-                  <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Condition 1 (Neither changed):</strong>
-                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>No action required; database remains cleanly synchronized with disk and cloud.</span>
+                  <strong className={isDark ? 'text-slate-100' : 'text-slate-900'}>Live Incoming Updates:</strong>
+                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>When another tab or device updates an observed file and you have no unsaved edits, Gawkyy reloads the database automatically.</span>
                 </div>
                 <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
-                  <strong className={isDark ? 'text-emerald-300' : 'text-emerald-800 font-bold'}>Condition 2 (Internal changed, external unchanged):</strong>
-                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>Current database is saved directly to the external destination (disk or cloud), updating sync metrics.</span>
+                  <strong className={isDark ? 'text-emerald-300' : 'text-emerald-800 font-bold'}>Clash-Free Saves & Merging:</strong>
+                  <span className={'ml-1 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>Every save passes expectedRevision; if concurrent edits occur, Gawkyy attempts automatic table/row reconciliation and opens the Conflict Resolver if needed.</span>
                 </div>
                 <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
                   <strong className={isDark ? 'text-sky-300' : 'text-sky-800 font-bold'}>Condition 3 (External changed, internal unchanged):</strong>
@@ -3509,7 +3507,7 @@ export default function PluginManagerPlugin({ gaw }) {
 
   const isSysPlugin = (p) => {
     return (
-      p.id === 'plugin_dropbox_sync' ||
+      p.id === 'plugin_clockie_h2' ||
       p.id === 'plugin_local_storage' ||
       p.id === 'plugin_manager' ||
       p.id === 'plugin_file_manager' ||
@@ -3569,7 +3567,7 @@ export default function PluginManagerPlugin({ gaw }) {
   }, [plugins]);
 
   const handleToggleActive = (plugin) => {
-    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage' || plugin.id === 'plugin_file_manager' || plugin.id === 'plugin_database_management') {
+    if (plugin.id === 'plugin_manager' || plugin.id === 'plugin_local_storage' || plugin.id === 'plugin_clockie_h2' || plugin.id === 'plugin_file_manager' || plugin.id === 'plugin_database_management') {
       gaw.toast.warning('Core system plugin "' + plugin.name + '" must remain active to keep the application operational.');
       return;
     }
@@ -3629,7 +3627,7 @@ export default function PluginManagerPlugin({ gaw }) {
 
   const handleConfirmDelete = () => {
     if (!deleteModalPlugin) return;
-    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage' || deleteModalPlugin.id === 'plugin_file_manager' || deleteModalPlugin.id === 'plugin_database_management') {
+    if (deleteModalPlugin.id === 'plugin_manager' || deleteModalPlugin.id === 'plugin_local_storage' || deleteModalPlugin.id === 'plugin_clockie_h2' || deleteModalPlugin.id === 'plugin_file_manager' || deleteModalPlugin.id === 'plugin_database_management') {
       gaw.toast.warning('Core system plugins cannot be removed.');
       setDeleteModalPlugin(null);
       return;
@@ -3745,7 +3743,7 @@ export default function PluginManagerPlugin({ gaw }) {
           <div>
             <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>React Components Manager</h1>
             <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-300' : 'text-slate-600')}>
-              Manage runtime TSX plugins, toggle active/inactive visibility, import from disk or Dropbox, and edit code.
+              Manage runtime TSX plugins, toggle active/inactive visibility, import from disk or Clockie H2 Drives, and edit code.
             </p>
           </div>
         </div>
@@ -3914,7 +3912,7 @@ export default function PluginManagerPlugin({ gaw }) {
         {filteredPlugins.map((p) => {
           const isActive = p.enabled !== 0;
           const isSystem = isSysPlugin(p);
-          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_file_manager' || p.id === 'plugin_database_management';
+          const isProtected = p.id === 'plugin_manager' || p.id === 'plugin_local_storage' || p.id === 'plugin_clockie_h2' || p.id === 'plugin_file_manager' || p.id === 'plugin_database_management';
           return (
             <div
               key={p.id}
@@ -4107,7 +4105,7 @@ export default function PluginManagerPlugin({ gaw }) {
                 Only the plugin record inside this application's SQLite database (<code className={'font-mono ' + (isDark ? 'text-slate-100' : 'text-slate-900')}>t_gaw_plugins</code>) will be removed.
               </p>
               <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                Your original source file on local disk or Dropbox will <strong>NOT</strong> be deleted or touched.
+                Your original source file on local disk or Clockie H2 Drives will <strong>not</strong> be deleted or touched.
               </p>
             </div>
 
@@ -4168,19 +4166,24 @@ import {
 
 export default function FileManagerPlugin({ gaw }) {
   const [storageMeta, setStorageMeta] = useState(() => gaw.storage.getMetadata());
-  const [dropboxConfig, setDropboxConfig] = useState(() => gaw.dropbox.getConfig());
+  const [bridgeState, setBridgeState] = useState(() => gaw.bridge.getState());
   const [recentFiles, setRecentFiles] = useState(() => gaw.workspace.getRecentFiles());
   const [sidebarOpen, setSidebarOpen] = useState(() => gaw.workspace.isSidebarOpen());
-  const [isConnectingDropbox, setIsConnectingDropbox] = useState(false);
-  const [showDropboxPicker, setShowDropboxPicker] = useState(false);
-  const [dropboxFiles, setDropboxFiles] = useState([]);
-  const [isLoadingDropbox, setIsLoadingDropbox] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [subTab, setSubTab] = useState('database');
 
   const isDbActive = !!storageMeta && !!(storageMeta.fileName || storageMeta.filePath || (gaw.db?.getTables && gaw.db.getTables().length));
   const hasLocalFile = !!storageMeta?.hasFileHandle;
-  const hasDropboxFile = !!dropboxConfig?.connected && !!dropboxConfig?.currentRemoteFile;
+  const isBridgeConnected = bridgeState?.status === 'connected';
+  const hasBridgeFile = isBridgeConnected && !!bridgeState?.activeFile;
+
+  const formatProv = (p) => {
+    if (p === 'pcloud') return 'pCloud';
+    if (p === 'gdrive') return 'Google Drive';
+    if (p === 'dropbox') return 'Dropbox';
+    if (p === 'local') return 'Local Drive';
+    return p || 'Clockie H2';
+  };
 
   // Active Database Information (Editable)
   const [appTitle, setAppTitle] = useState(() =>
@@ -4221,8 +4224,8 @@ export default function FileManagerPlugin({ gaw }) {
         setDbName(meta.fileName);
       }
     });
-    const unsubDropbox = gaw.dropbox.subscribe((cfg) => {
-      setDropboxConfig(cfg);
+    const unsubBridge = gaw.bridge.subscribe((st) => {
+      setBridgeState(st);
     });
     const unsubRecent = gaw.eventBus.on('recent_files_changed', () => {
       setRecentFiles(gaw.workspace.getRecentFiles());
@@ -4239,22 +4242,9 @@ export default function FileManagerPlugin({ gaw }) {
       }
     });
 
-    if (gaw.dropbox.getConfig().accessToken && !gaw.dropbox.getConfig().connected) {
-      setIsConnectingDropbox(true);
-      gaw.dropbox.validateToken().then((ok) => {
-        setIsConnectingDropbox(false);
-        setDropboxConfig(gaw.dropbox.getConfig());
-        if (ok) {
-          gaw.toast.info('Dropbox connection restored.');
-        }
-      }).catch(() => {
-        setIsConnectingDropbox(false);
-      });
-    }
-
     return () => {
       unsubStorage();
-      unsubDropbox();
+      unsubBridge();
       unsubRecent();
       if (unsubDb) unsubDb();
     };
@@ -4346,43 +4336,8 @@ export default function FileManagerPlugin({ gaw }) {
     }
   };
 
-  const handleOpenDropboxBrowser = async () => {
-    if (!dropboxConfig.connected) {
-      gaw.navigation.openPlugin('plugin_dropbox_sync');
-      return;
-    }
-    setShowDropboxPicker(true);
-    setIsLoadingDropbox(true);
-    try {
-      const files = await gaw.dropbox.listDatabaseFiles();
-      setDropboxFiles(files || []);
-    } catch (err) {
-      gaw.toast.error('Failed to list Dropbox files: ' + (err.message || ''));
-    } finally {
-      setIsLoadingDropbox(false);
-    }
-  };
-
-  const handleSelectDropboxFile = async (fileItem) => {
-    try {
-      setShowDropboxPicker(false);
-      const ok = await gaw.dropbox.downloadFile(fileItem);
-      if (ok) {
-        gaw.workspace?.setSidebarOpen(true);
-        setSidebarOpen(true);
-        setRecentFiles(gaw.workspace.getRecentFiles());
-        const meta = gaw.storage.getMetadata();
-        setStorageMeta(meta);
-        if (meta && meta.fileName) setDbName(meta.fileName);
-        if (gaw.workspace?.getSetting) {
-          setAppTitle(gaw.workspace.getSetting('app_title', 'New Application'));
-          setCompanyName(gaw.workspace.getSetting('company_name', 'None'));
-        }
-        gaw.toast.success('Loaded ' + fileItem.name + ' from Dropbox.');
-      }
-    } catch (err) {
-      gaw.toast.error('Failed to download file: ' + (err.message || ''));
-    }
+  const handleOpenClockieH2 = () => {
+    gaw.navigation.openPlugin('plugin_clockie_h2');
   };
 
   const handleOpenNorthwindDemo = () => {
@@ -4422,16 +4377,19 @@ export default function FileManagerPlugin({ gaw }) {
   const handleOpenRecent = async (file) => {
     if (file.source === 'demo') {
       handleOpenNorthwindDemo();
-    } else if (file.source === 'dropbox') {
-      if (!dropboxConfig.connected) {
-        gaw.toast.warning('Dropbox is not connected. Opening Dropbox Sync plugin...');
-        gaw.navigation.openPlugin('plugin_dropbox_sync');
+    } else if (file.source === 'h2') {
+      if (!isBridgeConnected) {
+        gaw.toast.warning('Clockie H2 Bridge is not connected. Opening Clockie H2 Drives...');
+        gaw.navigation.openPlugin('plugin_clockie_h2');
         return;
       }
       try {
-        const ok = await gaw.dropbox.downloadFile({
+        const ok = await gaw.bridge.openDatabase({
+          provider: file.provider || 'dropbox',
+          relativePath: file.path || file.name,
+          driveRoot: file.driveRoot ?? true,
+          fileId: file.fileId,
           name: file.name,
-          path_display: file.path || '/' + file.name,
         });
         if (ok) {
           gaw.workspace?.setSidebarOpen(true);
@@ -4444,10 +4402,10 @@ export default function FileManagerPlugin({ gaw }) {
             setAppTitle(gaw.workspace.getSetting('app_title', 'New Application'));
             setCompanyName(gaw.workspace.getSetting('company_name', 'None'));
           }
-          gaw.toast.success('Loaded ' + file.name + ' from Dropbox.');
+          gaw.toast.success('Opened ' + file.name + ' via Clockie H2 (' + formatProv(file.provider) + ').');
         }
       } catch (err) {
-        gaw.toast.error('Could not open Dropbox file: ' + (err.message || 'File not found'));
+        gaw.toast.error('Could not open Clockie H2 file: ' + (err?.message || 'File not found'));
       }
     } else {
       await handleOpenLocal();
@@ -4509,34 +4467,34 @@ export default function FileManagerPlugin({ gaw }) {
 
         {/* Status Badges */}
         <div className='flex items-center justify-center md:justify-end gap-2 flex-wrap'>
-          {dropboxConfig.connected ? (
+          {isBridgeConnected ? (
             <div className={'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs border-2 font-semibold shadow-sm ' + (
               isDark ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-emerald-100 border-emerald-400 text-emerald-900'
             )}>
               <CheckCircle2 className='w-3.5 h-3.5 text-emerald-500' />
-              <span>Dropbox Connected</span>
+              <span>Clockie H2 v1.5 Connected</span>
               <button
                 type="button"
-                onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                onClick={() => gaw.navigation.openPlugin('plugin_clockie_h2')}
                 className={'ml-1 text-[11px] underline font-bold cursor-pointer ' + (isDark ? 'text-emerald-300 hover:text-white' : 'text-emerald-900 hover:text-black')}
               >
-                Sync Settings
+                Browse Drives
               </button>
             </div>
           ) : (
             <div className={'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs border-2 font-semibold shadow-sm ' + (
               isDark ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-200/90 border-slate-300 text-slate-800'
             )}>
-              <Cloud className='w-3.5 h-3.5 text-indigo-400' />
-              <span>Dropbox Disconnected</span>
+              <Cloud className='w-3.5 h-3.5 text-sky-400' />
+              <span>Clockie H2 Offline</span>
               <button
                 type="button"
-                onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
+                onClick={() => gaw.navigation.openPlugin('plugin_clockie_h2')}
                 className={'ml-1 text-[11px] underline font-bold cursor-pointer ' + (
-                  isDark ? 'text-indigo-300 hover:text-white' : 'text-indigo-700 hover:text-indigo-950'
+                  isDark ? 'text-sky-300 hover:text-white' : 'text-blue-700 hover:text-blue-950'
                 )}
               >
-                Connect Cloud Sync
+                Connect Bridge
               </button>
             </div>
           )}
@@ -4544,8 +4502,14 @@ export default function FileManagerPlugin({ gaw }) {
           <div className={'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs border-2 font-semibold shadow-sm ' + (
             isDark ? 'bg-slate-800/90 border-slate-700 text-slate-200' : 'bg-slate-200/90 border-slate-300 text-slate-800'
           )}>
-            <HardDrive className={'w-3.5 h-3.5 ' + (isDark ? 'text-indigo-400' : 'text-indigo-600')} />
-            <span>Target: {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}</span>
+            <HardDrive className={'w-3.5 h-3.5 ' + (isDark ? 'text-sky-400' : 'text-blue-600')} />
+            <span>
+              Target: {hasBridgeFile
+                ? 'Clockie H2 (' + formatProv(bridgeState.activeFile?.provider) + ')'
+                : storageMeta.hasFileHandle
+                ? 'Local Disk Handle'
+                : 'In-Memory DB'}
+            </span>
           </div>
         </div>
       </div>
@@ -4846,8 +4810,12 @@ export default function FileManagerPlugin({ gaw }) {
               </div>
               <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
                 <span className={'block text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Storage Target</span>
-                <span className={'font-semibold mt-0.5 block capitalize ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                  {storageMeta.activeTarget === 'dropbox' ? 'Dropbox Cloud' : storageMeta.hasFileHandle ? 'Local Disk Handle' : 'In-Memory DB'}
+                <span className={'font-semibold mt-0.5 block ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                  {hasBridgeFile
+                    ? 'Clockie H2 (' + formatProv(bridgeState.activeFile?.provider) + ')'
+                    : storageMeta.hasFileHandle
+                    ? 'Local Disk Handle'
+                    : 'In-Memory DB'}
                 </span>
               </div>
               <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-950/60 border-slate-800/60' : 'bg-slate-50 border-slate-200')}>
@@ -4921,7 +4889,7 @@ export default function FileManagerPlugin({ gaw }) {
                 </div>
               </div>
 
-              {/* Card 3: Dropbox Cloud */}
+              {/* Card 3: Clockie H2 Drives */}
               <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between transition group border ' + (
                 isDark ? 'bg-slate-900 border-slate-800 hover:border-sky-500/50' : 'bg-white border-slate-200 hover:border-sky-300 shadow-sm'
               )}>
@@ -4933,8 +4901,8 @@ export default function FileManagerPlugin({ gaw }) {
                   </div>
                   <div>
                     <div className='flex items-center gap-2'>
-                      <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Open from Dropbox</h3>
-                      {dropboxConfig.connected && (
+                      <h3 className={'text-base font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Clockie H2 Drives</h3>
+                      {isBridgeConnected && (
                         <span className={'px-1.5 py-0.5 rounded text-[10px] font-semibold ' + (
                           isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         )}>
@@ -4943,32 +4911,18 @@ export default function FileManagerPlugin({ gaw }) {
                       )}
                     </div>
                     <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
-                      {dropboxConfig.connected
-                        ? 'Browse database files in your connected Dropbox storage and open them directly.'
-                        : 'Connect your Dropbox account to browse, pull, and synchronize cloud databases.'}
+                      Browse pCloud, Google Drive, Dropbox, and Local Drive with live file watching and clash-free saving.
                     </p>
                   </div>
                 </div>
                 <div className='pt-5 space-y-2'>
-                  {dropboxConfig.connected ? (
-                    <button
-                      onClick={handleOpenDropboxBrowser}
-                      className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer'
-                    >
-                      <Cloud className='w-4 h-4' />
-                      <span>Browse Dropbox Files...</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                      className={'w-full py-2.5 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-2 active:scale-98 border cursor-pointer ' + (
-                        isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-300 border-sky-700/40' : 'bg-sky-50 hover:bg-sky-100 text-sky-700 border-sky-200'
-                      )}
-                    >
-                      <ExternalLink className='w-4 h-4' />
-                      <span>Open Dropbox Cloud Sync</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={handleOpenClockieH2}
+                    className='w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-md transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer'
+                  >
+                    <Cloud className='w-4 h-4' />
+                    <span>{isBridgeConnected ? 'Browse Clockie H2 Drives...' : 'Open Clockie H2 Bridge'}</span>
+                  </button>
                 </div>
               </div>
 
@@ -5061,7 +5015,7 @@ export default function FileManagerPlugin({ gaw }) {
                 <div className='max-w-sm'>
                   <h4 className={'text-sm font-semibold ' + (isDark ? 'text-slate-300' : 'text-slate-700')}>No Recent Files Recorded</h4>
                   <p className={'text-xs mt-1 leading-relaxed ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
-                    Open a local file, pull a database from Dropbox, or launch the Northwind Demo above to track files here.
+                    Open a database from Clockie H2 Drives, choose a local file, or launch the Northwind Demo above to track files here.
                   </p>
                 </div>
               </div>
@@ -5069,7 +5023,7 @@ export default function FileManagerPlugin({ gaw }) {
               <div className='overflow-x-auto'>
                 <table className='w-full text-left text-xs'>
                   <thead>
-                    <tr className={'border-b uppercase tracking-wider text-[10px] font-semibold ' + (
+                    <tr className={'border-b text-[11px] font-semibold ' + (
                       isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 bg-slate-50/50'
                     )}>
                       <th className='py-2.5 px-3'>Database File</th>
@@ -5082,7 +5036,7 @@ export default function FileManagerPlugin({ gaw }) {
                   <tbody className={'divide-y ' + (isDark ? 'divide-slate-800/60' : 'divide-slate-200')}>
                     {recentFiles.map((file) => {
                       const isDemo = file.source === 'demo';
-                      const isDropbox = file.source === 'dropbox';
+                      const isH2 = file.source === 'h2';
                       return (
                         <tr
                           key={file.id}
@@ -5094,13 +5048,13 @@ export default function FileManagerPlugin({ gaw }) {
                               <div className={'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ' + (
                                 isDemo
                                   ? isDark ? 'bg-emerald-600/20 text-emerald-400' : 'bg-emerald-100 text-emerald-600'
-                                  : isDropbox
-                                  ? isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'
+                                  : isH2
+                                  ? isDark ? 'bg-sky-600/20 text-sky-400' : 'bg-sky-100 text-sky-600'
                                   : isDark ? 'bg-blue-600/20 text-blue-400' : 'bg-blue-100 text-blue-600'
                               )}>
                                 {isDemo ? (
                                   <Sparkles className='w-3.5 h-3.5' />
-                                ) : isDropbox ? (
+                                ) : isH2 ? (
                                   <Cloud className='w-3.5 h-3.5' />
                                 ) : (
                                   <HardDrive className='w-3.5 h-3.5' />
@@ -5108,12 +5062,12 @@ export default function FileManagerPlugin({ gaw }) {
                               </div>
                               <div>
                                 <span className={'font-semibold block transition ' + (
-                                  isDark ? 'text-white group-hover:text-indigo-300' : 'text-slate-900 group-hover:text-indigo-600'
+                                  isDark ? 'text-white group-hover:text-sky-300' : 'text-slate-900 group-hover:text-blue-600'
                                 )}>
                                   {file.name}
                                 </span>
                                 <span className={'text-[10px] font-mono ' + (isDark ? 'text-slate-500' : 'text-slate-400')}>
-                                  {file.path || (isDropbox ? 'Dropbox Cloud' : 'Local Disk')}
+                                  {file.path || (isH2 ? formatProv(file.provider) : 'Local Disk')}
                                 </span>
                               </div>
                             </div>
@@ -5123,11 +5077,11 @@ export default function FileManagerPlugin({ gaw }) {
                             <span className={'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ' + (
                               isDemo
                                 ? isDark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : isDropbox
-                                ? isDark ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                : isH2
+                                ? isDark ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-sky-100 text-sky-800 border border-sky-200'
                                 : isDark ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-blue-100 text-blue-800 border border-blue-200'
                             )}>
-                              {isDemo ? 'Demo Template' : isDropbox ? 'Dropbox' : 'Local Disk'}
+                              {isDemo ? 'Demo Template' : isH2 ? 'Clockie H2 • ' + formatProv(file.provider) : 'Local Disk'}
                             </span>
                           </td>
 
@@ -5146,7 +5100,7 @@ export default function FileManagerPlugin({ gaw }) {
                                   e.stopPropagation();
                                   handleOpenRecent(file);
                                 }}
-                                className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] transition shadow cursor-pointer"
+                                className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-[11px] transition shadow cursor-pointer"
                               >
                                 Open
                               </button>
@@ -5181,18 +5135,125 @@ export default function FileManagerPlugin({ gaw }) {
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-emerald-500" />
               <div>
-                <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-500">
-                  Storage & Sync Medium Configuration
+                <h3 className="font-bold text-xs text-emerald-500">
+                  Storage & Sync Configuration
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Save active database files and configure background synchronization for Local Disk Storage and Dropbox Cloud Sync.
+                  Save active databases via Clockie H2 Bridge v1.5 (with live observation) or standalone local file storage.
                 </p>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* CARD 1: LOCAL DISK STORAGE */}
+            {/* Card 1: Clockie H2 Drives */}
+            <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between border transition ' + (
+              !isDbActive
+                ? (isDark ? 'bg-slate-900/40 border-slate-800/60 opacity-60' : 'bg-slate-100 border-slate-200 opacity-60')
+                : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')
+            )}>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b pb-3 border-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
+                      isDark ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'bg-sky-50 text-sky-700 border border-sky-200'
+                    )}>
+                      <Cloud className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className={'font-bold text-sm ' + (isDark ? 'text-white' : 'text-slate-900')}>
+                        Clockie H2 Drives
+                      </h3>
+                      <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        pCloud, Google Drive, Dropbox & Local Drive via Bridge v1.5
+                      </p>
+                    </div>
+                  </div>
+
+                  {!isDbActive ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      No Database Loaded
+                    </span>
+                  ) : !hasBridgeFile ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Bound
+                    </span>
+                  ) : storageMeta.syncStatus === 'dirty' ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
+                      Unsaved
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      Synchronized
+                    </span>
+                  )}
+                </div>
+
+                {!isDbActive ? (
+                  <div className="py-4 text-center text-xs italic text-slate-500">
+                    No active database loaded in the application.
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Bridge Status:
+                      </span>
+                      <span className={'font-semibold block mt-0.5 ' + (isBridgeConnected ? 'text-emerald-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
+                        {isBridgeConnected ? 'Connected (v1.5)' : 'Disconnected'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Bound Drive & File Path:
+                      </span>
+                      <span className={'font-mono font-semibold block truncate mt-0.5 ' + (hasBridgeFile ? 'text-sky-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
+                        {hasBridgeFile
+                          ? formatProv(bridgeState.activeFile?.provider) + ': ' + bridgeState.activeFile?.relativePath
+                          : 'No Clockie H2 file bound yet'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
+                        Auto-Save on Edit:
+                      </span>
+                      <span className={'font-semibold block mt-0.5 ' + (isDark ? 'text-slate-200' : 'text-slate-800')}>
+                        {bridgeState.autoSaveEnabled ? 'Enabled (2.5s debounce)' : 'Disabled (Manual Ctrl+S)'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-6 border-t border-slate-800/60 flex items-center gap-2">
+                <button
+                  disabled={!isDbActive || !hasBridgeFile}
+                  onClick={() => gaw.bridge.saveDatabase()}
+                  className={'flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ' + (
+                    !isDbActive || !hasBridgeFile
+                      ? (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-50' : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50')
+                      : 'bg-sky-600 hover:bg-sky-500 text-white shadow-md active:scale-95 cursor-pointer'
+                  )}
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save</span>
+                </button>
+
+                <button
+                  onClick={() => gaw.navigation.openPlugin('plugin_clockie_h2')}
+                  className={'py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ' + (
+                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-blue-700 border-slate-300'
+                  )}
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Clockie H2 Drives</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Card 2: Standalone Local Disk Storage */}
             <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between border transition ' + (
               !isDbActive
                 ? (isDark ? 'bg-slate-900/40 border-slate-800/60 opacity-60' : 'bg-slate-100 border-slate-200 opacity-60')
@@ -5211,67 +5272,57 @@ export default function FileManagerPlugin({ gaw }) {
                         Local Disk Storage
                       </h3>
                       <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        File System Access API & direct file export
+                        Standalone manual Open, Save & direct .db export
                       </p>
                     </div>
                   </div>
 
-                  {/* Requirement 4: Synchronized Notification / Status for Local Disk Medium */}
                   {!isDbActive ? (
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
                       No Database Loaded
                     </span>
                   ) : !hasLocalFile ? (
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-                      Not Configured
+                      Not Bound
                     </span>
                   ) : storageMeta.syncStatus === 'dirty' ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
                       Unsaved
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      Synchronized
+                      Saved
                     </span>
                   )}
                 </div>
 
                 {!isDbActive ? (
                   <div className="py-4 text-center text-xs italic text-slate-500">
-                    No active database loaded in the application. Everything is disabled until a database is opened.
+                    No active database loaded in the application.
                   </div>
                 ) : (
                   <div className="space-y-3 text-xs">
                     <div>
                       <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        Local File Path:
+                        Local File Handle:
                       </span>
                       <span className={'font-mono font-semibold block truncate mt-0.5 ' + (hasLocalFile ? 'text-emerald-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
-                        {storageMeta.filePath || (hasLocalFile ? dbName : 'No local disk handle bound')}
+                        {hasLocalFile ? (storageMeta.filePath || dbName) : 'No local disk handle bound'}
                       </span>
                     </div>
 
                     <div>
                       <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        Auto-Save Status:
+                        Save Mode:
                       </span>
                       <span className={'font-semibold block mt-0.5 ' + (isDark ? 'text-slate-200' : 'text-slate-800')}>
-                        {storageMeta.isAutoSyncEnabled
-                          ? 'Enabled (Interval: ' + storageMeta.autoSyncIntervalSec + 's)'
-                          : 'Disabled (Manual Save)'}
+                        Manual Save (with pre-save timestamp check)
                       </span>
                     </div>
-
-                    {!hasLocalFile && (
-                      <p className="text-[11px] text-amber-400 italic">
-                        Local file saving is not configured for this active database. Click "Local Storage & Sync" below to configure or select a local destination file.
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
 
-              {/* Requirement 5 & 7: Save button & plugin link for Local Disk Medium */}
               <div className="pt-6 border-t border-slate-800/60 flex items-center gap-2">
                 <button
                   disabled={!isDbActive || !hasLocalFile}
@@ -5281,7 +5332,6 @@ export default function FileManagerPlugin({ gaw }) {
                       ? (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-50' : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50')
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md active:scale-95 cursor-pointer'
                   )}
-                  title={!hasLocalFile ? 'Not configured for local file' : 'Save active database to local file'}
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>Save</span>
@@ -5292,124 +5342,9 @@ export default function FileManagerPlugin({ gaw }) {
                   className={'py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ' + (
                     isDark ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-emerald-700 border-slate-300'
                   )}
-                  title='Open Local Storage & Disk Sync plugin'
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Local Storage & Sync</span>
-                </button>
-              </div>
-            </div>
-
-            {/* CARD 2: DROPBOX CLOUD SYNC */}
-            <div className={'rounded-2xl p-5 shadow-lg flex flex-col justify-between border transition ' + (
-              !isDbActive
-                ? (isDark ? 'bg-slate-900/40 border-slate-800/60 opacity-60' : 'bg-slate-100 border-slate-200 opacity-60')
-                : (isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm')
-            )}>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-3 border-slate-800/60">
-                  <div className="flex items-center gap-3">
-                    <div className={'w-10 h-10 rounded-xl flex items-center justify-center ' + (
-                      isDark ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30' : 'bg-sky-50 text-sky-700 border border-sky-200'
-                    )}>
-                      <Cloud className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className={'font-bold text-sm ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                        Dropbox Cloud Sync
-                      </h3>
-                      <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        Cloud sync, automatic backup & multi-device push/pull
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Requirement 4: Synchronized Notification / Status for Dropbox Medium */}
-                  {!isDbActive ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-                      No Database Loaded
-                    </span>
-                  ) : !hasDropboxFile ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-                      Not Configured
-                    </span>
-                  ) : storageMeta.syncStatus === 'dirty' ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Unsaved
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      Synchronized
-                    </span>
-                  )}
-                </div>
-
-                {!isDbActive ? (
-                  <div className="py-4 text-center text-xs italic text-slate-500">
-                    No active database loaded in the application. Everything is disabled until a database is opened.
-                  </div>
-                ) : (
-                  <div className="space-y-3 text-xs">
-                    <div>
-                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        Dropbox Cloud Account:
-                      </span>
-                      <span className={'font-semibold block mt-0.5 ' + (dropboxConfig.connected ? 'text-sky-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
-                        {dropboxConfig.connected
-                          ? 'Connected (' + (dropboxConfig.accountName || 'Active Account') + ')'
-                          : 'Disconnected'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className={'block font-semibold text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        Remote File Path:
-                      </span>
-                      <span className={'font-mono font-semibold block truncate mt-0.5 ' + (hasDropboxFile ? 'text-sky-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
-                        {dropboxConfig.currentRemoteFile?.path_display || (hasDropboxFile ? '/' + dbName : 'No Dropbox cloud destination file bound')}
-                      </span>
-                    </div>
-
-                    {!hasDropboxFile && (
-                      <p className="text-[11px] text-amber-400 italic">
-                        Dropbox Cloud Sync is not configured for this active database. Click "Dropbox Cloud Sync" below to link an account or upload a cloud database copy.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Requirement 5 & 7: Save button & plugin link for Dropbox Medium */}
-              <div className="pt-6 border-t border-slate-800/60 flex items-center gap-2">
-                <button
-                  disabled={!isDbActive || !hasDropboxFile}
-                  onClick={() => {
-                    if (gaw.dropbox?.save) {
-                      gaw.dropbox.save();
-                    } else {
-                      gaw.storage.save();
-                    }
-                  }}
-                  className={'flex-1 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition ' + (
-                    !isDbActive || !hasDropboxFile
-                      ? (isDark ? 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed opacity-50' : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-50')
-                      : 'bg-sky-600 hover:bg-sky-500 text-white shadow-md active:scale-95 cursor-pointer'
-                  )}
-                  title={!hasDropboxFile ? 'Not configured for Dropbox' : 'Save active database to Dropbox'}
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save</span>
-                </button>
-
-                <button
-                  onClick={() => gaw.navigation.openPlugin('plugin_dropbox_sync')}
-                  className={'py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 cursor-pointer ' + (
-                    isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-sky-700 border-slate-300'
-                  )}
-                  title='Open Dropbox Cloud Sync plugin'
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Dropbox Cloud Sync</span>
+                  <span>Local Storage</span>
                 </button>
               </div>
             </div>
@@ -5460,83 +5395,6 @@ export default function FileManagerPlugin({ gaw }) {
                 Clear Log
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dropbox File Picker Modal */}
-      {showDropboxPicker && (
-        <div className='fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4'>
-          <div className={'max-w-lg w-full rounded-2xl p-6 shadow-2xl space-y-4 border ' + (
-            isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
-          )}>
-            <div className={'flex items-center justify-between border-b pb-3 ' + (isDark ? 'border-slate-800' : 'border-slate-100')}>
-              <div className='flex items-center gap-2.5'>
-                <div className={'w-8 h-8 rounded-lg flex items-center justify-center ' + (
-                  isDark ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-50 text-indigo-600'
-                )}>
-                  <Cloud className='w-4 h-4' />
-                </div>
-                <div>
-                  <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Select Database from Dropbox</h3>
-                  <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>Showing .db and .sqlite files in your Dropbox</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowDropboxPicker(false)}
-                className={'p-1 rounded transition cursor-pointer ' + (isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100')}
-              >
-                <X className='w-4 h-4' />
-              </button>
-            </div>
-
-            {isLoadingDropbox ? (
-              <div className={'py-8 flex flex-col items-center justify-center space-y-2 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                <RefreshCw className='w-5 h-5 animate-spin text-indigo-500' />
-                <span className='text-xs'>Scanning Dropbox for databases...</span>
-              </div>
-            ) : dropboxFiles.length === 0 ? (
-              <div className='py-8 text-center space-y-2'>
-                <p className={'text-xs ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>No database files (.db, .sqlite) found in Dropbox.</p>
-                <button
-                  onClick={() => {
-                    setShowDropboxPicker(false);
-                    gaw.navigation.openPlugin('plugin_dropbox_sync');
-                  }}
-                  className={'text-xs underline cursor-pointer ' + (isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-800')}
-                >
-                  Open Dropbox Cloud Sync to push the active database
-                </button>
-              </div>
-            ) : (
-              <div className={'max-h-64 overflow-y-auto divide-y ' + (isDark ? 'divide-slate-800/80' : 'divide-slate-100')}>
-                {dropboxFiles.map((file) => (
-                  <button
-                    key={file.id || file.path_display}
-                    onClick={() => handleSelectDropboxFile(file)}
-                    className={'w-full text-left py-2.5 px-3 rounded-lg flex items-center justify-between group transition cursor-pointer ' + (
-                      isDark ? 'hover:bg-slate-800/60' : 'hover:bg-slate-50'
-                    )}
-                  >
-                    <div className='flex items-center gap-2.5 min-w-0'>
-                      <Database className='w-4 h-4 text-indigo-500 flex-shrink-0' />
-                      <div className='truncate'>
-                        <span className={'text-xs font-semibold block truncate group-hover:text-indigo-500 ' + (isDark ? 'text-white' : 'text-slate-900')}>
-                          {file.name}
-                        </span>
-                        <span className={'text-[10px] block truncate font-mono ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                          {file.path_display}
-                        </span>
-                      </div>
-                    </div>
-                    <span className={'text-[11px] font-mono flex-shrink-0 ml-2 ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                      {formatBytes(file.size)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
           </div>
         </div>
       )}
@@ -5667,6 +5525,7 @@ export default function HeaderNavbarPlugin({ gaw }) {
                       activeView === 'file' ||
                       activeView === 'plugin:plugin_file_manager' ||
                       activeView === 'plugin:plugin_local_storage' ||
+                      activeView === 'plugin:plugin_clockie_h2' ||
                       activeView.startsWith('table:') ||
                       activeView.startsWith('query:') ||
                       activeView.startsWith('report:') ||
@@ -5682,6 +5541,7 @@ export default function HeaderNavbarPlugin({ gaw }) {
                       activeRoute === 'plugins' &&
                       activeView !== 'plugin:plugin_file_manager' &&
                       activeView !== 'plugin:plugin_local_storage' &&
+                      activeView !== 'plugin:plugin_clockie_h2' &&
                       activeView !== 'plugin:plugin_database_management' &&
                       activeView !== 'plugin:plugin_help'
                     )
@@ -6301,29 +6161,31 @@ export default function FooterStatusPlugin({ gaw }) {
     const u1 = gaw.eventBus?.on('db_changed', forceUpdate);
     const u2 = gaw.eventBus?.on('theme_changed', forceUpdate);
     const u3 = gaw.eventBus?.on('storage_changed', forceUpdate);
-    return () => { u1?.(); u2?.(); u3?.(); };
-  }, [gaw.eventBus]);
+    const u4 = gaw.bridge?.subscribe?.(forceUpdate);
+    return () => { u1?.(); u2?.(); u3?.(); u4?.(); };
+  }, [gaw.eventBus, gaw.bridge]);
 
   const isDark = (gaw.theme || 'vs-dark') === 'vs-dark';
-  const meta = gaw.storage?.getMetadata() || { fileName: 'new_database.sqlite', fileSize: 0, syncStatus: 'clean', isAutoSyncEnabled: false, autoSyncIntervalSec: 0 };
+  const meta = gaw.storage?.getMetadata() || { fileName: 'new_database.sqlite', fileSize: 0, syncStatus: 'saved' };
+  const bridge = gaw.bridge?.getState?.();
 
   const tableCount = gaw.workspace?.getTables()?.length || 0;
   const pluginCount = gaw.plugins?.getAll()?.length || 0;
 
   return (
-    <footer className={'w-full h-full flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono select-text overflow-hidden ' + (
+    <footer className={'w-full h-full flex flex-wrap items-center justify-between px-3 py-1 border-t text-[11px] font-mono overflow-hidden ' + (
       isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-600'
     )}>
       {/* Left Diagnostics */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
+        <div className="flex items-center gap-1.5 text-sky-400 font-semibold">
           <LucideIcons.Database className="w-3.5 h-3.5" />
           <span>SQLite Wasm</span>
         </div>
 
         <div className="flex items-center gap-1 text-slate-300">
           <LucideIcons.HardDrive className="w-3 h-3 text-slate-500" />
-          <span className="font-semibold text-white">{meta.fileName}</span>
+          <span className={'font-semibold ' + (isDark ? 'text-white' : 'text-slate-900')}>{meta.fileName}</span>
           <span className="text-slate-500">({(meta.fileSize / 1024).toFixed(1)} KB)</span>
         </div>
 
@@ -6349,28 +6211,35 @@ export default function FooterStatusPlugin({ gaw }) {
       {/* Right Sync Diagnostics */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => gaw.navigation?.openSettings()}
-          className="flex items-center gap-1 hover:text-white transition"
-          title="Click to configure Auto-Save interval"
+          onClick={() => gaw.navigation?.openPlugin('plugin_clockie_h2')}
+          className="flex items-center gap-1 hover:text-white transition cursor-pointer"
+          title="Open Clockie H2 Drives"
         >
-          <LucideIcons.Clock className="w-3 h-3 text-slate-500" />
+          <LucideIcons.Cloud className={'w-3 h-3 ' + (bridge?.status === 'connected' ? 'text-emerald-400' : 'text-slate-500')} />
           <span>
-            {meta.isAutoSyncEnabled
-              ? 'Auto-Sync: ' + meta.autoSyncIntervalSec + 's'
-              : 'Auto-Sync: Off'}
+            {bridge?.activeFile
+              ? 'H2: ' + bridge.activeFile.provider + (bridge.activeFile.observationId ? ' (Live)' : '')
+              : bridge?.status === 'connected'
+              ? 'Clockie H2 Ready'
+              : 'Local Mode'}
           </span>
         </button>
 
         <div className="flex items-center gap-1">
           {meta.syncStatus === 'dirty' ? (
-            <span className="inline-flex items-center gap-1 text-amber-400 font-bold" title="Unsaved user modifications">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="inline-flex items-center gap-1 text-red-400 font-bold" title="Unsaved user modifications">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
               Unsaved
             </span>
+          ) : meta.syncStatus === 'saving' ? (
+            <span className="inline-flex items-center gap-1 text-sky-400 font-semibold" title="Saving database">
+              <span className="w-2 h-2 rounded-full bg-sky-400" />
+              Saving
+            </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-slate-500 font-medium" title="Synced">
+            <span className="inline-flex items-center gap-1 text-emerald-400 font-medium" title="Saved">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Synced
+              Saved
             </span>
           )}
         </div>

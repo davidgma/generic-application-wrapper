@@ -1,11 +1,10 @@
-export interface RecentFileItem {
-  id: string;
-  name: string;
-  source: 'local' | 'dropbox' | 'demo';
-  path?: string;
-  size?: number;
-  lastOpened: string; // ISO string
-}
+/**
+ * Official Documentation:
+ * - Web Storage API (localStorage): https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
+ */
+import { RecentFileItem } from '../types/storage';
+
+export type { RecentFileItem };
 
 const RECENT_FILES_KEY = 'gaw_recent_files';
 
@@ -16,8 +15,19 @@ export class RecentFilesManager {
       const raw = localStorage.getItem(RECENT_FILES_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-      return [];
+      if (!Array.isArray(parsed)) return [];
+      // Migrate legacy 'dropbox' recent file entries cleanly to Clockie H2 ('h2' + provider: 'dropbox')
+      return parsed.map((item: any) => {
+        if (item && item.source === 'dropbox') {
+          return {
+            ...item,
+            source: 'h2' as const,
+            provider: 'dropbox' as const,
+            driveRoot: true,
+          };
+        }
+        return item as RecentFileItem;
+      });
     } catch {
       return [];
     }
@@ -30,13 +40,20 @@ export class RecentFilesManager {
     try {
       const current = RecentFilesManager.getRecentFiles();
       const existingIdx = current.findIndex(
-        (f) => f.name.toLowerCase() === item.name.toLowerCase() && f.source === item.source
+        (f) =>
+          f.name.toLowerCase() === item.name.toLowerCase() &&
+          f.source === item.source &&
+          (f.provider || '') === (item.provider || '') &&
+          (f.path || '') === (item.path || '')
       );
 
       const updatedItem: RecentFileItem = {
         id: item.id || `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         name: item.name,
         source: item.source,
+        provider: item.provider,
+        driveRoot: item.driveRoot,
+        fileId: item.fileId,
         path: item.path,
         size: item.size,
         lastOpened: item.lastOpened || new Date().toISOString(),

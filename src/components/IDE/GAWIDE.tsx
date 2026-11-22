@@ -2458,10 +2458,10 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => openAndTogglePlugin('plugin_manager', 'Components Manager'),
       },
       {
-        id: 'cmd_dropbox_sync',
-        title: 'System UI: Open Dropbox Cloud Sync',
+        id: 'cmd_clockie_h2',
+        title: 'System UI: Open Clockie H2 Drives',
         shortcut: '',
-        action: () => openAndTogglePlugin('plugin_dropbox_sync', 'Dropbox Cloud Sync'),
+        action: () => openAndTogglePlugin('plugin_clockie_h2', 'Clockie H2 Drives'),
       },
       {
         id: 'cmd_local_storage',
@@ -2958,8 +2958,8 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         action: () => openAndTogglePlugin('plugin_spreadsheet_studio', 'Spreadsheet Studio'),
       },
       {
-        label: 'Dropbox Cloud Sync UI',
-        action: () => openAndTogglePlugin('plugin_dropbox_sync', 'Dropbox Cloud Sync'),
+        label: 'Clockie H2 Drives UI',
+        action: () => openAndTogglePlugin('plugin_clockie_h2', 'Clockie H2 Drives'),
       },
       {
         label: 'Local Storage & Persistence UI',
@@ -3348,7 +3348,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                             className={`p-0.5 rounded transition cursor-pointer ${
                               isDark ? 'hover:bg-slate-700 text-sky-400 hover:text-white' : 'hover:bg-slate-200 text-blue-600 hover:text-black'
                             }`}
-                            title="Import Component Wizard (Local File, Folder, or Dropbox)"
+                            title="Import Component Wizard (Local File, Folder, or Clockie H2 Drives)"
                           >
                             <Upload className="w-3.5 h-3.5" />
                           </button>
@@ -4958,7 +4958,15 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             {storageMeta.syncStatus === 'dirty' ? (
               <button
                 type="button"
-                onClick={() => gawContext?.storage?.save?.()}
+                onClick={() => {
+                  if (gawContext?.bridge?.getState?.().activeFile) {
+                    gawContext.bridge.saveDatabase().catch((err: any) => {
+                      gawContext.toast?.error?.(err?.message || 'Clockie H2 save failed.');
+                    });
+                  } else {
+                    gawContext?.storage?.save?.();
+                  }
+                }}
                 className="inline-flex items-center gap-1 ml-1 px-1.5 py-0.2 rounded bg-red-600/90 hover:bg-red-500 text-white font-bold transition cursor-pointer"
                 title="Unsaved database changes — click to save database file"
               >
