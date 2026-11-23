@@ -595,7 +595,7 @@ export default function App() {
     });
   }, [h2Engine, refreshDatabaseState, syncLayoutWithDatabase, eventBusApi]);
 
-  // Connect to Clockie H2 Extension Bridge v1.5 once SQLite is ready (non-blocking 2.5s probe)
+  // Connect to Clockie H2 Extension Bridge v1.6 once SQLite is ready (non-blocking 2.5s probe, prerender-safe)
   // If this tab was launched directly from Clockie H2 File Manager on a .db/.sqlite file, open it automatically.
   const hasAttemptedH2BootRef = useRef(false);
   useEffect(() => {
@@ -1568,6 +1568,7 @@ export default function App() {
           return ok;
         },
         requestTree: (opts) => h2Engine.getClient().requestTree(opts),
+        switchDriveRoot: (provider, maxDepth) => h2Engine.getClient().switchDriveRoot(provider, maxDepth),
         listFolder: (opts) => h2Engine.getClient().listFolder(opts),
         statFile: (opts) => h2Engine.getClient().statFile(opts),
         readFile: (opts) => h2Engine.getClient().readFile(opts),
@@ -1577,6 +1578,7 @@ export default function App() {
         createFolder: (opts) => h2Engine.getClient().createFolder(opts),
         deleteFile: (opts) => h2Engine.getClient().deleteFile(opts),
         deleteFolder: (opts) => h2Engine.getClient().deleteFolder(opts),
+        deleteItem: (opts) => h2Engine.getClient().deleteItem(opts),
         moveFile: (opts) => h2Engine.getClient().moveFile(opts),
         moveFolder: (opts) => h2Engine.getClient().moveFolder(opts),
         observeFile: (opts) => h2Engine.getClient().observeFile(opts),

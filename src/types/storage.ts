@@ -9,10 +9,21 @@ export type SyncStatus = 'saved' | 'saving' | 'dirty' | 'conflict' | 'error';
 // Storage target is either Clockie H2 Extension Bridge ('h2') or standalone browser local disk ('local')
 export type StorageTarget = 'local' | 'h2';
 
-// Supported drives exposed by Clockie H2 Bridge v1.5
+// Supported drives exposed by Clockie H2 Bridge v1.6
 export type H2Provider = 'pcloud' | 'gdrive' | 'dropbox' | 'local';
 export type H2ProviderFilter = H2Provider | 'all';
 export type H2WatchQuality = 'cloud-push' | 'cloud-poll' | 'native' | 'local-poll';
+export type H2ReasonCode =
+  | 'ORIGIN_NOT_AUTHORIZED'
+  | 'ORIGIN_DISABLED'
+  | 'BRIDGE_DISABLED'
+  | 'UNSUPPORTED_VERSION'
+  | 'PRERENDERING'
+  | 'SESSION_EXPIRED'
+  | 'CONFLICT'
+  | 'PAYLOAD_TOO_LARGE'
+  | 'TIMEOUT'
+  | string;
 
 export interface RecentFileItem {
   id: string;
@@ -56,7 +67,7 @@ export interface ConflictDetails {
   remoteRevision?: string | null;
 }
 
-// --- Clockie H2 Bridge Protocol v1.5 Types ---
+// --- Clockie H2 Bridge Protocol v1.6 Types ---
 
 export interface H2DriveInfo {
   connected: boolean;
@@ -100,7 +111,7 @@ export interface H2LaunchedScope {
 export interface H2ConnectResponse {
   success: boolean;
   sessionId: string | null;
-  reasonCode?: string | null;
+  reasonCode?: H2ReasonCode | null;
   negotiatedVersion?: string;
   sessionMode?: 'launched' | 'direct';
   provider?: H2ProviderFilter;
@@ -275,5 +286,5 @@ export interface H2BridgeState {
   autoSaveEnabled: boolean;
   lastSyncTime: Date | null;
   error: string | null;
-  reasonCode: string | null;
+  reasonCode: H2ReasonCode | null;
 }

@@ -1,0 +1,435 @@
+# Clockie H2 + File Manager — External Web App Bridge Specification (v1.6)
+
+Paste this prompt + specification into Google AI Studio (or any external web app) so it connects
+cleanly via H2_CLOUD_BRIDGE v1.6 with prerender-safe activation, MV3 session persistence,
+structured SESSION_EXPIRED recovery, real-time file/folder observation, optimistic concurrency
+(revision / expectedRevision), lightweight stat, and binary Base64 transfer (e.g. SQLite databases).
+
+================================================================================
+Prompt for External Web App (Google AI Studio)
+================================================================================
+Implement support for the Clockie H2 Extension Bridge Protocol v1.6 (H2_CLOUD_BRIDGE):
+- Zero-URL Session Binding (Critical):
+  * Never read, write, or expect #h2Session or ?h2Session in window.location. The URL stays
+    100% clean so SPA hash/path routing works untouched and URLs can be shared safely.
+  * Store the active sessionId strictly in per-tab window.sessionStorage (for example key
+    "h2_bridge_session_id"), never in localStorage.
+- Strict v1.6 Startup, Prerendering & Page-Refresh Flow:
+  * Always include protocolVersion: "1.6" on every request, and initiate connection with
+    H2_CONNECT_REQ (protocolVersion: "1.6", supportedVersions: ["1.6"], clientName, and
+    previousSessionId read from sessionStorage). All prior versions (v1.5 and earlier) and
+    H2_HANDSHAKE_REQ are discontinued and rejected with reasonCode: "UNSUPPORTED_VERSION".
+  * Content script injects at document_start and emits H2_BRIDGE_READY; H2_CONNECT_REQ also
+    works immediately on page boot because listeners attach synchronously at document_start.
+  * Chrome Omnibox / Speculation Rules Prerendering (New in v1.6): while document.prerendering === true,
+    the content script defers H2_BRIDGE_READY and silently queues early H2_CONNECT_REQ calls until
+    prerenderingchange fires on tab activation. The service worker also rejects any non-standard
+    prerender connection with reasonCode: "PRERENDERING".
+  * MV3 Persistence, Tab Replacement & Recovery (New in v1.6): active sessions persist in
+    chrome.storage.session across MV3 service worker idle restarts, survive chrome.tabs.onReplaced
+    tab swaps, and are protected against mid-load tabs.onUpdated races. If a session is ever
+    invalidated (e.g. closed in Preferences or tab mismatch), Clockie H2 returns success: false with
+    reasonCode: "SESSION_EXPIRED" across all request types so direct-mode clients can cleanly
+    auto-reconnect once without string-matching error messages.
+  * If the user opened this tab from the File Manager, the extension binds the launch to the
+    browser tabId and returns H2_CONNECT_RES with sessionMode: "launched" and launchedScope
+    (provider, rootName, launchedItemType, primaryRelativePath).
+  * If the user opened the site directly — or refreshed the tab (F5) — the extension tears
+    down the prior session, mints a brand-new sessionId (sessionMode: "direct", provider: "all"),
+    and the app overwrites sessionStorage with the new sessionId for a clean fresh start.
+- Real-Time File & Folder Observation:
+  * Call H2_OBSERVE_FILE_REQ or H2_OBSERVE_FOLDER_REQ to subscribe to live change pushes
+    (H2_FILE_CHANGED_EVENT / H2_FOLDER_CHANGED_EVENT). While >= 1 observation is active, the
+    extension automatically holds a chrome.runtime.Port open with 20s heartbeats to keep the MV3
+    service worker awake, and closes it once all observations stop or the tab closes/refreshes.
+  * Watch quality by provider: Dropbox uses native longpoll ("cloud-push"), pCloud (/diff) and
+    Google Drive (changes.list) poll at 4s ("cloud-poll"), Local Drive uses FileSystemObserver
+    ("native") in the File Manager tab or 3s stat polling ("local-poll"). All mutations made
+    through Clockie H2 bridge sessions or the File Manager UI are pushed immediately (0ms).
+  * Echo suppression: every change event includes originSessionId (and originClientName).
+    Compare event.originSessionId === client.sessionId to skip reloading your own saves.
+  * Handle eventType === "resync_required" (emitted after SW restart/sleep-wake or cloud cursor
+    reset) by re-statting or reloading the observed file/folder.
+- Optimistic Concurrency & Clash-Free Writes:
+  * H2_STAT_FILE_RES, H2_READ_FILE_RES, H2_SAVE_FILE_RES, H2_MOVE_FILE_RES, tree nodes, and
+    change events return a normalized provider-agnostic revision string.
+  * Pass expectedRevision on H2_SAVE_FILE_REQ (or expectedRevision: "NONE" for create-only).
+    If another tab/device modified the file in the meantime, Clockie H2 rejects the write with
+    success: false, reasonCode: "CONFLICT", currentRevision, exists, modifiedMs, sizeBytes.
+- Binary Base64 Transfer & Size Guard:
+  * For binary files (including .sqlite, .sqlite3, .db -> application/vnd.sqlite3), send and
+    receive contentType: "binary" + encoding: "base64" (Uint8Array <-> Base64 string).
+  * Single-message payload limit is 32 MB raw bytes (capabilities.maxPayloadBytes = 33554432);
+    larger reads/saves fail cleanly with reasonCode: "PAYLOAD_TOO_LARGE".
+- Standardized Timestamps & Sizes:
+  * All v1.6 responses and push events standardize on modifiedMs (epoch ms) and sizeBytes.
+- Crypto Folder Protection (Always On):
+  * Root-level folders containing "crypto" (case-insensitive) and encrypted pCloud items are hidden
+    and permanently blocked across all read/write/create/delete/move/observe operations.
+- Check accessMode ("readwrite" | "readonly") & capabilities before editing.
+
+================================================================================
+1. Unified Session Lifecycle (v1.6)
+================================================================================
+1. URL is always clean: https://your-app.example/#/any-spa-route
+2. On boot: read prev = sessionStorage.getItem("h2_bridge_session_id"), clear it, and send H2_CONNECT_REQ
+   with protocolVersion: "1.6", supportedVersions: ["1.6"], and previousSessionId: prev.
+3. On H2_CONNECT_RES (success: true): save reply.sessionId into sessionStorage.setItem("h2_bridge_session_id", reply.sessionId).
+   - If reply.sessionMode === "launched": open/focus reply.launchedScope (e.g. primaryRelativePath or folder tree).
+   - If reply.sessionMode === "direct": show drive switcher for connected drives (reply.drives).
+4. On page refresh (F5) or tab close: pagehide + tab listener tear down the old session & all active observations.
+
+================================================================================
+2. All Bridge v1.6 Message Types
+================================================================================
+
+Common Envelope Fields:
+  protocol: "H2_CLOUD_BRIDGE"
+  protocolVersion: "1.6" (required on every message; prior versions are rejected with UNSUPPORTED_VERSION)
+  sessionId: "<sessionId>" (omit on H2_CONNECT_REQ)
+  requestId: "<unique correlation ID>" (omitted on unsolicited push events)
+  type: "<MESSAGE_TYPE>"
+  (Extension replies and push events include __h2FromExtension: true and source: "CLOCKIE_H2_EXTENSION".)
+
+--- Type 0: H2_BRIDGE_READY (Extension -> Web App on document_start & DOMContentLoaded, deferred if prerendering) ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_BRIDGE_READY", "source": "CLOCKIE_H2_EXTENSION", "__h2FromExtension": true }
+
+--- Type 1a: H2_CONNECT_REQ (Web App -> Extension) ---
+{
+  "protocol": "H2_CLOUD_BRIDGE",
+  "protocolVersion": "1.6",
+  "type": "H2_CONNECT_REQ",
+  "requestId": "conn_1",
+  "clientName": "My Web App",
+  "previousSessionId": "<optional previous sessionId from sessionStorage>",
+  "supportedVersions": ["1.6"]
+}
+
+--- Type 1b: H2_CONNECT_RES (Extension -> Web App) ---
+{
+  "protocol": "H2_CLOUD_BRIDGE",
+  "protocolVersion": "1.6",
+  "type": "H2_CONNECT_RES",
+  "sessionId": "<newly active sessionId or null if refused>",
+  "requestId": "conn_1",
+  "source": "CLOCKIE_H2_EXTENSION",
+  "__h2FromExtension": true,
+  "success": true,
+  "reasonCode": null, // On failure: "ORIGIN_NOT_AUTHORIZED" | "ORIGIN_DISABLED" | "BRIDGE_DISABLED" | "UNSUPPORTED_VERSION" | "PRERENDERING" (and "SESSION_EXPIRED" on post-connect requests)
+  "negotiatedVersion": "1.6",
+  "sessionMode": "launched" | "direct",
+  "provider": "pcloud" | "all",
+  "rootName": "Projects" | "All Connected Drives",
+  "launchedItemType": "file" | "folder" | "workspace",
+  "primaryRelativePath": "data.sqlite", // Populated when sessionMode === "launched" on a file
+  "launchedScope": { "provider": "pcloud", "rootName": "Projects", "rootFolderId": "...", "rootPath": "/Projects", "launchedItemType": "file", "primaryRelativePath": "data.sqlite" },
+  "accessMode": "readwrite", // or "readonly"
+  "drives": {
+    "pcloud": { "connected": true, "visible": true },
+    "gdrive": { "connected": true, "visible": false },
+    "dropbox": { "connected": false, "visible": true },
+    "local": { "connected": true, "visible": true }
+  },
+  "capabilities": {
+    "lazyTree": true, "lazyRead": true, "listFolder": true, "workspaceTreeDepth": true,
+    "statFile": true, "observeFiles": true, "observeFolders": true,
+    "expectedRevision": true, "binaryBase64": true, "maxPayloadBytes": 33554432,
+    "multiDrive": true, "driveRootSwitch": true,
+    "save": true, "createFiles": true, "createFolders": true,
+    "deleteFiles": true, "deleteFolders": true, "moveFiles": true, "moveFolders": true,
+    "nativeMove": true, "crossDriveMove": false, "trashByDefault": true
+  },
+  "error": null
+}
+
+--- Type 2a/2b/2c: H2_WORKSPACE_TREE_REQ / H2_LIST_FOLDER_REQ -> H2_WORKSPACE_TREE / H2_LIST_FOLDER_RES ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_WORKSPACE_TREE_REQ", "sessionId": "<sessionId>", "requestId": "tree_1", "provider": "pcloud", "driveRoot": false, "basePath": "", "maxDepth": 2 }
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_LIST_FOLDER_REQ", "sessionId": "<sessionId>", "requestId": "ls_1", "provider": "pcloud", "driveRoot": true, "basePath": "tmp/src", "maxDepth": 1 }
+
+--- Type 3: H2_STAT_FILE_REQ / H2_STAT_FILE_RES (metadata + revision without downloading bytes) ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_STAT_FILE_REQ", "sessionId": "<sessionId>", "requestId": "stat_1", "provider": "dropbox", "driveRoot": true, "relativePath": "Gawkyy/data.sqlite", "fileId": "<optional>" }
+// Response: { success: true, exists: true, itemType: "file", provider, fileId, parentFolderId, name, relativePath, mimeType, contentType, encoding, revision, sizeBytes, modifiedMs, error: null }
+
+--- Type 4: H2_READ_FILE_REQ / H2_READ_FILE_RES (text utf-8 or binary base64; returns revision) ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_READ_FILE_REQ", "sessionId": "<sessionId>", "requestId": "read_1", "provider": "dropbox", "driveRoot": true, "relativePath": "Gawkyy/data.sqlite", "fileId": "<optional>", "encoding": "base64" }
+// Response includes: { success: true, contentType: "binary", encoding: "base64", mimeType: "application/vnd.sqlite3", content: "<base64>", revision: "dropbox:...", sizeBytes, modifiedMs }
+// Guard: files > 32 MB fail with reasonCode: "PAYLOAD_TOO_LARGE", sizeBytes, maxPayloadBytes.
+
+--- Type 5: H2_SAVE_FILE_REQ / H2_SAVE_FILE_RES (optional expectedRevision clash protection) ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_SAVE_FILE_REQ", "sessionId": "<sessionId>", "requestId": "save_1", "provider": "dropbox", "driveRoot": true, "relativePath": "Gawkyy/data.sqlite", "mimeType": "application/vnd.sqlite3", "contentType": "binary", "encoding": "base64", "content": "<base64>", "expectedRevision": "dropbox:015f..." }
+// Pass expectedRevision: "NONE" to require create-only (fails if file already exists).
+// On clash: { success: false, reasonCode: "CONFLICT", currentRevision: "dropbox:0160...", exists: true, modifiedMs, sizeBytes, fileId, error: "..." }
+// On success: returns updated { revision, fileId, sizeBytes, modifiedMs }.
+
+--- Type 6-10: File & Folder Mutations (DELETE_FILE, CREATE_FOLDER, DELETE_FOLDER, MOVE_FILE, MOVE_FOLDER) ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_DELETE_FILE_REQ", "sessionId": "<sessionId>", "requestId": "del_1", "provider": "pcloud", "driveRoot": false, "relativePath": "old.ts", "fileId": "<optional>", "permanent": false }
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_CREATE_FOLDER_REQ", "sessionId": "<sessionId>", "requestId": "mkdir_1", "provider": "pcloud", "driveRoot": false, "relativePath": "src/components" }
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_DELETE_FOLDER_REQ", "sessionId": "<sessionId>", "requestId": "rmdir_1", "provider": "pcloud", "driveRoot": false, "relativePath": "old-dir", "permanent": false }
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_MOVE_FILE_REQ", "sessionId": "<sessionId>", "requestId": "mv_f_1", "provider": "pcloud", "driveRoot": false, "relativePath": "a/file.txt", "targetRelativePath": "b/renamed.txt", "overwrite": false }
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_MOVE_FOLDER_REQ", "sessionId": "<sessionId>", "requestId": "mv_d_1", "provider": "pcloud", "driveRoot": false, "relativePath": "src/old", "targetRelativePath": "archive/old", "overwrite": false }
+
+--- Type 11a/11b: H2_OBSERVE_FILE_REQ / H2_OBSERVE_FILE_RES ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_OBSERVE_FILE_REQ", "sessionId": "<sessionId>", "requestId": "obs_1", "provider": "dropbox", "driveRoot": true, "relativePath": "Gawkyy/data.sqlite", "pollIntervalMs": 4000, "debounceMs": 300 }
+// Response: { success: true, observationId: "obs_f_...", provider, relativePath, fileId, exists, revision, modifiedMs, sizeBytes, watchQuality: "cloud-push" | "cloud-poll" | "native" | "local-poll", pollIntervalMs, debounceMs }
+
+--- Type 12a/12b: H2_OBSERVE_FOLDER_REQ / H2_OBSERVE_FOLDER_RES ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_OBSERVE_FOLDER_REQ", "sessionId": "<sessionId>", "requestId": "obs_d_1", "provider": "pcloud", "driveRoot": true, "relativePath": "Gawkyy", "recursive": false, "pollIntervalMs": 4000, "debounceMs": 300 }
+// Response: { success: true, observationId: "obs_d_...", provider, relativePath, folderId, recursive, watchQuality, pollIntervalMs, debounceMs }
+
+--- Type 13a/13b: H2_UNOBSERVE_REQ / H2_UNOBSERVE_RES ---
+// Cancel one observation by observationId, or cancel all for this session with all: true.
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_UNOBSERVE_REQ", "sessionId": "<sessionId>", "requestId": "unobs_1", "observationId": "obs_f_..." }
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_UNOBSERVE_REQ", "sessionId": "<sessionId>", "requestId": "unobs_all", "all": true }
+
+--- Type 14: H2_FILE_CHANGED_EVENT (Extension -> Web App push, no requestId) ---
+{
+  "protocol": "H2_CLOUD_BRIDGE",
+  "protocolVersion": "1.6",
+  "type": "H2_FILE_CHANGED_EVENT",
+  "sessionId": "<sessionId>",
+  "source": "CLOCKIE_H2_EXTENSION",
+  "__h2FromExtension": true,
+  "observationId": "obs_f_...",
+  "eventType": "modified" | "created" | "deleted" | "moved" | "renamed" | "resync_required" | "watch_error",
+  "provider": "dropbox",
+  "relativePath": "Gawkyy/data.sqlite",
+  "newRelativePath": "<present on moved/renamed>",
+  "fileId": "id:...",
+  "revision": "dropbox:0161...",
+  "modifiedMs": 1765000000000,
+  "sizeBytes": 163840,
+  "originSessionId": "<sessionId of writer, "CLOCKIE_FILE_MANAGER", or null if external>",
+  "originClientName": "<client name or null>",
+  "timestampMs": 1765000000500
+}
+
+--- Type 15: H2_FOLDER_CHANGED_EVENT (Extension -> Web App push, no requestId) ---
+{
+  "protocol": "H2_CLOUD_BRIDGE",
+  "protocolVersion": "1.6",
+  "type": "H2_FOLDER_CHANGED_EVENT",
+  "sessionId": "<sessionId>",
+  "source": "CLOCKIE_H2_EXTENSION",
+  "__h2FromExtension": true,
+  "observationId": "obs_d_...",
+  "eventType": "created" | "modified" | "deleted" | "moved" | "renamed" | "resync_required" | "watch_error",
+  "itemType": "file" | "folder",
+  "provider": "pcloud",
+  "watchedRelativePath": "Gawkyy",
+  "relativePath": "Gawkyy/notes.sqlite",
+  "newRelativePath": "<present on moved/renamed>",
+  "fileId": "...",
+  "revision": "pcloud:h:...",
+  "modifiedMs": 1765000000000,
+  "sizeBytes": 81920,
+  "originSessionId": "<writer sessionId or null>",
+  "originClientName": "<writer clientName or null>",
+  "timestampMs": 1765000000500
+}
+
+--- Type 16a/16b: H2_DISCONNECT_REQ / H2_DISCONNECT_RES ---
+{ "protocol": "H2_CLOUD_BRIDGE", "protocolVersion": "1.6", "type": "H2_DISCONNECT_REQ", "sessionId": "<sessionId>", "requestId": "disc_1" }
+
+================================================================================
+3. Drop-In Client Helper (JavaScript / TypeScript v1.6)
+================================================================================
+const H2_SESSION_STORAGE_KEY = "h2_bridge_session_id";
+
+export function uint8ToBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+export function base64ToUint8(b64) {
+  const bin = atob(b64 || "");
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+export class H2BridgeClient {
+  constructor(clientName = "External Web App", storageKey = H2_SESSION_STORAGE_KEY) {
+    this.clientName = clientName;
+    this.storageKey = storageKey;
+    this.sessionId = null;
+    this.pending = new Map();
+    this.sessionInfo = null;
+    this._reconnectPromise = null;
+    this.onReady = null;
+    this._fileListeners = new Set();
+    this._folderListeners = new Set();
+    this._onMsg = (event) => {
+      if (event.source !== window) return;
+      const d = event.data;
+      if (!d || d.protocol !== "H2_CLOUD_BRIDGE" || !d.__h2FromExtension) return;
+      if (d.type === "H2_BRIDGE_READY") {
+        if (typeof this.onReady === "function") this.onReady(d);
+        return;
+      }
+      if (d.type === "H2_FILE_CHANGED_EVENT") {
+        if (this.sessionId && d.sessionId && d.sessionId !== this.sessionId) return;
+        this._fileListeners.forEach((fn) => { try { fn(d); } catch {} });
+        return;
+      }
+      if (d.type === "H2_FOLDER_CHANGED_EVENT") {
+        if (this.sessionId && d.sessionId && d.sessionId !== this.sessionId) return;
+        this._folderListeners.forEach((fn) => { try { fn(d); } catch {} });
+        return;
+      }
+      const entry = this.pending.get(d.requestId);
+      if (entry) {
+        if (this.sessionId && d.sessionId && d.sessionId !== this.sessionId) return;
+        this.pending.delete(d.requestId);
+        if (d.success) {
+          if (d.sessionId) {
+            this.sessionId = d.sessionId;
+            try { window.sessionStorage.setItem(this.storageKey, d.sessionId); } catch {}
+          }
+          entry.resolve(d);
+        } else {
+          const err = new Error(d.error || "Bridge request failed");
+          err.reasonCode = d.reasonCode || null;
+          if (d.currentRevision !== undefined) err.currentRevision = d.currentRevision;
+          if (d.exists !== undefined) err.exists = d.exists;
+          if (d.modifiedMs !== undefined) err.modifiedMs = d.modifiedMs;
+          if (d.sizeBytes !== undefined) err.sizeBytes = d.sizeBytes;
+          if (d.maxPayloadBytes !== undefined) err.maxPayloadBytes = d.maxPayloadBytes;
+          entry.reject(err);
+        }
+      }
+    };
+    window.addEventListener("message", this._onMsg);
+  }
+  static async connect(clientName = "External Web App", storageKey = H2_SESSION_STORAGE_KEY) {
+    const client = new H2BridgeClient(clientName, storageKey);
+    await client.reconnect();
+    return client;
+  }
+  async reconnect() {
+    if (this._reconnectPromise) return this._reconnectPromise;
+    this._reconnectPromise = (async () => {
+      let previousSessionId = this.sessionId;
+      try {
+        if (!previousSessionId) previousSessionId = window.sessionStorage.getItem(this.storageKey);
+        window.sessionStorage.removeItem(this.storageKey);
+      } catch {}
+      this.sessionId = null;
+      this.sessionInfo = await this._sendOnce("H2_CONNECT_REQ", {
+        clientName: this.clientName,
+        previousSessionId: previousSessionId || undefined,
+        supportedVersions: ["1.6"]
+      }, 15000);
+      return this.sessionInfo;
+    })().finally(() => { this._reconnectPromise = null; });
+    return this._reconnectPromise;
+  }
+  onFileChanged(handler) {
+    this._fileListeners.add(handler);
+    return () => this._fileListeners.delete(handler);
+  }
+  onFolderChanged(handler) {
+    this._folderListeners.add(handler);
+    return () => this._folderListeners.delete(handler);
+  }
+  _post(type, payload = {}, explicitReqId) {
+    const requestId = explicitReqId || (type + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7));
+    window.postMessage({ protocol: "H2_CLOUD_BRIDGE", protocolVersion: "1.6", sessionId: this.sessionId, requestId, type, ...payload }, window.location.origin);
+    return requestId;
+  }
+  _sendOnce(type, payload = {}, timeoutMs = 60000) {
+    return new Promise((resolve, reject) => {
+      const requestId = this._post(type, payload);
+      const timer = setTimeout(() => { this.pending.delete(requestId); reject(new Error(type + " timed out")); }, timeoutMs);
+      this.pending.set(requestId, {
+        resolve: (d) => { clearTimeout(timer); resolve(d); },
+        reject: (e) => { clearTimeout(timer); reject(e); }
+      });
+    });
+  }
+  async request(type, payload = {}, timeoutMs = 60000) {
+    try {
+      return await this._sendOnce(type, payload, timeoutMs);
+    } catch (err) {
+      // Automatically reconnect once on SESSION_EXPIRED in direct mode (single-flight safe)
+      if (err && err.reasonCode === "SESSION_EXPIRED" && type !== "H2_CONNECT_REQ" && type !== "H2_DISCONNECT_REQ" && (!this.sessionInfo || this.sessionInfo.sessionMode === "direct")) {
+        await this.reconnect();
+        return await this._sendOnce(type, payload, timeoutMs);
+      }
+      throw err;
+    }
+  }
+  requestTree({ provider, driveRoot = false, basePath, baseFolderId, maxDepth } = {}) {
+    return this.request("H2_WORKSPACE_TREE_REQ", { provider, driveRoot, basePath, baseFolderId, maxDepth });
+  }
+  switchDriveRoot(provider, maxDepth = 1) {
+    return this.requestTree({ provider, driveRoot: true, maxDepth });
+  }
+  listFolder({ provider, driveRoot = false, basePath, baseFolderId, maxDepth = 1 } = {}) {
+    return this.request("H2_LIST_FOLDER_REQ", { provider, driveRoot, basePath, baseFolderId, maxDepth });
+  }
+  statFile({ provider, driveRoot = false, relativePath, fileId } = {}) {
+    return this.request("H2_STAT_FILE_REQ", { provider, driveRoot, relativePath, fileId });
+  }
+  readFile(relativePath, fileId, encoding, provider, driveRoot = false) {
+    return this.request("H2_READ_FILE_REQ", { provider, driveRoot, relativePath, fileId, encoding });
+  }
+  async readBinaryFile({ provider, driveRoot = false, relativePath, fileId } = {}) {
+    const res = await this.request("H2_READ_FILE_REQ", { provider, driveRoot, relativePath, fileId, encoding: "base64" });
+    return { ...res, bytes: base64ToUint8(res.content || "") };
+  }
+  readFiles(items) {
+    return Promise.all(items.map((it) => this.readFile(it.relativePath, it.fileId, it.encoding, it.provider, it.driveRoot)));
+  }
+  saveFile({ provider, driveRoot = false, relativePath, fileId, mimeType, contentType = "text", encoding = "utf-8", content, expectedRevision }) {
+    return this.request("H2_SAVE_FILE_REQ", { provider, driveRoot, relativePath, fileId, mimeType, contentType, encoding, content, expectedRevision });
+  }
+  saveBinaryFile({ provider, driveRoot = false, relativePath, fileId, mimeType = "application/vnd.sqlite3", bytes, expectedRevision }) {
+    return this.saveFile({ provider, driveRoot, relativePath, fileId, mimeType, contentType: "binary", encoding: "base64", content: uint8ToBase64(bytes), expectedRevision });
+  }
+  observeFile({ provider, driveRoot = false, relativePath, fileId, pollIntervalMs, debounceMs } = {}) {
+    return this.request("H2_OBSERVE_FILE_REQ", { provider, driveRoot, relativePath, fileId, pollIntervalMs, debounceMs });
+  }
+  observeFolder({ provider, driveRoot = false, relativePath = "", folderId, recursive = false, pollIntervalMs, debounceMs } = {}) {
+    return this.request("H2_OBSERVE_FOLDER_REQ", { provider, driveRoot, relativePath, folderId, recursive, pollIntervalMs, debounceMs });
+  }
+  unobserve(observationIdOrOptions) {
+    const payload = typeof observationIdOrOptions === "string" ? { observationId: observationIdOrOptions } : (observationIdOrOptions || { all: true });
+    return this.request("H2_UNOBSERVE_REQ", payload);
+  }
+  createFolder({ provider, driveRoot = false, relativePath, parentRelativePath, parentFolderId, folderName }) {
+    return this.request("H2_CREATE_FOLDER_REQ", { provider, driveRoot, relativePath, parentRelativePath, parentFolderId, folderName });
+  }
+  deleteFile({ provider, driveRoot = false, relativePath, fileId, permanent = false }) {
+    return this.request("H2_DELETE_FILE_REQ", { provider, driveRoot, relativePath, fileId, permanent });
+  }
+  deleteFolder({ provider, driveRoot = false, relativePath, folderId, permanent = false }) {
+    return this.request("H2_DELETE_FOLDER_REQ", { provider, driveRoot, relativePath, folderId, permanent });
+  }
+  deleteItem({ provider, driveRoot = false, itemType = "file", relativePath, fileId, folderId, permanent = false }) {
+    if (itemType === "folder") return this.deleteFolder({ provider, driveRoot, relativePath, folderId, permanent });
+    return this.deleteFile({ provider, driveRoot, relativePath, fileId, permanent });
+  }
+  moveFile({ provider, targetProvider, driveRoot = false, relativePath, fileId, targetRelativePath, targetParentPath, newName, overwrite = false }) {
+    return this.request("H2_MOVE_FILE_REQ", { provider, targetProvider, driveRoot, relativePath, fileId, targetRelativePath, targetParentPath, newName, overwrite });
+  }
+  moveFolder({ provider, targetProvider, driveRoot = false, relativePath, folderId, targetRelativePath, targetParentPath, newName, overwrite = false }) {
+    return this.request("H2_MOVE_FOLDER_REQ", { provider, targetProvider, driveRoot, relativePath, folderId, targetRelativePath, targetParentPath, newName, overwrite });
+  }
+  async disconnect() {
+    try { window.sessionStorage.removeItem(this.storageKey); } catch {}
+    if (this.sessionId) {
+      await this.request("H2_DISCONNECT_REQ", {}, 5000).catch(() => {});
+      this.sessionId = null;
+    }
+    this.destroy();
+  }
+  destroy() {
+    this._fileListeners.clear();
+    this._folderListeners.clear();
+    window.removeEventListener("message", this._onMsg);
+  }
+}

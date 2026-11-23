@@ -125,7 +125,7 @@ export interface GAWStorageApi {
   onStatusChange: (listener: (meta: StorageMetadata) => void) => () => void;
 }
 
-// Clockie H2 Extension Bridge v1.5 API exposed to all Gawkyy plugins & user apps
+// Clockie H2 Extension Bridge v1.6 API exposed to all Gawkyy plugins & user apps
 export interface GAWBridgeApi {
   getState: () => H2BridgeState;
   subscribe: (listener: (state: H2BridgeState) => void) => () => void;
@@ -158,6 +158,7 @@ export interface GAWBridgeApi {
     baseFolderId?: string;
     maxDepth?: number;
   }) => Promise<any>;
+  switchDriveRoot: (provider: H2Provider, maxDepth?: number) => Promise<any>;
   listFolder: (opts?: {
     provider?: H2ProviderFilter;
     driveRoot?: boolean;
@@ -226,8 +227,18 @@ export interface GAWBridgeApi {
     folderId?: string;
     permanent?: boolean;
   }) => Promise<any>;
+  deleteItem: (opts: {
+    provider: H2Provider;
+    itemType?: 'file' | 'folder';
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    folderId?: string;
+    permanent?: boolean;
+  }) => Promise<any>;
   moveFile: (opts: {
     provider: H2Provider;
+    targetProvider?: H2Provider;
     relativePath: string;
     targetRelativePath?: string;
     targetParentPath?: string;
@@ -238,6 +249,7 @@ export interface GAWBridgeApi {
   }) => Promise<any>;
   moveFolder: (opts: {
     provider: H2Provider;
+    targetProvider?: H2Provider;
     relativePath: string;
     targetRelativePath?: string;
     targetParentPath?: string;

@@ -93,12 +93,14 @@ export interface GAWEventBusApi {
 }
 
 export interface GAWBridgeApi {
-  /** Get current Clockie H2 Bridge v1.5 connection, drives, and active observed file state */
+  /** Get current Clockie H2 Bridge v1.6 connection, drives, and active observed file state */
   getState: () => any;
   /** Subscribe to Clockie H2 state changes */
   subscribe: (listener: (state: any) => void) => () => void;
   /** Reconnect to Clockie H2 extension */
   reconnect: () => Promise<boolean>;
+  /** Switch drive root and return the top-level folder tree */
+  switchDriveRoot: (provider: H2Provider, maxDepth?: number) => Promise<any>;
   /** List a folder on any connected drive ('pcloud' | 'gdrive' | 'dropbox' | 'local') */
   listFolder: (opts?: { provider?: H2Provider | 'all'; driveRoot?: boolean; basePath?: string; maxDepth?: number }) => Promise<any>;
   /** Check file metadata and revision without downloading file bytes */
@@ -111,9 +113,11 @@ export interface GAWBridgeApi {
   saveFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; content: string; contentType?: 'text' | 'binary'; encoding?: 'utf-8' | 'base64'; mimeType?: string; expectedRevision?: string }) => Promise<any>;
   /** Save binary Uint8Array bytes to a Clockie H2 drive */
   saveBinaryFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; bytes: Uint8Array; mimeType?: string; expectedRevision?: string }) => Promise<any>;
-  /** Subscribe to live file change push events via Clockie H2 v1.5 */
+  /** Delete a file or folder (moves to trash by default unless permanent: true) */
+  deleteItem: (opts: { provider: H2Provider; itemType?: 'file' | 'folder'; relativePath: string; driveRoot?: boolean; fileId?: string; folderId?: string; permanent?: boolean }) => Promise<any>;
+  /** Subscribe to live file change push events via Clockie H2 v1.6 */
   observeFile: (opts: { provider: H2Provider; relativePath: string; driveRoot?: boolean; fileId?: string; pollIntervalMs?: number; debounceMs?: number }) => Promise<any>;
-  /** Subscribe to live folder change push events via Clockie H2 v1.5 */
+  /** Subscribe to live folder change push events via Clockie H2 v1.6 */
   observeFolder: (opts: { provider: H2Provider; relativePath?: string; driveRoot?: boolean; folderId?: string; recursive?: boolean }) => Promise<any>;
   /** Cancel one observation by ID or all observations */
   unobserve: (observationIdOrOptions?: string | { observationId?: string; all?: boolean }) => Promise<any>;
@@ -138,7 +142,7 @@ export interface GAWContext {
   navigation: GAWNavigationApi;
   /** Inter-plugin pub-sub event bus */
   eventBus: GAWEventBusApi;
-  /** Clockie H2 Extension Bridge v1.5 (pCloud, Google Drive, Dropbox, Local) */
+  /** Clockie H2 Extension Bridge v1.6 (pCloud, Google Drive, Dropbox, Local) */
   bridge: GAWBridgeApi;
   /** Active UI color scheme ('vs-dark' or 'vs-light') */
   theme: 'vs-dark' | 'vs-light';

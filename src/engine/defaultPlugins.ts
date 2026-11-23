@@ -1434,9 +1434,10 @@ export default function ClockieH2Plugin({ gaw }) {
   };
 
   const formatWatchQuality = (q) => {
-    if (q === 'native_event') return 'Live Native Watcher';
-    if (q === 'extension_bus') return 'Live Extension Bus';
-    if (q === 'polling') return 'Extension Cloud Watcher';
+    if (q === 'cloud-push') return 'Cloud Longpoll Push';
+    if (q === 'cloud-poll') return 'Cloud Diff Watcher (4s)';
+    if (q === 'native') return 'Live Native Observer';
+    if (q === 'local-poll') return 'Local Stat Watcher (3s)';
     return 'Observing';
   };
 
@@ -1530,7 +1531,7 @@ export default function ClockieH2Plugin({ gaw }) {
     try {
       const ok = await gaw.bridge.reconnect();
       if (ok) {
-        gaw.toast.success('Connected to Clockie H2 Bridge v1.5.');
+        gaw.toast.success('Connected to Clockie H2 Bridge v1.6.');
       } else {
         gaw.toast.warning(gaw.bridge.getState().error || 'Clockie H2 extension did not respond.');
       }
@@ -1683,7 +1684,7 @@ export default function ClockieH2Plugin({ gaw }) {
               <h1 className={'text-xl font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Clockie H2 Drives</h1>
               {isConnected ? (
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-600/20 border border-emerald-500/40 text-emerald-400 inline-flex items-center gap-1">
-                  <CheckCircle2 className="w-3 h-3" /> Bridge v1.5 Connected
+                  <CheckCircle2 className="w-3 h-3" /> Bridge v1.6 Connected
                 </span>
               ) : (
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-red-600/15 border border-red-500/40 text-red-400 inline-flex items-center gap-1">
@@ -1732,10 +1733,10 @@ export default function ClockieH2Plugin({ gaw }) {
         )}>
           <div className="flex items-center gap-2 font-semibold text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{bridgeState.error || 'Clockie H2 Chrome Extension (v1.5) is not currently connected.'}</span>
+            <span>{bridgeState.error || 'Clockie H2 Chrome Extension (v1.6) is not currently connected.'}</span>
           </div>
           <p className="leading-relaxed">
-            Ensure the Clockie H2 extension is installed and enabled in Chrome with Bridge Protocol v1.5 active, then click <strong>Connect Extension</strong>.
+            Ensure the Clockie H2 extension is installed and enabled in Chrome with Bridge Protocol v1.6 active, then click <strong>Connect Extension</strong>.
             On browsers without Clockie H2 (such as mobile browsers), use{' '}
             <button
               type="button"
@@ -2370,7 +2371,7 @@ export default function LocalStoragePlugin({ gaw }) {
                 <span>Need Real-Time File Observation or Cloud Drives?</span>
               </div>
               <p className="text-[11px] leading-relaxed">
-                Use <strong>Clockie H2 Drives</strong> (Bridge v1.5) for live file change pushes, optimistic concurrency, and seamless access to pCloud, Google Drive, Dropbox, and Local Drive.
+                Use <strong>Clockie H2 Drives</strong> (Bridge v1.6) for live file change pushes, automatic session recovery, optimistic concurrency, and seamless access to pCloud, Google Drive, Dropbox, and Local Drive.
               </p>
             </div>
           </div>
@@ -2578,10 +2579,10 @@ export default function HelpPlugin({ gaw }) {
       icon: Cpu,
     },
     {
-      name: 'Clockie H2 Bridge v1.5',
+      name: 'Clockie H2 Bridge v1.6',
       badge: 'Multi-Drive Sync',
       url: 'https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage',
-      desc: 'Extension bridge connecting Gawkyy and user apps to pCloud, Google Drive, Dropbox, and Local Drive with live file/folder observation and clash-free expectedRevision saves.',
+      desc: 'Extension bridge connecting Gawkyy and user apps to pCloud, Google Drive, Dropbox, and Local Drive with prerender-safe startup, MV3 session persistence, automatic session recovery, live file/folder observation, and clash-free expectedRevision saves.',
       icon: Cloud,
     },
     {
@@ -2846,7 +2847,7 @@ export default function HelpPlugin({ gaw }) {
                   <h3 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-sky-300' : 'text-blue-700')}>
                     <span>Gawkyy — Generic Application Wrapper</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono font-normal">
-                      v1.2.0
+                      v1.21
                     </span>
                   </h3>
                   <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
@@ -2856,7 +2857,7 @@ export default function HelpPlugin({ gaw }) {
                   <div className="flex flex-wrap gap-2 pt-1 text-[11px] font-mono text-blue-400">
                     <span>• sql.js WebAssembly SQLite</span>
                     <span>• Sucrase Fast TSX Compiler</span>
-                    <span>• Clockie H2 Bridge v1.5</span>
+                    <span>• Clockie H2 Bridge v1.6</span>
                     <span>• PWA File System Access API</span>
                   </div>
                 </div>
@@ -2911,7 +2912,7 @@ export default function HelpPlugin({ gaw }) {
                 <div>
                   <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>Clockie H2 Multi-Drive Bridge</h3>
                   <p className={'text-xs mt-0.5 ' + (isDark ? 'text-slate-400' : 'text-slate-700')}>
-                    Open, observe in real time, and clash-free save SQLite databases across pCloud, Google Drive, Dropbox, and Local Drive using Clockie H2 Bridge v1.5.
+                    Open, observe in real time, and clash-free save SQLite databases across pCloud, Google Drive, Dropbox, and Local Drive using Clockie H2 Bridge v1.6.
                   </p>
                 </div>
               </div>
@@ -3069,7 +3070,7 @@ export default function HelpPlugin({ gaw }) {
                   ['gaw.navigation.openAI()', 'Launches the AI Specification Generator modal.'],
                   ['gaw.eventBus.on(event, cb) / .emit(event, ...args)', 'Decoupled pub/sub event bus for plugin-to-plugin real-time events.'],
                   ['gaw.storage.save() / .saveAs()', 'Manual local disk save with pre-save timestamp conflict guard.'],
-                  ['gaw.bridge.readFile() / .saveFile() / .observeFile()', 'Clockie H2 Bridge v1.5 multi-drive read, clash-free save, and live file/folder observation.'],
+                  ['gaw.bridge.readFile() / .saveFile() / .observeFile()', 'Clockie H2 Bridge v1.6 multi-drive read, clash-free save, live observation, and auto-recovering sessions.'],
                   ['gaw.theme', 'Current theme ("vs-dark" | "vs-light") to match system aesthetics.'],
                 ].map(([api, desc], i) => (
                   <div key={i} className="py-2.5 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
@@ -3396,7 +3397,7 @@ export default function HelpPlugin({ gaw }) {
               </ul>
             </div>
 
-            {/* Feature 4: Clockie H2 Bridge v1.5 & Local File Storage */}
+            {/* Feature 4: Clockie H2 Bridge v1.6 & Local File Storage */}
             <div className={'p-5 rounded-2xl border space-y-3 ' + (
               isDark ? 'bg-slate-950/80 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900'
             )}>
@@ -3405,7 +3406,7 @@ export default function HelpPlugin({ gaw }) {
                 <h3 className={'text-sm font-bold ' + (isDark ? 'text-white' : 'text-slate-900')}>4. Clockie H2 Multi-Drive Sync & Conflict Reconciliation</h3>
               </div>
               <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-300' : 'text-slate-800')}>
-                Gawkyy connects to pCloud, Google Drive, Dropbox, and Local Drive via the Clockie H2 Extension Bridge v1.5 (with real-time file observation and optimistic concurrency), alongside standalone manual local file open/save:
+                Gawkyy connects to pCloud, Google Drive, Dropbox, and Local Drive via the Clockie H2 Extension Bridge v1.6 (with prerender-safe activation, MV3 session persistence, real-time file observation, and optimistic concurrency), alongside standalone manual local file open/save:
               </p>
               <div className="space-y-2 text-xs pt-1">
                 <div className={'p-3 rounded-xl border ' + (isDark ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50 border-slate-200')}>
@@ -4472,7 +4473,7 @@ export default function FileManagerPlugin({ gaw }) {
               isDark ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300' : 'bg-emerald-100 border-emerald-400 text-emerald-900'
             )}>
               <CheckCircle2 className='w-3.5 h-3.5 text-emerald-500' />
-              <span>Clockie H2 v1.5 Connected</span>
+              <span>Clockie H2 v1.6 Connected</span>
               <button
                 type="button"
                 onClick={() => gaw.navigation.openPlugin('plugin_clockie_h2')}
@@ -5139,7 +5140,7 @@ export default function FileManagerPlugin({ gaw }) {
                   Storage & Sync Configuration
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Save active databases via Clockie H2 Bridge v1.5 (with live observation) or standalone local file storage.
+                  Save active databases via Clockie H2 Bridge v1.6 (with live observation & auto-recovery) or standalone local file storage.
                 </p>
               </div>
             </div>
@@ -5165,7 +5166,7 @@ export default function FileManagerPlugin({ gaw }) {
                         Clockie H2 Drives
                       </h3>
                       <p className={'text-[11px] ' + (isDark ? 'text-slate-400' : 'text-slate-500')}>
-                        pCloud, Google Drive, Dropbox & Local Drive via Bridge v1.5
+                        pCloud, Google Drive, Dropbox & Local Drive via Bridge v1.6
                       </p>
                     </div>
                   </div>
@@ -5200,7 +5201,7 @@ export default function FileManagerPlugin({ gaw }) {
                         Bridge Status:
                       </span>
                       <span className={'font-semibold block mt-0.5 ' + (isBridgeConnected ? 'text-emerald-400' : (isDark ? 'text-slate-500' : 'text-slate-400'))}>
-                        {isBridgeConnected ? 'Connected (v1.5)' : 'Disconnected'}
+                        {isBridgeConnected ? 'Connected (v1.6)' : 'Disconnected'}
                       </span>
                     </div>
 

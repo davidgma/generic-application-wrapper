@@ -2,6 +2,7 @@
  * Official Documentation:
  * - Window.postMessage API (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage
  * - Window.sessionStorage (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage
+ * - Document.prerendering & Speculation Rules (MDN): https://developer.mozilla.org/en-US/docs/Web/API/Document/prerendering
  * - Base64 Encoding & Decoding (MDN): https://developer.mozilla.org/en-US/docs/Glossary/Base64
  * - sql.js (SQLite WebAssembly): https://sql.js.org/
  */
@@ -20,6 +21,7 @@ import {
   H2Provider,
   H2ProviderFilter,
   H2ReadResponse,
+  H2ReasonCode,
   H2SaveResponse,
   H2StatResponse,
 } from '../types/storage';
@@ -27,9 +29,29 @@ import {
 const H2_SESSION_STORAGE_KEY = 'h2_bridge_session_id';
 const H2_AUTO_SAVE_STORAGE_KEY = 'gaw_h2_auto_save_enabled';
 const H2_PROTOCOL = 'H2_CLOUD_BRIDGE';
-const H2_PROTOCOL_VERSION = '1.5';
+const H2_PROTOCOL_VERSION = '1.6';
 const AUTO_SAVE_DEBOUNCE_MS = 2500;
-const DEFAULT_MAX_PAYLOAD_BYTES = 33554432; // 32 MB raw byte limit enforced by v1.5
+const DEFAULT_MAX_PAYLOAD_BYTES = 33554432; // 32 MB raw byte limit enforced by v1.6
+
+/**
+ * Returns true while Chrome is speculatively prerendering this document in the background.
+ * Under Clockie H2 Bridge v1.6, the extension defers H2_BRIDGE_READY and queues early
+ * H2_CONNECT_REQ messages until `prerenderingchange` fires upon real tab activation.
+ */
+function isDocumentPrerendering(): boolean {
+  return typeof document !== 'undefined' && Boolean((document as any).prerendering);
+}
+
+/**
+ * Resolves immediately for normal tabs, or waits once for `prerenderingchange` on prerendered tabs
+ * so short boot connection timeouts do not fire prematurely before tab activation.
+ */
+function waitForPrerenderActivation(): Promise<void> {
+  if (!isDocumentPrerendering()) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    document.addEventListener('prerenderingchange', () => resolve(), { once: true });
+  });
+}
 
 export function formatProviderLabel(provider?: H2Provider | string | null): string {
   switch (provider) {
@@ -72,7 +94,7 @@ export function base64ToUint8(b64: string): Uint8Array {
 }
 
 export interface H2BridgeError extends Error {
-  reasonCode?: string | null;
+  reasonCode?: H2ReasonCode | null;
   currentRevision?: string | null;
   exists?: boolean;
   modifiedMs?: number;
@@ -81,20 +103,26 @@ export interface H2BridgeError extends Error {
 }
 
 /**
- * Low-level transport client implementing the Clockie H2 Extension Bridge Protocol v1.5.
- * Uses strictly window.postMessage + per-tab window.sessionStorage (zero URL parameters).
+ * Low-level transport client implementing the Clockie H2 Extension Bridge Protocol v1.6.
+ * Uses strictly window.postMessage + per-tab window.sessionStorage (zero URL parameters),
+ * with prerender-safe activation and single-flight SESSION_EXPIRED auto-recovery in direct mode.
  */
 export class H2BridgeClient {
+  private clientName: string;
   private storageKey: string;
   public sessionId: string | null = null;
   public sessionInfo: H2ConnectResponse | null = null;
+  private reconnectPromise: Promise<H2ConnectResponse> | null = null;
   private pending = new Map<string, { resolve: (d: any) => void; reject: (e: H2BridgeError) => void }>();
   private fileListeners = new Set<(event: H2FileChangedEvent) => void>();
   private folderListeners = new Set<(event: H2FolderChangedEvent) => void>();
   public onReady: ((data: any) => void) | null = null;
+  public onSessionRecovered: ((res: H2ConnectResponse) => void) | null = null;
+  public onSessionExpired: ((err: H2BridgeError) => void) | null = null;
   private onMsg: (event: MessageEvent) => void;
 
-  constructor(storageKey: string = H2_SESSION_STORAGE_KEY) {
+  constructor(clientName: string = 'Gawkyy', storageKey: string = H2_SESSION_STORAGE_KEY) {
+    this.clientName = clientName;
     this.storageKey = storageKey;
     this.onMsg = (event: MessageEvent) => {
       if (typeof window === 'undefined' || event.source !== window) return;
@@ -162,26 +190,52 @@ export class H2BridgeClient {
     }
   }
 
+  /**
+   * Connects to Clockie H2 Bridge v1.6 by updating clientName and delegating to single-flight reconnect().
+   */
   public async connect(clientName: string = 'Gawkyy', timeoutMs: number = 2500): Promise<H2ConnectResponse> {
-    let previousSessionId: string | null = null;
-    try {
-      previousSessionId = window.sessionStorage.getItem(this.storageKey);
-      window.sessionStorage.removeItem(this.storageKey);
-    } catch {
-      // ignore
-    }
+    this.clientName = clientName;
+    return this.reconnect(timeoutMs);
+  }
 
-    const res: H2ConnectResponse = await this.request(
-      'H2_CONNECT_REQ',
-      {
-        clientName,
-        previousSessionId: previousSessionId || undefined,
-        supportedVersions: [H2_PROTOCOL_VERSION],
-      },
-      timeoutMs
-    );
-    this.sessionInfo = res;
-    return res;
+  /**
+   * Single-flight v1.6 handshake (H2_CONNECT_REQ).
+   * Waits for prerender activation if needed, reads and clears any prior sessionId from sessionStorage,
+   * and negotiates a fresh v1.6 session.
+   */
+  public async reconnect(timeoutMs: number = 15000): Promise<H2ConnectResponse> {
+    if (this.reconnectPromise) return this.reconnectPromise;
+
+    this.reconnectPromise = (async () => {
+      await waitForPrerenderActivation();
+
+      let previousSessionId: string | null = this.sessionId;
+      try {
+        if (!previousSessionId) {
+          previousSessionId = window.sessionStorage.getItem(this.storageKey);
+        }
+        window.sessionStorage.removeItem(this.storageKey);
+      } catch {
+        // ignore storage restrictions
+      }
+      this.sessionId = null;
+
+      const res = await this.sendOnce<H2ConnectResponse>(
+        'H2_CONNECT_REQ',
+        {
+          clientName: this.clientName,
+          previousSessionId: previousSessionId || undefined,
+          supportedVersions: [H2_PROTOCOL_VERSION],
+        },
+        timeoutMs
+      );
+      this.sessionInfo = res;
+      return res;
+    })().finally(() => {
+      this.reconnectPromise = null;
+    });
+
+    return this.reconnectPromise;
   }
 
   public onFileChanged(handler: (event: H2FileChangedEvent) => void): () => void {
@@ -210,7 +264,7 @@ export class H2BridgeClient {
     return requestId;
   }
 
-  public request<T = any>(type: string, payload: Record<string, any> = {}, timeoutMs: number = 60000): Promise<T> {
+  private sendOnce<T = any>(type: string, payload: Record<string, any> = {}, timeoutMs: number = 60000): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       if (typeof window === 'undefined') {
         reject(new Error('Window not available for Clockie H2 bridge'));
@@ -237,6 +291,52 @@ export class H2BridgeClient {
     });
   }
 
+  /**
+   * Sends a Clockie H2 v1.6 request with transparent single-flight SESSION_EXPIRED recovery.
+   * In direct mode, if Clockie H2 responds with reasonCode === "SESSION_EXPIRED", the client
+   * automatically reconnects once and replays the request.
+   */
+  public async request<T = any>(type: string, payload: Record<string, any> = {}, timeoutMs: number = 60000): Promise<T> {
+    try {
+      return await this.sendOnce<T>(type, payload, timeoutMs);
+    } catch (err: any) {
+      if (
+        err &&
+        err.reasonCode === 'SESSION_EXPIRED' &&
+        type !== 'H2_CONNECT_REQ' &&
+        type !== 'H2_DISCONNECT_REQ'
+      ) {
+        if (!this.sessionInfo || this.sessionInfo.sessionMode === 'direct') {
+          const recovered = await this.reconnect(15000);
+          if (typeof this.onSessionRecovered === 'function') {
+            try {
+              this.onSessionRecovered(recovered);
+            } catch (hookErr) {
+              console.error('H2BridgeClient onSessionRecovered hook error:', hookErr);
+            }
+          }
+          return await this.sendOnce<T>(type, payload, timeoutMs);
+        }
+
+        // Launched-mode sessions are scoped to their original launch and require explicit user reconnect
+        this.sessionId = null;
+        try {
+          window.sessionStorage.removeItem(this.storageKey);
+        } catch {
+          // ignore
+        }
+        if (typeof this.onSessionExpired === 'function') {
+          try {
+            this.onSessionExpired(err);
+          } catch (hookErr) {
+            console.error('H2BridgeClient onSessionExpired hook error:', hookErr);
+          }
+        }
+      }
+      throw err;
+    }
+  }
+
   public requestTree(opts: { provider?: H2ProviderFilter; driveRoot?: boolean; basePath?: string; baseFolderId?: string; maxDepth?: number } = {}) {
     return this.request('H2_WORKSPACE_TREE_REQ', {
       provider: opts.provider,
@@ -245,6 +345,10 @@ export class H2BridgeClient {
       baseFolderId: opts.baseFolderId,
       maxDepth: opts.maxDepth,
     });
+  }
+
+  public switchDriveRoot(provider: H2Provider, maxDepth: number = 1) {
+    return this.requestTree({ provider, driveRoot: true, maxDepth });
   }
 
   public listFolder(opts: { provider?: H2ProviderFilter; driveRoot?: boolean; basePath?: string; baseFolderId?: string; maxDepth?: number } = {}) {
@@ -414,8 +518,36 @@ export class H2BridgeClient {
     });
   }
 
+  public deleteItem(opts: {
+    provider: H2Provider;
+    itemType?: 'file' | 'folder';
+    relativePath: string;
+    driveRoot?: boolean;
+    fileId?: string;
+    folderId?: string;
+    permanent?: boolean;
+  }) {
+    if (opts.itemType === 'folder') {
+      return this.deleteFolder({
+        provider: opts.provider,
+        driveRoot: opts.driveRoot,
+        relativePath: opts.relativePath,
+        folderId: opts.folderId,
+        permanent: opts.permanent,
+      });
+    }
+    return this.deleteFile({
+      provider: opts.provider,
+      driveRoot: opts.driveRoot,
+      relativePath: opts.relativePath,
+      fileId: opts.fileId,
+      permanent: opts.permanent,
+    });
+  }
+
   public moveFile(opts: {
     provider: H2Provider;
+    targetProvider?: H2Provider;
     driveRoot?: boolean;
     relativePath: string;
     fileId?: string;
@@ -426,6 +558,7 @@ export class H2BridgeClient {
   }) {
     return this.request('H2_MOVE_FILE_REQ', {
       provider: opts.provider,
+      targetProvider: opts.targetProvider,
       driveRoot: opts.driveRoot ?? false,
       relativePath: opts.relativePath,
       fileId: opts.fileId,
@@ -438,6 +571,7 @@ export class H2BridgeClient {
 
   public moveFolder(opts: {
     provider: H2Provider;
+    targetProvider?: H2Provider;
     driveRoot?: boolean;
     relativePath: string;
     folderId?: string;
@@ -448,6 +582,7 @@ export class H2BridgeClient {
   }) {
     return this.request('H2_MOVE_FOLDER_REQ', {
       provider: opts.provider,
+      targetProvider: opts.targetProvider,
       driveRoot: opts.driveRoot ?? false,
       relativePath: opts.relativePath,
       folderId: opts.folderId,
@@ -465,9 +600,10 @@ export class H2BridgeClient {
       // ignore
     }
     if (this.sessionId) {
-      await this.request('H2_DISCONNECT_REQ', {}, 4000).catch(() => {});
+      await this.sendOnce('H2_DISCONNECT_REQ', {}, 4000).catch(() => {});
       this.sessionId = null;
     }
+    this.sessionInfo = null;
   }
 
   public destroy(): void {
@@ -482,8 +618,9 @@ export class H2BridgeClient {
 export type H2ToastLevel = 'success' | 'info' | 'warning' | 'error';
 
 /**
- * High-level singleton orchestrating Clockie H2 v1.5 connectivity, live SQLite database
- * observation, clash-free expectedRevision saves, reconciliation, and debounced auto-save.
+ * High-level singleton orchestrating Clockie H2 v1.6 connectivity, prerender-safe activation,
+ * MV3 SESSION_EXPIRED auto-recovery, live SQLite database observation, clash-free expectedRevision
+ * saves, reconciliation, and debounced auto-save.
  */
 export class H2BridgeEngine {
   private static instance: H2BridgeEngine | null = null;
@@ -499,9 +636,10 @@ export class H2BridgeEngine {
   // Serializes database file operations so saves, reloads, and reconciliations never overlap
   private opQueue: Promise<any> = Promise.resolve();
   private connectPromise: Promise<boolean> | null = null;
+  private prerenderRetryScheduled = false;
 
   private constructor() {
-    this.client = new H2BridgeClient();
+    this.client = new H2BridgeClient('Gawkyy');
     this.state = {
       status: 'disconnected',
       sessionId: null,
@@ -522,6 +660,40 @@ export class H2BridgeEngine {
       if (this.state.status === 'disconnected' || this.state.status === 'unavailable') {
         this.connect(3000).catch(() => {});
       }
+    };
+
+    // Keep engine state and active file observation synchronized after automatic v1.6 SESSION_EXPIRED recovery
+    this.client.onSessionRecovered = (res) => {
+      const active = this.state.activeFile;
+      this.updateState({
+        status: 'connected',
+        sessionId: res.sessionId,
+        sessionMode: res.sessionMode || 'direct',
+        accessMode: res.accessMode || 'readwrite',
+        launchedScope: res.launchedScope || null,
+        drives: res.drives || {},
+        capabilities: res.capabilities || {},
+        activeFile: active ? { ...active, observationId: null, watchQuality: null } : null,
+        error: null,
+        reasonCode: null,
+      });
+      this.emitNotify('info', 'Clockie H2 session recovered automatically.');
+      if (active) {
+        this.reattachActiveFileObservation(active.revision).catch(() => {});
+      }
+    };
+
+    // Handle SESSION_EXPIRED when auto-recovery is not applicable (e.g. launched mode)
+    this.client.onSessionExpired = (err) => {
+      const active = this.state.activeFile;
+      this.updateState({
+        status: 'disconnected',
+        sessionId: null,
+        activeFile: active ? { ...active, observationId: null, watchQuality: null } : null,
+        error: err?.message || 'Clockie H2 session expired. Click Reconnect to establish a new session.',
+        reasonCode: 'SESSION_EXPIRED',
+      });
+      this.emitNotify('warning', 'Clockie H2 session expired. Click Reconnect in Clockie H2 Drives to resume.');
     };
 
     // Listen for live file change pushes for the currently opened SQLite database
@@ -650,8 +822,9 @@ export class H2BridgeEngine {
   }
 
   /**
-   * Connects to Clockie H2 Bridge v1.5 using a short default timeout so browsers without the
+   * Connects to Clockie H2 Bridge v1.6 using a short default timeout so browsers without the
    * extension boot instantaneously without waiting 15 seconds.
+   * Defers the timeout while Chrome is speculatively prerendering the tab (`document.prerendering`).
    */
   public async connect(timeoutMs: number = 2500): Promise<boolean> {
     if (this.isConnected()) return true;
@@ -661,6 +834,7 @@ export class H2BridgeEngine {
 
     this.connectPromise = (async () => {
       try {
+        await waitForPrerenderActivation();
         const res = await this.client.connect('Gawkyy', timeoutMs);
         this.updateState({
           status: 'connected',
@@ -673,16 +847,42 @@ export class H2BridgeEngine {
           error: null,
           reasonCode: null,
         });
+        // If a database file was already bound before reconnecting, re-attach its live watcher
+        if (this.state.activeFile && !this.state.activeFile.observationId) {
+          this.reattachActiveFileObservation(this.state.activeFile.revision).catch(() => {});
+        }
         return true;
       } catch (err: any) {
-        const reason = err?.reasonCode || null;
+        const reason: H2ReasonCode | null = err?.reasonCode || null;
+        if (reason === 'PRERENDERING') {
+          // Wait for tab activation rather than marking the connection permanently refused
+          this.updateState({
+            status: 'connecting',
+            sessionId: null,
+            error: null,
+            reasonCode: 'PRERENDERING',
+          });
+          if (!this.prerenderRetryScheduled) {
+            this.prerenderRetryScheduled = true;
+            waitForPrerenderActivation().then(() => {
+              this.prerenderRetryScheduled = false;
+              this.connect(timeoutMs).catch(() => {});
+            });
+          }
+          return false;
+        }
+
         const isTimeout = reason === 'TIMEOUT';
+        const errorMessage = isTimeout
+          ? 'Clockie H2 extension not detected in this browser.'
+          : reason === 'UNSUPPORTED_VERSION'
+          ? 'Clockie H2 extension requires Protocol v1.6. Please update Clockie H2 to the latest version.'
+          : err?.message || 'Clockie H2 connection refused.';
+
         this.updateState({
           status: isTimeout ? 'unavailable' : 'refused',
           sessionId: null,
-          error: isTimeout
-            ? 'Clockie H2 extension not detected in this browser.'
-            : err?.message || 'Clockie H2 connection refused.',
+          error: errorMessage,
           reasonCode: reason,
         });
         return false;
@@ -778,12 +978,12 @@ export class H2BridgeEngine {
   }
 
   /**
-   * Starts live v1.5 file observation for the active SQLite database file.
+   * Starts live v1.6 file observation for the active SQLite database file.
    */
-  private async startObservingActiveFile(): Promise<void> {
+  private async startObservingActiveFile(): Promise<H2ObserveFileResponse | null> {
     const active = this.state.activeFile;
-    if (!active || !this.isConnected()) return;
-    if (this.state.capabilities.observeFiles === false) return;
+    if (!active || !this.isConnected()) return null;
+    if (this.state.capabilities.observeFiles === false) return null;
 
     try {
       const res = await this.client.observeFile({
@@ -805,14 +1005,55 @@ export class H2BridgeEngine {
             ...this.state.activeFile,
             observationId: res.observationId,
             watchQuality: res.watchQuality || null,
-            revision: res.revision ?? this.state.activeFile.revision,
+            // Preserve the known local revision so callers can detect if the file changed while disconnected
+            revision: this.state.activeFile.revision ?? res.revision ?? null,
             modifiedMs: res.modifiedMs ?? this.state.activeFile.modifiedMs,
             sizeBytes: res.sizeBytes ?? this.state.activeFile.sizeBytes,
           },
         });
       }
+      return res;
     } catch (err) {
       console.warn('Clockie H2 observeFile warning:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Re-subscribes live observation after a v1.6 SESSION_EXPIRED auto-recovery or manual reconnect,
+   * and triggers a lightweight resync if the remote revision advanced while disconnected.
+   */
+  private async reattachActiveFileObservation(previousRevision: string | null): Promise<void> {
+    const res = await this.startObservingActiveFile();
+    const current = this.state.activeFile;
+    if (!res || !current) return;
+
+    if (res.exists === false) {
+      FileStorageEngine.getInstance().markDirty(true);
+      this.emitNotify(
+        'warning',
+        `${current.name} no longer exists on ${formatProviderLabel(current.provider)}.`
+      );
+      return;
+    }
+
+    if (previousRevision && res.revision && res.revision !== previousRevision) {
+      this.handleIncomingFileChanged({
+        protocol: H2_PROTOCOL,
+        protocolVersion: H2_PROTOCOL_VERSION,
+        type: 'H2_FILE_CHANGED_EVENT',
+        observationId: res.observationId,
+        eventType: 'resync_required',
+        provider: current.provider,
+        relativePath: current.relativePath,
+        fileId: res.fileId || current.fileId,
+        revision: res.revision,
+        modifiedMs: res.modifiedMs,
+        sizeBytes: res.sizeBytes,
+        originSessionId: null,
+        originClientName: null,
+        timestampMs: Date.now(),
+      });
     }
   }
 
@@ -1133,7 +1374,7 @@ export class H2BridgeEngine {
   }
 
   /**
-   * Handles incoming live H2_FILE_CHANGED_EVENT push notifications from Clockie H2 v1.5.
+   * Handles incoming live H2_FILE_CHANGED_EVENT push notifications from Clockie H2 v1.6.
    */
   private handleIncomingFileChanged(event: H2FileChangedEvent): void {
     const active = this.state.activeFile;

@@ -5214,7 +5214,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 
             <div className={`space-y-2 text-xs mb-6 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               <p>
-                <strong>Version</strong>: 1.2.0 (Gawkyy Studio Edition)
+                <strong>Version</strong>: 1.21 (Gawkyy Studio Edition)
               </p>
               <p>
                 <strong>Editor Engine</strong>: Monaco IDE (Browser-based code editor engine)
