@@ -51,6 +51,8 @@ import {
   Upload,
   Wand2,
   HardDrive,
+  Keyboard,
+  Activity,
 } from 'lucide-react';
 
 const SaveAsIcon: React.FC<{ className?: string }> = ({ className = 'w-3.5 h-3.5' }) => (
@@ -62,10 +64,11 @@ const SaveAsIcon: React.FC<{ className?: string }> = ({ className = 'w-3.5 h-3.5
 import { SQLiteEngine } from '../../engine/sqliteEngine';
 import { PluginEngine } from '../../engine/pluginEngine';
 import { FileStorageEngine } from '../../engine/fileStorage';
+import { H2BridgeEngine } from '../../engine/h2Bridge';
 import { QueryResult, SavedQuery, TableSchema } from '../../types/sqlite';
 import { PluginRecord, SYSTEM_PLUGIN_IDS, isSystemPlugin } from '../../types/plugin';
 import { SavedReport } from '../../types/report';
-import { StorageMetadata } from '../../types/storage';
+import { H2Provider, StorageMetadata } from '../../types/storage';
 import { safeStorage } from '../../utils/storage';
 import { QueryGrid } from '../QueryGrid';
 import { PluginHost } from '../PluginHost';
@@ -74,6 +77,20 @@ import { MultiQueryResultsView } from '../MultiQueryResultsView';
 import { CodeFormatter } from '../../engine/formatter';
 import { GAW_TYPES_DECLARATION } from './gawTypesDeclaration';
 import { REACT_TYPES_DECLARATION, LUCIDE_TYPES_DECLARATION } from './vendorTypesDeclaration';
+import {
+  CustomShortcutOverrides,
+  ShortcutActionId,
+  buildShortcutLookup,
+  formatBindingsForMenu,
+  getEffectiveBindings,
+  keyboardEventToKeyToken,
+  keyboardEventToStepString,
+  loadCustomShortcuts,
+  resetCustomShortcuts,
+  saveCustomShortcuts,
+} from './ideShortcuts';
+import { ShortcutsModal } from './ShortcutsModal';
+import { BridgeInteractionsModal } from './BridgeInteractionsModal';
 
 export interface TabItem {
   id: string;
@@ -116,7 +133,27 @@ interface GAWIDEProps {
   onDeleteObject?: (type: 'plugin' | 'table' | 'query' | 'report', id: string, name: string) => void;
 }
 
-export type MenuKey = 'App' | 'File' | 'Edit' | 'Selection' | 'View' | 'Go' | 'Run' | 'Terminal' | 'Tools' | 'Help';
+export type MenuKey =
+  | 'App'
+  | 'File'
+  | 'Edit'
+  | 'Selection'
+  | 'Bridge'
+  | 'View'
+  | 'Go'
+  | 'Run'
+  | 'Terminal'
+  | 'Tools'
+  | 'Help';
+
+interface MenuItemDef {
+  label: string;
+  shortcut?: string;
+  action?: () => void;
+  divider?: boolean;
+  disabled?: boolean;
+  children?: MenuItemDef[];
+}
 
 type ActivityBarTab = 'explorer' | 'search' | 'extensions' | 'settings';
 
@@ -140,6 +177,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 }) => {
   const engine = SQLiteEngine.getInstance();
   const storageEngine = useMemo(() => FileStorageEngine.getInstance(), []);
+  const h2BridgeEngine = useMemo(() => H2BridgeEngine.getInstance(), []);
   const [storageMeta, setStorageMeta] = useState<StorageMetadata>(() => storageEngine.getMetadata());
   const editorRef = useRef<any>(null);
   const isDark = theme === 'vs-dark';
@@ -170,7 +208,59 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const [commandPaletteQuery, setCommandPaletteQuery] = useState('');
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [activeMenu, setActiveMenu] = useState<MenuKey | null>(null);
+  const [openSubmenuKey, setOpenSubmenuKey] = useState<string | null>(null);
   const [showAboutModal, setShowAboutModal] = useState(false);
+
+  // Standardized IDE shortcuts, chord state, and Bridge Interactions Log modal
+  const [customShortcuts, setCustomShortcuts] = useState<CustomShortcutOverrides>(() =>
+    loadCustomShortcuts()
+  );
+  const [shortcutModalTab, setShortcutModalTab] = useState<'system' | 'custom' | null>(null);
+  const [isRecordingShortcut, setIsRecordingShortcut] = useState(false);
+  const [showBridgeLogModal, setShowBridgeLogModal] = useState(false);
+  const [pendingChordPrefix, setPendingChordPrefix] = useState<string | null>(null);
+  const pendingChordPrefixRef = useRef<string | null>(null);
+  const pendingChordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const shortcutLookup = useMemo(() => buildShortcutLookup(customShortcuts), [customShortcuts]);
+  const getMenuShortcut = useCallback(
+    (actionId: ShortcutActionId): string =>
+      formatBindingsForMenu(getEffectiveBindings(actionId, customShortcuts)),
+    [customShortcuts]
+  );
+
+  const clearPendingChord = useCallback(() => {
+    if (pendingChordTimerRef.current) {
+      clearTimeout(pendingChordTimerRef.current);
+      pendingChordTimerRef.current = null;
+    }
+    pendingChordPrefixRef.current = null;
+    setPendingChordPrefix(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pendingChordTimerRef.current) {
+        clearTimeout(pendingChordTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setOpenSubmenuKey(null);
+  }, [activeMenu]);
+
+  const handleUpdateCustomShortcuts = useCallback((next: CustomShortcutOverrides) => {
+    setCustomShortcuts(next);
+    saveCustomShortcuts(next);
+  }, []);
+
+  const handleResetCustomShortcuts = useCallback(() => {
+    resetCustomShortcuts();
+    setCustomShortcuts({});
+    gawContext?.toast?.info?.('Custom keyboard shortcuts reset to system defaults.');
+  }, [gawContext]);
+
   const menubarRef = useRef<HTMLDivElement>(null);
   const monacoRef = useRef<any>(null);
   const handleSaveActiveTabRef = useRef<() => void>(() => {});
@@ -179,6 +269,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
   const handleToggleCommentsRef = useRef<() => void>(() => {});
   const handleToggleViewInIDERef = useRef<() => void>(() => {});
   const handleOpenSaveAsRef = useRef<() => void>(() => {});
+  const shortcutActionHandlersRef = useRef<Partial<Record<ShortcutActionId, () => void>>>({});
   const savedCursorPosRef = useRef<Record<string, { lineNumber: number; column: number }>>({});
   const sqlCompletionProviderRef = useRef<any>(null);
   const deletedQueriesUndoStackRef = useRef<
@@ -192,6 +283,14 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       created_at?: string;
     }>
   >([]);
+  const closedTabsStackRef = useRef<
+    Array<{
+      tab: TabItem;
+      index: number;
+      wasViewToggled: boolean;
+    }>
+  >([]);
+  const [closedTabsCount, setClosedTabsCount] = useState(0);
 
   const [formatOnSave, setFormatOnSave] = useState(() => {
     return safeStorage.getItem('gaw_format_on_save') !== 'false';
@@ -375,9 +474,13 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
 
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || '');
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+  const tabsRef = useRef<TabItem[]>(tabs);
+  tabsRef.current = tabs;
 
   // Toggle View inside IDE (Ctrl+Shift+K) - Code <-> Preview/Data/Results/Report
   const [toggledTabIds, setToggledTabIds] = useState<Record<string, boolean>>({});
+  const toggledTabIdsRef = useRef<Record<string, boolean>>(toggledTabIds);
+  toggledTabIdsRef.current = toggledTabIds;
   const isViewToggled = !!(activeTabId && toggledTabIds[activeTabId]);
 
   const handleToggleViewInIDE = useCallback(() => {
@@ -388,22 +491,91 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }));
   }, [activeTabId]);
 
-
-
-  // Close tab
+  // Close a single tab and record it on the Undo Close Tab stack (allows closing down to 0 tabs)
   const closeTab = useCallback((idToClose: string) => {
-    setTabs((prev) => {
-      if (prev.length <= 1) return prev;
-      const nextTabs = prev.filter((t) => t.id !== idToClose);
-      setActiveTabId((currentActive) => {
-        if (currentActive === idToClose) {
-          return nextTabs[0]?.id || '';
-        }
-        return currentActive;
-      });
-      return nextTabs;
+    const currentTabs = tabsRef.current;
+    const idx = currentTabs.findIndex((t) => t.id === idToClose);
+    if (idx === -1) return;
+
+    const closingTab = currentTabs[idx];
+    closedTabsStackRef.current.push({
+      tab: closingTab,
+      index: idx,
+      wasViewToggled: Boolean(toggledTabIdsRef.current[closingTab.id]),
+    });
+    if (closedTabsStackRef.current.length > 25) {
+      closedTabsStackRef.current.shift();
+    }
+    setClosedTabsCount(closedTabsStackRef.current.length);
+
+    const nextTabs = currentTabs.filter((t) => t.id !== idToClose);
+    setTabs(nextTabs);
+    setActiveTabId((currentActive) => {
+      if (currentActive === idToClose) {
+        const fallback = nextTabs[Math.min(idx, nextTabs.length - 1)];
+        return fallback ? fallback.id : '';
+      }
+      return currentActive;
     });
   }, []);
+
+  // Close all open tabs and record them so Undo Close Tab restores the most recently active tab first
+  const closeAllTabs = useCallback(() => {
+    const currentTabs = tabsRef.current;
+    if (currentTabs.length === 0) return;
+
+    const inactiveEntries = currentTabs
+      .map((tab, index) => ({
+        tab,
+        index,
+        wasViewToggled: Boolean(toggledTabIdsRef.current[tab.id]),
+      }))
+      .filter((entry) => entry.tab.id !== activeTabId);
+
+    const activeEntry = currentTabs
+      .map((tab, index) => ({
+        tab,
+        index,
+        wasViewToggled: Boolean(toggledTabIdsRef.current[tab.id]),
+      }))
+      .find((entry) => entry.tab.id === activeTabId);
+
+    const orderedToPush = activeEntry ? [...inactiveEntries, activeEntry] : inactiveEntries;
+    closedTabsStackRef.current.push(...orderedToPush);
+    if (closedTabsStackRef.current.length > 25) {
+      closedTabsStackRef.current = closedTabsStackRef.current.slice(-25);
+    }
+    setClosedTabsCount(closedTabsStackRef.current.length);
+    setTabs([]);
+    setActiveTabId('');
+  }, [activeTabId]);
+
+  // Restore the most recently closed IDE tab in its previous slot and view-toggle state
+  const handleUndoCloseTab = useCallback(() => {
+    const entry = closedTabsStackRef.current.pop();
+    setClosedTabsCount(closedTabsStackRef.current.length);
+    if (!entry) {
+      gawContext?.toast?.info?.('No recently closed tabs to restore.');
+      return;
+    }
+
+    setTabs((prev) => {
+      if (prev.some((t) => t.id === entry.tab.id)) {
+        return prev;
+      }
+      const next = [...prev];
+      const insertAt = Math.max(0, Math.min(entry.index, next.length));
+      next.splice(insertAt, 0, entry.tab);
+      return next;
+    });
+    if (entry.wasViewToggled) {
+      setToggledTabIds((prev) => ({
+        ...prev,
+        [entry.tab.id]: true,
+      }));
+    }
+    setActiveTabId(entry.tab.id);
+  }, [gawContext]);
 
   const getTargetFromTab = useCallback((tab?: TabItem | null): TargetTabInfo | null => {
     if (!tab) return null;
@@ -912,6 +1084,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     const handleClickOutside = (e: MouseEvent) => {
       if (menubarRef.current && !menubarRef.current.contains(e.target as Node)) {
         setActiveMenu(null);
+        setOpenSubmenuKey(null);
       }
     };
     if (activeMenu) {
@@ -920,32 +1093,38 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
     }
   }, [activeMenu]);
 
-  // Global capture-phase keydown handler to intercept browser menus (like Alt+F) and handle VS Code keys
+  // Unified capture-phase keyboard shortcut & two-step chord engine (IDE Mode only).
+  // Uses physical KeyboardEvent.code tokens via ideShortcuts.ts so Alt+ chords work consistently
+  // across Windows, Linux, and macOS without leaking second-step characters into Monaco.
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // Alt-key combinations for menubar (Alt+F, Alt+E, Alt+S, Alt+V, Alt+G, Alt+R, Alt+T, Alt+H)
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-        const key = e.key.toLowerCase();
-        const map: Record<string, MenuKey> = {
-          f: 'File',
-          e: 'Edit',
-          s: 'Selection',
-          v: 'View',
-          g: 'Go',
-          r: 'Run',
-          t: 'Terminal',
-          h: 'Help',
-        };
-        if (map[key]) {
-          e.preventDefault();
-          e.stopPropagation();
-          setActiveMenu((prev) => (prev === map[key] ? null : map[key]));
-          return;
-        }
+      // Pause IDE shortcut dispatching while the user is recording a custom shortcut
+      if (isRecordingShortcut) {
+        return;
       }
 
-      // Escape key handling
+      // Escape cancels an active chord first, then closes open IDE overlays/menus
       if (e.key === 'Escape') {
+        if (pendingChordPrefixRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          clearPendingChord();
+          return;
+        }
+        if (shortcutModalTab) {
+          e.preventDefault();
+          e.stopPropagation();
+          setShortcutModalTab(null);
+          setTimeout(() => editorRef.current?.focus(), 10);
+          return;
+        }
+        if (showBridgeLogModal) {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowBridgeLogModal(false);
+          setTimeout(() => editorRef.current?.focus(), 10);
+          return;
+        }
         if (showCommandPalette) {
           e.preventDefault();
           e.stopPropagation();
@@ -956,6 +1135,7 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
           e.preventDefault();
           e.stopPropagation();
           setActiveMenu(null);
+          setOpenSubmenuKey(null);
           setTimeout(() => editorRef.current?.focus(), 10);
           return;
         }
@@ -975,66 +1155,101 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
         }
       }
 
-      // Ctrl+Shift+P / F1 for Command Palette
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
-        e.preventDefault();
-        e.stopPropagation();
-        setShowCommandPalette(true);
-        return;
-      }
-      if (e.key === 'F1') {
-        e.preventDefault();
-        e.stopPropagation();
-        setShowCommandPalette(true);
+      // Do not trigger background IDE shortcuts while a modal dialog is open
+      if (
+        showCommandPalette ||
+        showSaveAsModal ||
+        shortcutModalTab ||
+        showBridgeLogModal ||
+        showAboutModal
+      ) {
         return;
       }
 
-      // Ctrl+Shift+S / Cmd+Shift+S: Save As...
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+      const step = keyboardEventToStepString(e);
+      if (!step) return;
+
+      // 1. If waiting for the second key of a two-step chord (e.g. "Alt+N" -> "C")
+      const activePrefix = pendingChordPrefixRef.current;
+      if (activePrefix) {
         e.preventDefault();
         e.stopPropagation();
-        handleOpenSaveAsRef.current?.();
+        clearPendingChord();
+
+        const secondMap = shortcutLookup.chordMap.get(activePrefix);
+        let matchedAction = secondMap?.get(step);
+        // Ergonomic fallback: if user kept Alt held for the second key (e.g. Alt+N then Alt+C),
+        // also match against the bare key token so fast chord typing works smoothly.
+        if (!matchedAction && e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          const bareToken = keyboardEventToKeyToken(e);
+          if (bareToken) {
+            matchedAction = secondMap?.get(bareToken);
+          }
+        }
+        if (matchedAction) {
+          setActiveMenu(null);
+          setOpenSubmenuKey(null);
+          shortcutActionHandlersRef.current[matchedAction]?.();
+        }
         return;
       }
 
-      // Ctrl+S / Cmd+S: Save current tab
-      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S') && !e.altKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        handleSaveActiveTabRef.current?.();
+      // 2. Skip unmodified keys when focused inside plain form inputs (Search box, etc.) outside Monaco
+      const target = e.target as HTMLElement | null;
+      const isMonacoInput = Boolean(target?.closest?.('.monaco-editor'));
+      const isPlainFormField =
+        !isMonacoInput &&
+        Boolean(target) &&
+        (target!.tagName === 'INPUT' ||
+          target!.tagName === 'TEXTAREA' ||
+          target!.tagName === 'SELECT' ||
+          target!.isContentEditable);
+      if (isPlainFormField && !e.ctrlKey && !e.metaKey && !e.altKey) {
         return;
       }
 
-      // Ctrl+B: Toggle primary sidebar
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B') && !e.shiftKey && !e.altKey) {
+      // 3. Check if this step initiates a registered two-step chord
+      if (shortcutLookup.chordMap.has(step)) {
         e.preventDefault();
         e.stopPropagation();
-        setIsPrimarySidebarOpen((prev) => !prev);
+        pendingChordPrefixRef.current = step;
+        setPendingChordPrefix(step);
+        if (pendingChordTimerRef.current) {
+          clearTimeout(pendingChordTimerRef.current);
+        }
+        pendingChordTimerRef.current = setTimeout(() => {
+          pendingChordPrefixRef.current = null;
+          setPendingChordPrefix(null);
+          pendingChordTimerRef.current = null;
+        }, 1800);
         return;
       }
 
-      // Note: Ctrl+Shift+F is handled globally in App.tsx (capture phase) to toggle IDE Mode <-> App Mode
-
-      // Ctrl+Shift+K: Toggle view in IDE (Code <-> Preview/Data/Results/Report)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'k' || e.key === 'K')) {
+      // 4. Check single-step shortcuts (Ctrl+S, Alt+S, Alt+Shift+S, Alt+A, Ctrl+Shift+P, etc.)
+      const singleAction = shortcutLookup.singleStepMap.get(step);
+      if (singleAction) {
         e.preventDefault();
         e.stopPropagation();
-        handleToggleViewInIDERef.current?.();
-        return;
-      }
-
-      // Ctrl+/: Toggle line comments
-      if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.code === 'Slash')) {
-        e.preventDefault();
-        e.stopPropagation();
-        handleToggleCommentsRef.current?.();
-        return;
+        setActiveMenu(null);
+        setOpenSubmenuKey(null);
+        shortcutActionHandlersRef.current[singleAction]?.();
       }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [showCommandPalette, activeMenu, showAboutModal, showSaveAsModal, handleCloseCommandPalette]);
+  }, [
+    isRecordingShortcut,
+    shortcutModalTab,
+    showBridgeLogModal,
+    showCommandPalette,
+    activeMenu,
+    showAboutModal,
+    showSaveAsModal,
+    handleCloseCommandPalette,
+    shortcutLookup,
+    clearPendingChord,
+  ]);
 
   // Sync external targetTab request (from Sidebar edit options)
   const lastProcessedTargetKeyRef = useRef<string | null>(null);
@@ -1342,60 +1557,16 @@ export const GAWIDE: React.FC<GAWIDEProps> = ({
       },
     });
 
-    // Keybindings:
-    // Ctrl+Enter: Run
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      runCurrentQuery();
-    });
-    // Ctrl+S: Save (with optional Prettier format on save)
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-      handleSaveActiveTabRef.current?.();
-    });
-    // Ctrl+Z: Undo in Monaco
+    // Keep native Monaco Undo / Redo bindings; all customizable IDE shortcuts and Alt+ chords
+    // are dispatched centrally by the capture-phase chord engine so user overrides work inside Monaco.
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () => {
       editor.trigger('keyboard', 'undo', null);
     });
-    // Ctrl+Y / Ctrl+Shift+Z: Redo in Monaco
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () => {
       editor.trigger('keyboard', 'redo', null);
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ, () => {
       editor.trigger('keyboard', 'redo', null);
-    });
-    // Shift+Alt+F: Format Document with Prettier
-    editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
-      handleFormatDocument();
-    });
-    // Ctrl+Shift+P: Command Palette
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () => {
-      setShowCommandPalette(true);
-    });
-    // Ctrl+B / Shift+Ctrl+N: Toggle Sidebar
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
-      setIsPrimarySidebarOpen((prev) => !prev);
-    });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyN, () => {
-      setIsPrimarySidebarOpen((prev) => !prev);
-    });
-    // Alt+N: New Query Tab
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyN, () => {
-      addSqlTab();
-    });
-    // Alt+F: Open File Menu
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
-      setActiveMenu((prev) => (prev === 'File' ? null : 'File'));
-    });
-    // Alt+E: Open Edit Menu
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyE, () => {
-      setActiveMenu((prev) => (prev === 'Edit' ? null : 'Edit'));
-    });
-    // Alt+S: Open Selection Menu
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyS, () => {
-      setActiveMenu((prev) => (prev === 'Selection' ? null : 'Selection'));
-    });
-    // Alt+V: Open View Menu
-    editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.KeyV, () => {
-      setActiveMenu((prev) => (prev === 'View' ? null : 'View'));
     });
   };
 
@@ -2290,6 +2461,180 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     setActiveTabId(id);
   };
 
+  // Edit -> Invert Selection (Alt+E I): replaces Monaco's current selections with their exact text complement
+  const handleInvertSelection = useCallback(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+    const model = editor.getModel();
+    if (!model) return;
+
+    const fullLen = model.getValueLength();
+    const selections = editor.getSelections() || [];
+
+    // Convert each non-empty selection to a sorted [start, end] offset range and merge overlaps
+    const intervals: Array<[number, number]> = selections
+      .map((sel: any): [number, number] => {
+        const a = model.getOffsetAt({ lineNumber: sel.startLineNumber, column: sel.startColumn });
+        const b = model.getOffsetAt({ lineNumber: sel.endLineNumber, column: sel.endColumn });
+        return a <= b ? [a, b] : [b, a];
+      })
+      .filter(([a, b]: [number, number]) => b > a)
+      .sort((x: [number, number], y: [number, number]) => x[0] - y[0]);
+
+    if (intervals.length === 0) {
+      editor.setSelection(model.getFullModelRange());
+      editor.focus();
+      return;
+    }
+
+    const merged: Array<[number, number]> = [];
+    for (const [start, end] of intervals) {
+      if (merged.length === 0 || start > merged[merged.length - 1][1]) {
+        merged.push([start, end]);
+      } else {
+        merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], end);
+      }
+    }
+
+    // If the entire file is selected, inverting clears selection to the top of the document
+    if (merged.length === 1 && merged[0][0] === 0 && merged[0][1] === fullLen) {
+      editor.setSelection(new monaco.Selection(1, 1, 1, 1));
+      editor.focus();
+      return;
+    }
+
+    const complements: Array<[number, number]> = [];
+    let cursor = 0;
+    for (const [start, end] of merged) {
+      if (start > cursor) {
+        complements.push([cursor, start]);
+      }
+      cursor = end;
+    }
+    if (cursor < fullLen) {
+      complements.push([cursor, fullLen]);
+    }
+
+    if (complements.length === 0) {
+      editor.setSelection(new monaco.Selection(1, 1, 1, 1));
+    } else {
+      const nextSelections = complements.map(([start, end]) => {
+        const startPos = model.getPositionAt(start);
+        const endPos = model.getPositionAt(end);
+        return new monaco.Selection(
+          startPos.lineNumber,
+          startPos.column,
+          endPos.lineNumber,
+          endPos.column
+        );
+      });
+      editor.setSelections(nextSelections);
+    }
+    editor.focus();
+  }, []);
+
+  // File -> Open Drive -> pCloud / Google Drive / Dropbox / Local
+  const handleOpenDrive = useCallback(
+    (provider: H2Provider) => {
+      if (gawContext) {
+        (gawContext as any).clockieH2PendingProvider = provider;
+        gawContext.eventBus?.emit?.('clockie_h2_select_provider', provider);
+      }
+      openAndTogglePlugin('plugin_clockie_h2', 'Clockie H2 Drives');
+    },
+    [gawContext, openAndTogglePlugin]
+  );
+
+  // View -> Refresh (Alt+V R): refresh DB schema/Explorer, clear compiled plugin cache,
+  // reset toggled view cache, and verify active Clockie H2 file revision via lightweight statFile
+  const handleRefreshView = useCallback(async () => {
+    PluginEngine.clearCache();
+    lastExecutedTabContentRef.current = '';
+    setDbVersion((v) => v + 1);
+    gawContext?.eventBus?.emit?.('storage_changed');
+
+    const h2State = h2BridgeEngine.getState();
+    const activeH2 = h2State.activeFile;
+    if (activeH2 && h2BridgeEngine.isConnected()) {
+      try {
+        const stat = await h2BridgeEngine.getClient().statFile({
+          provider: activeH2.provider,
+          driveRoot: activeH2.driveRoot,
+          relativePath: activeH2.relativePath,
+          fileId: activeH2.fileId,
+        });
+        if (!stat.exists) {
+          gawContext?.toast?.warning?.(
+            `Workspace refreshed. Remote file "${activeH2.name}" was not found on ${activeH2.provider}.`
+          );
+        } else if (stat.revision && activeH2.revision && stat.revision !== activeH2.revision) {
+          gawContext?.toast?.info?.(
+            `Workspace refreshed. Remote revision of "${activeH2.name}" has updated on ${activeH2.provider}.`
+          );
+        } else {
+          gawContext?.toast?.success?.(
+            `Workspace refreshed and "${activeH2.name}" is up to date.`
+          );
+        }
+        return;
+      } catch (err: any) {
+        gawContext?.toast?.warning?.(
+          `Workspace refreshed locally (Clockie H2 stat check failed: ${err?.message || 'unknown error'}).`
+        );
+        return;
+      }
+    }
+
+    gawContext?.toast?.success?.('Workspace schema, Explorer, and component caches refreshed.');
+  }, [gawContext, h2BridgeEngine]);
+
+  // Keep latest action closures wired into the unified capture-phase shortcut dispatcher
+  shortcutActionHandlersRef.current = {
+    'file.new.component': () => handleAddNewPlugin(),
+    'file.new.query': () => handleAddNewQuery(),
+    'file.new.table': () => handleAddNewTable(),
+    'file.new.view': () => handleAddNewView(),
+    'file.new.report': () => (onNewReportVisual ? onNewReportVisual() : handleAddNewReport()),
+    'file.newTab': () => addSqlTab(),
+    'file.closeTab': () => {
+      if (activeTabId) closeTab(activeTabId);
+    },
+    'file.closeAllTabs': () => closeAllTabs(),
+    'file.undoCloseTab': () => handleUndoCloseTab(),
+    'file.open': () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
+    'file.openDrive.pcloud': () => handleOpenDrive('pcloud'),
+    'file.openDrive.gdrive': () => handleOpenDrive('gdrive'),
+    'file.openDrive.dropbox': () => handleOpenDrive('dropbox'),
+    'file.openDrive.local': () => handleOpenDrive('local'),
+    'file.save': () => handleSaveActiveTabRef.current?.(),
+    'file.saveAs': () => handleOpenSaveAsRef.current?.(),
+    'file.saveAll': () => {
+      saveDirtyTabsRef.current?.();
+    },
+    'edit.invertSelection': () => handleInvertSelection(),
+    'edit.preferences': () =>
+      openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
+    'bridge.interactionsLog': () => setShowBridgeLogModal(true),
+    'view.refresh': () => {
+      void handleRefreshView();
+    },
+    'view.shortcuts.system': () => setShortcutModalTab('system'),
+    'view.shortcuts.custom': () => setShortcutModalTab('custom'),
+    'help.about': () => setShowAboutModal(true),
+    'ide.commandPalette': () => setShowCommandPalette(true),
+    'ide.toggleSidebar': () => setIsPrimarySidebarOpen((prev) => !prev),
+    'ide.toggleMode': () => {
+      void handleSwitchToAppMode();
+    },
+    'ide.toggleView': () => handleToggleViewInIDERef.current?.(),
+    'ide.formatDocument': () => {
+      void handleFormatDocument();
+    },
+    'ide.runQuery': () => runCurrentQuery(),
+    'ide.toggleComment': () => handleToggleCommentsRef.current?.(),
+  };
+
 
   // Search in Files Results
   const searchResults = useMemo(() => {
@@ -2554,19 +2899,12 @@ export default function ${componentName}({ gawContext }: PluginProps) {
   // Active query result to render
   const currentResult = queryResults[activeResultIndex] || queryResults[0];
 
-  // Menubar definitions with full VS Code action binding
-  const menuDefinitions: Record<
-    MenuKey,
-    Array<{
-      label: string;
-      shortcut?: string;
-      action: () => void;
-      divider?: boolean;
-    }>
-  > = {
+  // Standardized Gawkyy IDE menubar definitions aligned with Clockie H2 and Monaco IDE
+  const menuDefinitions: Record<MenuKey, MenuItemDef[]> = {
     App: [
       {
         label: 'About Gawkyy IDE...',
+        shortcut: getMenuShortcut('help.about'),
         action: () => setShowAboutModal(true),
       },
       {
@@ -2576,76 +2914,153 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Editor Settings & Keybindings...',
-        shortcut: 'Ctrl+,',
         action: () => {
           setActiveActivity('settings');
           setIsPrimarySidebarOpen(true);
         },
       },
       {
-        label: 'Application Settings UI',
+        label: 'Preferences',
+        shortcut: getMenuShortcut('edit.preferences'),
         action: () => openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
       },
       {
         label: 'Command Palette...',
-        shortcut: 'Ctrl+Shift+P',
+        shortcut: getMenuShortcut('ide.commandPalette'),
         action: () => setShowCommandPalette(true),
       },
       {
         label: 'Switch to App Mode',
-        shortcut: 'Ctrl+Shift+F',
+        shortcut: getMenuShortcut('ide.toggleMode'),
         action: () => handleSwitchToAppMode(),
-        divider: true,
       },
     ],
     File: [
       {
-        label: 'File & Workspace Manager',
-        action: () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
+        label: 'New',
+        children: [
+          {
+            label: 'Component',
+            shortcut: getMenuShortcut('file.new.component'),
+            action: () => handleAddNewPlugin(),
+          },
+          {
+            label: 'Query',
+            shortcut: getMenuShortcut('file.new.query'),
+            action: () => handleAddNewQuery(),
+          },
+          {
+            label: 'Table',
+            shortcut: getMenuShortcut('file.new.table'),
+            action: () => handleAddNewTable(),
+          },
+          {
+            label: 'View',
+            shortcut: getMenuShortcut('file.new.view'),
+            action: () => handleAddNewView(),
+          },
+          {
+            label: 'Report',
+            shortcut: getMenuShortcut('file.new.report'),
+            action: () => (onNewReportVisual ? onNewReportVisual() : handleAddNewReport()),
+            divider: true,
+          },
+          {
+            label: 'Report (.json)',
+            action: () => handleAddNewReport(),
+          },
+          {
+            label: 'Import Component Wizard...',
+            action: () => onOpenAddPluginModal?.(),
+          },
+        ],
         divider: true,
       },
       {
-        label: 'New SQL Query Tab',
-        shortcut: 'Alt+N',
+        label: 'New tab',
+        shortcut: getMenuShortcut('file.newTab'),
         action: () => addSqlTab(),
       },
       {
-        label: 'New Component (.tsx)',
-        action: () => handleAddNewPlugin(),
+        label: 'Close tab',
+        shortcut: getMenuShortcut('file.closeTab'),
+        disabled: !activeTabId,
+        action: () => {
+          if (activeTabId) closeTab(activeTabId);
+        },
       },
       {
-        label: 'New Visual Report (Report Builder)...',
-        action: () => onNewReportVisual?.(),
+        label: 'Close all tabs',
+        shortcut: getMenuShortcut('file.closeAllTabs'),
+        disabled: tabs.length === 0,
+        action: () => closeAllTabs(),
       },
       {
-        label: 'Import Component Wizard...',
-        action: () => onOpenAddPluginModal?.(),
+        label: 'Undo close tab',
+        shortcut: getMenuShortcut('file.undoCloseTab'),
+        disabled: closedTabsCount === 0,
+        action: () => handleUndoCloseTab(),
         divider: true,
       },
       {
-        label: 'Open Object / File...',
-        shortcut: 'Ctrl+O',
-        action: () => setShowCommandPalette(true),
+        label: 'Open',
+        shortcut: getMenuShortcut('file.open'),
+        action: () => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager'),
       },
       {
-        label: 'Save Current Tab',
-        shortcut: 'Ctrl+S',
+        label: 'Open Drive',
+        children: [
+          {
+            label: 'pCloud',
+            shortcut: getMenuShortcut('file.openDrive.pcloud'),
+            action: () => handleOpenDrive('pcloud'),
+          },
+          {
+            label: 'Google Drive',
+            shortcut: getMenuShortcut('file.openDrive.gdrive'),
+            action: () => handleOpenDrive('gdrive'),
+          },
+          {
+            label: 'Dropbox',
+            shortcut: getMenuShortcut('file.openDrive.dropbox'),
+            action: () => handleOpenDrive('dropbox'),
+          },
+          {
+            label: 'Local',
+            shortcut: getMenuShortcut('file.openDrive.local'),
+            action: () => handleOpenDrive('local'),
+          },
+        ],
+      },
+      {
+        label: 'Open Object / Command Palette...',
+        shortcut: getMenuShortcut('ide.commandPalette'),
+        action: () => setShowCommandPalette(true),
+        divider: true,
+      },
+      {
+        label: 'Save',
+        shortcut: getMenuShortcut('file.save'),
+        disabled: !activeTab,
         action: () => handleSaveActiveTabRef.current?.(),
       },
       {
-        label: 'Save As...',
-        shortcut: 'Ctrl+Shift+S',
+        label: 'Save As…',
+        shortcut: getMenuShortcut('file.saveAs'),
+        disabled: !activeTab,
         action: () => handleOpenSaveAsRef.current?.(),
       },
       {
-        label: 'Save All Dirty Tabs',
+        label: 'Save All',
+        shortcut: getMenuShortcut('file.saveAll'),
         action: () => {
           saveDirtyTabsRef.current?.();
         },
       },
       {
         label: 'Format with Prettier & Save',
-        shortcut: 'Shift+Alt+F',
+        shortcut: getMenuShortcut('ide.formatDocument'),
+        disabled: !activeTab,
         action: async () => {
           await handleFormatDocument();
           handleSaveActiveTabRef.current?.();
@@ -2653,34 +3068,20 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         divider: true,
       },
       {
-        label: 'Close Active Tab',
-        shortcut: 'Ctrl+W',
-        action: () => {
-          if (activeTabId) closeTab(activeTabId);
-        },
-      },
-      {
-        label: 'Close All Tabs',
-        action: () => {
-          tabs.forEach((t) => closeTab(t.id));
-        },
-        divider: true,
-      },
-      {
         label: 'Switch to App Mode',
-        shortcut: 'Ctrl+Shift+F',
+        shortcut: getMenuShortcut('ide.toggleMode'),
         action: () => handleSwitchToAppMode(),
       },
     ],
     Edit: [
       {
         label: 'Undo',
-        shortcut: 'Ctrl+Z',
+        shortcut: getMenuShortcut('edit.undo'),
         action: () => handleUndo(),
       },
       {
         label: 'Redo',
-        shortcut: 'Ctrl+Y',
+        shortcut: getMenuShortcut('edit.redo'),
         action: () => {
           editorRef.current?.trigger('menu', 'redo', null);
           editorRef.current?.focus();
@@ -2689,7 +3090,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Cut',
-        shortcut: 'Ctrl+X',
+        shortcut: getMenuShortcut('edit.cut'),
         action: () => {
           editorRef.current?.focus();
           document.execCommand('cut');
@@ -2697,7 +3098,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Copy',
-        shortcut: 'Ctrl+C',
+        shortcut: getMenuShortcut('edit.copy'),
         action: () => {
           editorRef.current?.focus();
           document.execCommand('copy');
@@ -2705,7 +3106,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Paste',
-        shortcut: 'Ctrl+V',
+        shortcut: getMenuShortcut('edit.paste'),
         action: () => {
           navigator.clipboard?.readText?.().then((text) => {
             if (text && editorRef.current) {
@@ -2714,6 +3115,25 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             }
           });
         },
+        divider: true,
+      },
+      {
+        label: 'Select All',
+        shortcut: getMenuShortcut('edit.selectAll'),
+        action: () => {
+          if (editorRef.current) {
+            const model = editorRef.current.getModel();
+            if (model) {
+              editorRef.current.setSelection(model.getFullModelRange());
+              editorRef.current.focus();
+            }
+          }
+        },
+      },
+      {
+        label: 'Invert Selection',
+        shortcut: getMenuShortcut('edit.invertSelection'),
+        action: () => handleInvertSelection(),
         divider: true,
       },
       {
@@ -2735,18 +3155,20 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Format Document (Prettier)',
-        shortcut: 'Shift+Alt+F',
+        shortcut: getMenuShortcut('ide.formatDocument'),
         action: () => handleFormatDocument(),
+        divider: true,
       },
       {
-        label: 'Settings',
+        label: 'Preferences',
+        shortcut: getMenuShortcut('edit.preferences'),
         action: () => openAndTogglePlugin('plugin_settings', 'Settings & Workspace Preferences'),
       },
     ],
     Selection: [
       {
         label: 'Select All',
-        shortcut: 'Ctrl+A',
+        shortcut: getMenuShortcut('edit.selectAll'),
         action: () => {
           if (editorRef.current) {
             const model = editorRef.current.getModel();
@@ -2756,6 +3178,11 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             }
           }
         },
+      },
+      {
+        label: 'Invert Selection',
+        shortcut: getMenuShortcut('edit.invertSelection'),
+        action: () => handleInvertSelection(),
       },
       {
         label: 'Expand Selection',
@@ -2801,16 +3228,77 @@ export default function ${componentName}({ gawContext }: PluginProps) {
         },
       },
     ],
+    Bridge: [
+      {
+        label: 'Show Interactions Log',
+        shortcut: getMenuShortcut('bridge.interactionsLog'),
+        action: () => setShowBridgeLogModal(true),
+        divider: true,
+      },
+      {
+        label: 'Open Clockie H2 Drives',
+        action: () => openAndTogglePlugin('plugin_clockie_h2', 'Clockie H2 Drives'),
+      },
+      {
+        label: 'Reconnect Bridge',
+        action: () => {
+          h2BridgeEngine
+            .reconnect()
+            .then((ok) => {
+              if (ok) {
+                gawContext?.toast?.success?.('Connected to Clockie H2 Bridge v1.6.');
+              } else {
+                gawContext?.toast?.warning?.(
+                  h2BridgeEngine.getState().error || 'Clockie H2 extension did not respond.'
+                );
+              }
+            })
+            .catch((err: any) => {
+              gawContext?.toast?.error?.(`Bridge reconnect failed: ${err?.message || String(err)}`);
+            });
+        },
+      },
+      {
+        label: 'Disconnect Bridge',
+        action: () => {
+          h2BridgeEngine.disconnect().then(() => {
+            gawContext?.toast?.info?.('Disconnected from Clockie H2 Bridge.');
+          });
+        },
+      },
+    ],
     View: [
       {
+        label: 'Refresh',
+        shortcut: getMenuShortcut('view.refresh'),
+        action: () => {
+          void handleRefreshView();
+        },
+      },
+      {
+        label: 'Shortcuts',
+        children: [
+          {
+            label: 'System shortcuts',
+            shortcut: getMenuShortcut('view.shortcuts.system'),
+            action: () => setShortcutModalTab('system'),
+          },
+          {
+            label: 'Custom shortcuts',
+            shortcut: getMenuShortcut('view.shortcuts.custom'),
+            action: () => setShortcutModalTab('custom'),
+          },
+        ],
+        divider: true,
+      },
+      {
         label: 'Command Palette...',
-        shortcut: 'Ctrl+Shift+P',
+        shortcut: getMenuShortcut('ide.commandPalette'),
         action: () => setShowCommandPalette(true),
         divider: true,
       },
       {
         label: 'Explorer',
-        shortcut: 'Ctrl+Shift+E',
         action: () => {
           setActiveActivity('explorer');
           setIsPrimarySidebarOpen(true);
@@ -2833,17 +3321,16 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Toggle Primary Side Bar',
-        shortcut: 'Ctrl+B',
+        shortcut: getMenuShortcut('ide.toggleSidebar'),
         action: () => setIsPrimarySidebarOpen((p) => !p),
       },
       {
         label: 'Toggle Live TSX Preview',
-        shortcut: 'Ctrl+J',
         action: () => setShowLivePreview((p) => !p),
       },
       {
         label: 'Toggle View (Code <-> Preview/Data/Report)',
-        shortcut: 'Ctrl+Shift+K',
+        shortcut: getMenuShortcut('ide.toggleView'),
         action: () => handleToggleViewInIDE(),
       },
       {
@@ -2891,7 +3378,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     Run: [
       {
         label: 'Run Current Query / Document',
-        shortcut: 'Ctrl+Enter',
+        shortcut: getMenuShortcut('ide.runQuery'),
         action: () => runCurrentQuery(),
       },
       {
@@ -2901,9 +3388,9 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             const res = PluginEngine.compile(activeTab.content, activeTab.pluginId || 'test');
             setCompileStatus({ valid: res.success, error: res.error });
             if (res.success) {
-              alert('TSX Syntax Valid: No compilation errors found.');
+              gawContext?.toast?.success?.('TSX Syntax Valid: No compilation errors found.');
             } else {
-              alert('TSX Syntax Error:\n' + (res.error || 'Unknown error'));
+              gawContext?.toast?.error?.('TSX Syntax Error: ' + (res.error || 'Unknown error'));
             }
           }
         },
@@ -2981,14 +3468,13 @@ export default function ${componentName}({ gawContext }: PluginProps) {
       },
       {
         label: 'Keyboard Shortcuts Reference',
-        action: () => {
-          setActiveActivity('settings');
-          setIsPrimarySidebarOpen(true);
-        },
+        shortcut: getMenuShortcut('view.shortcuts.system'),
+        action: () => setShortcutModalTab('system'),
         divider: true,
       },
       {
-        label: 'About Gawkyy IDE',
+        label: 'About',
+        shortcut: getMenuShortcut('help.about'),
         action: () => setShowAboutModal(true),
       },
     ],
@@ -2998,45 +3484,125 @@ export default function ${componentName}({ gawContext }: PluginProps) {
     const items = menuDefinitions[mKey] || [];
     return (
       <div
-        className={`absolute left-0 top-full mt-1 min-w-[230px] rounded-lg shadow-2xl py-1.5 z-50 select-text border backdrop-blur-md ${
+        className={`absolute left-0 top-full mt-1 min-w-[248px] rounded-lg shadow-2xl py-1.5 z-50 select-text border backdrop-blur-md ${
           isDark
             ? 'bg-[#252526] border-[#454545] text-slate-200'
             : 'bg-white border-[#d4d4d4] text-slate-800'
         }`}
       >
-        {items.map((item, idx) => (
-          <React.Fragment key={idx}>
-            <button
-              onClick={() => {
-                setActiveMenu(null);
-                item.action();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-xs transition ${
-                isDark
-                  ? 'hover:bg-[#094771] hover:text-white'
-                  : 'hover:bg-[#e8f0fe] hover:text-blue-900'
-              }`}
-            >
-              <span>{item.label}</span>
-              {item.shortcut && (
-                <span
-                  className={`text-[10px] font-mono ml-4 ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
+        {items.map((item, idx) => {
+          const subKey = `${mKey}:${idx}`;
+          const hasChildren = Boolean(item.children && item.children.length > 0);
+          const isSubOpen = openSubmenuKey === subKey;
+
+          return (
+            <React.Fragment key={subKey}>
+              <div
+                className="relative"
+                onMouseEnter={() => setOpenSubmenuKey(hasChildren ? subKey : null)}
+              >
+                <button
+                  type="button"
+                  disabled={item.disabled}
+                  onClick={() => {
+                    if (item.disabled) return;
+                    if (hasChildren) {
+                      setOpenSubmenuKey((prev) => (prev === subKey ? null : subKey));
+                      return;
+                    }
+                    setActiveMenu(null);
+                    setOpenSubmenuKey(null);
+                    item.action?.();
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-xs transition ${
+                    item.disabled
+                      ? 'opacity-40 cursor-not-allowed'
+                      : isDark
+                      ? isSubOpen
+                        ? 'bg-[#094771] text-white'
+                        : 'hover:bg-[#094771] hover:text-white cursor-pointer'
+                      : isSubOpen
+                      ? 'bg-[#e8f0fe] text-blue-900'
+                      : 'hover:bg-[#e8f0fe] hover:text-blue-900 cursor-pointer'
                   }`}
                 >
-                  {item.shortcut}
-                </span>
+                  <span className="truncate">{item.label}</span>
+                  {hasChildren ? (
+                    <ChevronRight className="w-3.5 h-3.5 ml-4 opacity-75 flex-shrink-0" />
+                  ) : (
+                    item.shortcut && (
+                      <span
+                        className={`text-[10px] font-mono ml-5 whitespace-nowrap flex-shrink-0 ${
+                          isDark ? 'text-slate-400' : 'text-slate-500'
+                        }`}
+                      >
+                        {item.shortcut}
+                      </span>
+                    )
+                  )}
+                </button>
+
+                {/* Flyout Submenu (e.g. File -> New, File -> Open Drive, View -> Shortcuts) */}
+                {hasChildren && isSubOpen && item.children && (
+                  <div
+                    className={`absolute left-full top-0 ml-0.5 min-w-[235px] rounded-lg shadow-2xl py-1.5 z-50 select-text border backdrop-blur-md ${
+                      isDark
+                        ? 'bg-[#252526] border-[#454545] text-slate-200'
+                        : 'bg-white border-[#d4d4d4] text-slate-800'
+                    }`}
+                  >
+                    {item.children.map((child, cIdx) => (
+                      <React.Fragment key={`${subKey}:${cIdx}`}>
+                        <button
+                          type="button"
+                          disabled={child.disabled}
+                          onClick={() => {
+                            if (child.disabled) return;
+                            setActiveMenu(null);
+                            setOpenSubmenuKey(null);
+                            child.action?.();
+                          }}
+                          className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-xs transition ${
+                            child.disabled
+                              ? 'opacity-40 cursor-not-allowed'
+                              : isDark
+                              ? 'hover:bg-[#094771] hover:text-white cursor-pointer'
+                              : 'hover:bg-[#e8f0fe] hover:text-blue-900 cursor-pointer'
+                          }`}
+                        >
+                          <span className="truncate">{child.label}</span>
+                          {child.shortcut && (
+                            <span
+                              className={`text-[10px] font-mono ml-5 whitespace-nowrap flex-shrink-0 ${
+                                isDark ? 'text-slate-400' : 'text-slate-500'
+                              }`}
+                            >
+                              {child.shortcut}
+                            </span>
+                          )}
+                        </button>
+                        {child.divider && (
+                          <div
+                            className={`my-1 border-t ${
+                              isDark ? 'border-[#3c3c3c]' : 'border-[#e5e5e5]'
+                            }`}
+                          />
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {item.divider && (
+                <div
+                  className={`my-1 border-t ${
+                    isDark ? 'border-[#3c3c3c]' : 'border-[#e5e5e5]'
+                  }`}
+                />
               )}
-            </button>
-            {item.divider && (
-              <div
-                className={`my-1 border-t ${
-                  isDark ? 'border-[#3c3c3c]' : 'border-[#e5e5e5]'
-                }`}
-              />
-            )}
-          </React.Fragment>
-        ))}
+            </React.Fragment>
+          );
+        })}
       </div>
     );
   };
@@ -3076,7 +3642,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             </div>
 
             <div className="flex items-center gap-0.5 font-medium text-[11px]">
-              {(['File', 'Edit', 'Selection', 'View', 'Go', 'Run', 'Terminal', 'Tools', 'Help'] as MenuKey[]).map((mKey) => (
+              {(['File', 'Edit', 'Selection', 'Bridge', 'View', 'Go', 'Run', 'Terminal', 'Tools', 'Help'] as MenuKey[]).map((mKey) => (
                 <div key={mKey} className="relative">
                   <button
                     onClick={() => setActiveMenu((prev) => (prev === mKey ? null : mKey))}
@@ -4349,25 +4915,48 @@ export default function ${componentName}({ gawContext }: PluginProps) {
               {activeActivity === 'settings' && (
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-950'}`}>Keyboard Shortcuts:</span>
+                    <span className={`font-bold text-[11px] ${isDark ? 'text-white' : 'text-slate-950'}`}>Keyboard Shortcuts (IDE Mode):</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setShortcutModalTab('system')}
+                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                      >
+                        <Keyboard className="w-3.5 h-3.5" />
+                        <span>System shortcuts</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShortcutModalTab('custom')}
+                        className={`flex items-center justify-center gap-1.5 px-2 py-1.5 rounded border text-[11px] font-semibold transition cursor-pointer ${
+                          isDark
+                            ? 'bg-[#1e1e1e] border-blue-500/40 text-blue-300 hover:bg-blue-900/30'
+                            : 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                        <span>Custom shortcuts</span>
+                      </button>
+                    </div>
                     <div className="space-y-1.5">
                       {[
-                        ['Ctrl + Shift + F', 'Toggle IDE Mode / App Mode (auto-saves edits)'],
-                        ['Ctrl + Shift + K', 'Toggle View (Code <-> Preview/Data/Report)'],
-                        ['Shift + Alt + F', 'Format Document (Prettier)'],
-                        ['Ctrl + Enter', 'Run Query / Test Component'],
-                        ['Ctrl + S', 'Save File'],
-                        ['Ctrl + Shift + P', 'Command Palette'],
-                        ['Ctrl + B', 'Toggle Primary Side Bar'],
+                        [getMenuShortcut('file.newTab'), 'New Tab'],
+                        [getMenuShortcut('file.closeTab'), 'Close Tab'],
+                        [getMenuShortcut('file.undoCloseTab'), 'Undo Close Tab'],
+                        [getMenuShortcut('file.save'), 'Save Active Tab'],
+                        [getMenuShortcut('file.saveAll'), 'Save All Tabs'],
+                        [getMenuShortcut('bridge.interactionsLog'), 'Bridge Interactions Log'],
+                        [getMenuShortcut('view.refresh'), 'Refresh Workspace'],
+                        [getMenuShortcut('ide.toggleMode'), 'Switch to App Mode'],
                       ].map(([keys, desc], idx) => (
                         <div
                           key={idx}
-                          className={`p-1.5 rounded border flex items-center justify-between text-[10px] ${
+                          className={`p-1.5 rounded border flex items-center justify-between gap-2 text-[10px] ${
                             isDark ? 'bg-[#1e1e1e] border-[#333]' : 'bg-white border-slate-200 text-slate-950 shadow-2xs'
                           }`}
                         >
                           <span className={isDark ? 'text-slate-400' : 'text-slate-950 font-medium'}>{desc}</span>
-                          <kbd className={`px-1.5 py-0.5 rounded font-mono ${
+                          <kbd className={`px-1.5 py-0.5 rounded font-mono whitespace-nowrap ${
                             isDark ? 'bg-[#2d2d2d] border border-[#444] text-slate-200' : 'bg-slate-100 border border-slate-300 text-slate-950 font-bold'
                           }`}>
                             {keys}
@@ -4557,18 +5146,18 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                     <span className="truncate max-w-[140px]">
                       {displayTitle}
                     </span>
-                    {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-                    {tabs.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeTab(tab.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
+                    {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-red-400" />}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition cursor-pointer"
+                      title={`Close tab (${getMenuShortcut('file.closeTab')})`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
                   </div>
                 );
               })}
@@ -4801,6 +5390,71 @@ export default function ${componentName}({ gawContext }: PluginProps) {
                 </div>
               )}
             </div>
+          ) : !activeTab ? (
+            /* Empty Workspace Prompt when all tabs are closed */
+            <div
+              className={`flex-1 flex flex-col items-center justify-center p-8 text-center ${
+                isDark ? 'bg-[#1e1e1e] text-slate-300' : 'bg-slate-50 text-slate-700'
+              }`}
+            >
+              <div className="p-3.5 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-400 mb-4">
+                <Code2 className="w-8 h-8" />
+              </div>
+              <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                No open tabs
+              </h3>
+              <p className={`text-xs max-w-md mb-5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                Select a component, table, query, or report from the Explorer sidebar, or use one of the standardized IDE actions below.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={addSqlTab}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-semibold transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New tab ({getMenuShortcut('file.newTab')})</span>
+                </button>
+                {closedTabsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleUndoCloseTab}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border font-semibold transition cursor-pointer ${
+                      isDark
+                        ? 'bg-[#252526] border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/30'
+                        : 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                  >
+                    <Undo className="w-3.5 h-3.5" />
+                    <span>Undo close tab ({getMenuShortcut('file.undoCloseTab')})</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openAndTogglePlugin('plugin_file_manager', 'File & Workspace Manager')}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border font-semibold transition cursor-pointer ${
+                    isDark
+                      ? 'bg-[#252526] border-[#454545] text-slate-200 hover:bg-[#333]'
+                      : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+                  }`}
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Open ({getMenuShortcut('file.open')})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBridgeLogModal(true)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border font-semibold transition cursor-pointer ${
+                    isDark
+                      ? 'bg-[#252526] border-[#454545] text-slate-200 hover:bg-[#333]'
+                      : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100'
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Bridge log ({getMenuShortcut('bridge.interactionsLog')})</span>
+                </button>
+              </div>
+            </div>
           ) : (
             /* Monaco Editor Frame */
             <div className="flex-1 flex overflow-hidden min-h-0">
@@ -5023,6 +5677,14 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             );
           })()}
 
+          {/* Pending two-step chord prompt (e.g. Alt+N waiting for C/Q/T/V/R) */}
+          {pendingChordPrefix && (
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-700 border border-emerald-300/60 text-white font-mono text-[10px] font-semibold flex-shrink-0 shadow-xs">
+              <Keyboard className="w-3 h-3 text-emerald-200" />
+              <span>Chord: {pendingChordPrefix} — press next key (Esc to cancel)</span>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -5214,7 +5876,7 @@ export default function ${componentName}({ gawContext }: PluginProps) {
 
             <div className={`space-y-2 text-xs mb-6 ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
               <p>
-                <strong>Version</strong>: 1.21 (Gawkyy Studio Edition)
+                <strong>Version</strong>: 1.22 (Gawkyy Studio Edition)
               </p>
               <p>
                 <strong>Editor Engine</strong>: Monaco IDE (Browser-based code editor engine)
@@ -5344,6 +6006,34 @@ export default function ${componentName}({ gawContext }: PluginProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 8. SYSTEM & CUSTOM KEYBOARD SHORTCUTS MODAL (View -> Shortcuts) */}
+      {shortcutModalTab && (
+        <ShortcutsModal
+          initialTab={shortcutModalTab}
+          isDark={isDark}
+          overrides={customShortcuts}
+          onUpdateOverrides={handleUpdateCustomShortcuts}
+          onResetAll={handleResetCustomShortcuts}
+          onRecordingChange={setIsRecordingShortcut}
+          onClose={() => {
+            setIsRecordingShortcut(false);
+            setShortcutModalTab(null);
+            setTimeout(() => editorRef.current?.focus(), 10);
+          }}
+        />
+      )}
+
+      {/* 9. CLOCKIE H2 BRIDGE INTERACTIONS LOG MODAL (Bridge -> Show Interactions Log) */}
+      {showBridgeLogModal && (
+        <BridgeInteractionsModal
+          isDark={isDark}
+          onClose={() => {
+            setShowBridgeLogModal(false);
+            setTimeout(() => editorRef.current?.focus(), 10);
+          }}
+        />
       )}
     </div>
   );

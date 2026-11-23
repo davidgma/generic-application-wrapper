@@ -913,40 +913,8 @@ export default function App() {
     };
   }, [storageEngine, h2Engine, eventBusApi]);
 
-  // Global Keyboard Shortcuts for App Mode (Ctrl+S save database, Ctrl+O open file)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // When in IDE Mode, Monaco IDE handles keyboard shortcuts (Ctrl+S, etc.) natively
-      if (mode === 'ide') {
-        return;
-      }
-      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
-      if (isCmdOrCtrl && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        if (h2Engine.hasActiveFile()) {
-          h2Engine.saveDatabase().catch((err: any) => {
-            toastApi.error(err?.message || 'Clockie H2 save failed.');
-          });
-        } else {
-          storageEngine.save().then((ok) => {
-            if (ok) toastApi.success('Database saved successfully!');
-          });
-        }
-      } else if (isCmdOrCtrl && e.key.toLowerCase() === 'o') {
-        e.preventDefault();
-        storageEngine.openFile().then((ok) => {
-          if (ok) {
-            PluginEngine.clearCache();
-            toastApi.success('Database opened successfully!');
-            refreshDatabaseState();
-          }
-        });
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [storageEngine, h2Engine, toastApi, refreshDatabaseState, mode]);
+  // App Mode intentionally omits custom keyboard shortcuts so touch/mobile-first apps
+  // retain native browser Cut / Copy / Paste without host-level key interception.
 
   // Navigate to Table View
   const handleSelectTable = useCallback((tableName: string, updateHash: boolean = true) => {
@@ -1201,51 +1169,10 @@ export default function App() {
     }
   }, [spreadsheetSource, handleSelectTable, handleSelectQuery, navigateTo, plugins, appSettings.initialPlugin, getInitialAppView]);
 
-  // Global Ctrl+Shift+F toggle directly between IDE Mode and App Mode (auto-saves dirty tabs when leaving IDE)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        e.shiftKey &&
-        (e.key === 'F' || e.key === 'f')
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof e.stopImmediatePropagation === 'function') {
-          e.stopImmediatePropagation();
-        }
-        handleToggleMode(mode === 'ide' ? 'app' : 'ide');
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [mode, handleToggleMode]);
+  // IDE-only keyboard shortcuts (including Ctrl+Shift+F mode switch and Ctrl+Shift+D sidebar toggle)
+  // are handled centrally inside GAWIDE's unified customizable chord/shortcut engine so App Mode
+  // remains free of custom keyboard shortcuts (native browser cut/copy/paste only).
 
-  // Global Shift+Ctrl+D shortcut: In IDE Mode, toggle IDE Primary Side Bar (pass through in App Mode)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isD = (e.key && e.key.toLowerCase() === 'd') || e.code === 'KeyD' || e.keyCode === 68;
-      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
-      if (isCtrlOrCmd && e.shiftKey && isD) {
-        if (mode !== 'ide') {
-          // Pass-through in App Mode to browser or user plugin
-          return;
-        }
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof e.stopImmediatePropagation === 'function') {
-          e.stopImmediatePropagation();
-        }
-        eventBusApi.emit('ide_toggle_sidebar');
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
-    document.addEventListener('keydown', handleKeyDown, true);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-      document.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [mode, eventBusApi]);
 
   const isEngineReadyRef = useRef(isEngineReady);
   useEffect(() => {

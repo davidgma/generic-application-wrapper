@@ -102,10 +102,55 @@ export interface H2BridgeError extends Error {
   maxPayloadBytes?: number;
 }
 
+export interface H2InteractionLogEntry {
+  id: string;
+  timestamp: number;
+  direction: 'outgoing' | 'incoming' | 'event';
+  type: string;
+  requestId?: string;
+  sessionId?: string | null;
+  success?: boolean;
+  reasonCode?: H2ReasonCode | null;
+  durationMs?: number;
+  summary: string;
+  payload: Record<string, any>;
+}
+
+const MAX_INTERACTION_LOG_ENTRIES = 300;
+
+/**
+ * Redacts/summarizes large Base64 payloads so the Bridge Interactions Log stays fast and readable.
+ */
+function sanitizePayloadForLog(raw: Record<string, any>): Record<string, any> {
+  const clone: Record<string, any> = {};
+  for (const [k, v] of Object.entries(raw || {})) {
+    if (k === 'content' && typeof v === 'string' && v.length > 512) {
+      const approxBytes = Math.round((v.length * 3) / 4);
+      clone[k] = `[Payload omitted: ${(approxBytes / 1024).toFixed(1)} KB]`;
+    } else if (v !== undefined) {
+      clone[k] = v;
+    }
+  }
+  return clone;
+}
+
+function summarizeBridgeMessage(msg: Record<string, any>, fallback = ''): string {
+  const parts: string[] = [];
+  if (msg.provider) parts.push(String(msg.provider));
+  if (msg.relativePath) parts.push(String(msg.relativePath));
+  else if (msg.basePath) parts.push(String(msg.basePath));
+  if (msg.eventType) parts.push(`event=${msg.eventType}`);
+  if (msg.sessionMode) parts.push(`mode=${msg.sessionMode}`);
+  if (msg.watchQuality) parts.push(`watch=${msg.watchQuality}`);
+  if (msg.revision) parts.push(`rev=${String(msg.revision).slice(0, 14)}`);
+  if (msg.error) parts.push(String(msg.error));
+  return parts.length > 0 ? parts.join(' • ') : fallback;
+}
+
 /**
  * Low-level transport client implementing the Clockie H2 Extension Bridge Protocol v1.6.
  * Uses strictly window.postMessage + per-tab window.sessionStorage (zero URL parameters),
- * with prerender-safe activation and single-flight SESSION_EXPIRED auto-recovery in direct mode.
+ * with prerender-safe activation, single-flight SESSION_EXPIRED auto-recovery, and interaction logging.
  */
 export class H2BridgeClient {
   private clientName: string;
@@ -113,9 +158,14 @@ export class H2BridgeClient {
   public sessionId: string | null = null;
   public sessionInfo: H2ConnectResponse | null = null;
   private reconnectPromise: Promise<H2ConnectResponse> | null = null;
-  private pending = new Map<string, { resolve: (d: any) => void; reject: (e: H2BridgeError) => void }>();
+  private pending = new Map<
+    string,
+    { resolve: (d: any) => void; reject: (e: H2BridgeError) => void; startedAt: number; reqType: string }
+  >();
   private fileListeners = new Set<(event: H2FileChangedEvent) => void>();
   private folderListeners = new Set<(event: H2FolderChangedEvent) => void>();
+  private interactionLogs: H2InteractionLogEntry[] = [];
+  private logListeners = new Set<(entries: H2InteractionLogEntry[]) => void>();
   public onReady: ((data: any) => void) | null = null;
   public onSessionRecovered: ((res: H2ConnectResponse) => void) | null = null;
   public onSessionExpired: ((err: H2BridgeError) => void) | null = null;
@@ -130,12 +180,26 @@ export class H2BridgeClient {
       if (!d || d.protocol !== H2_PROTOCOL || !d.__h2FromExtension) return;
 
       if (d.type === 'H2_BRIDGE_READY') {
+        this.recordInteraction({
+          direction: 'event',
+          type: 'H2_BRIDGE_READY',
+          sessionId: d.sessionId || null,
+          summary: 'Extension bridge ready signal received',
+          payload: d,
+        });
         if (typeof this.onReady === 'function') this.onReady(d);
         return;
       }
 
       if (d.type === 'H2_FILE_CHANGED_EVENT') {
         if (this.sessionId && d.sessionId && d.sessionId !== this.sessionId) return;
+        this.recordInteraction({
+          direction: 'event',
+          type: 'H2_FILE_CHANGED_EVENT',
+          sessionId: d.sessionId || this.sessionId,
+          summary: summarizeBridgeMessage(d, 'File changed event'),
+          payload: d,
+        });
         this.fileListeners.forEach((fn) => {
           try {
             fn(d as H2FileChangedEvent);
@@ -148,6 +212,13 @@ export class H2BridgeClient {
 
       if (d.type === 'H2_FOLDER_CHANGED_EVENT') {
         if (this.sessionId && d.sessionId && d.sessionId !== this.sessionId) return;
+        this.recordInteraction({
+          direction: 'event',
+          type: 'H2_FOLDER_CHANGED_EVENT',
+          sessionId: d.sessionId || this.sessionId,
+          summary: summarizeBridgeMessage(d, 'Folder changed event'),
+          payload: d,
+        });
         this.folderListeners.forEach((fn) => {
           try {
             fn(d as H2FolderChangedEvent);
@@ -162,6 +233,18 @@ export class H2BridgeClient {
       if (entry) {
         if (this.sessionId && d.sessionId && d.sessionId !== this.sessionId) return;
         this.pending.delete(d.requestId);
+        const durationMs = Math.max(0, Math.round(Date.now() - entry.startedAt));
+        this.recordInteraction({
+          direction: 'incoming',
+          type: d.type || `${entry.reqType}_RES`,
+          requestId: d.requestId,
+          sessionId: d.sessionId || this.sessionId,
+          success: Boolean(d.success),
+          reasonCode: d.reasonCode || null,
+          durationMs,
+          summary: summarizeBridgeMessage(d, d.success ? 'OK' : 'Request failed'),
+          payload: d,
+        });
         if (d.success) {
           if (d.sessionId) {
             this.sessionId = d.sessionId;
@@ -248,6 +331,50 @@ export class H2BridgeClient {
     return () => this.folderListeners.delete(handler);
   }
 
+  private recordInteraction(
+    entry: Omit<H2InteractionLogEntry, 'id' | 'timestamp' | 'payload'> & { payload: Record<string, any> }
+  ): void {
+    const item: H2InteractionLogEntry = {
+      ...entry,
+      id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: Date.now(),
+      payload: sanitizePayloadForLog(entry.payload),
+    };
+    this.interactionLogs.push(item);
+    if (this.interactionLogs.length > MAX_INTERACTION_LOG_ENTRIES) {
+      this.interactionLogs.splice(0, this.interactionLogs.length - MAX_INTERACTION_LOG_ENTRIES);
+    }
+    const snapshot = [...this.interactionLogs];
+    this.logListeners.forEach((fn) => {
+      try {
+        fn(snapshot);
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  public getInteractionLogs(): H2InteractionLogEntry[] {
+    return [...this.interactionLogs];
+  }
+
+  public clearInteractionLogs(): void {
+    this.interactionLogs = [];
+    this.logListeners.forEach((fn) => {
+      try {
+        fn([]);
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  public subscribeInteractionLogs(listener: (entries: H2InteractionLogEntry[]) => void): () => void {
+    this.logListeners.add(listener);
+    listener([...this.interactionLogs]);
+    return () => this.logListeners.delete(listener);
+  }
+
   private post(type: string, payload: Record<string, any> = {}, explicitReqId?: string): string {
     const requestId = explicitReqId || `${type}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const envelope: Record<string, any> = {
@@ -260,6 +387,14 @@ export class H2BridgeClient {
     if (type !== 'H2_CONNECT_REQ' && this.sessionId) {
       envelope.sessionId = this.sessionId;
     }
+    this.recordInteraction({
+      direction: 'outgoing',
+      type,
+      requestId,
+      sessionId: envelope.sessionId || null,
+      summary: summarizeBridgeMessage(envelope, 'Outgoing request'),
+      payload: envelope,
+    });
     window.postMessage(envelope, window.location.origin);
     return requestId;
   }
@@ -270,15 +405,29 @@ export class H2BridgeClient {
         reject(new Error('Window not available for Clockie H2 bridge'));
         return;
       }
+      const startedAt = Date.now();
       const requestId = this.post(type, payload);
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
         const err: H2BridgeError = new Error(`${type} timed out`);
         err.reasonCode = 'TIMEOUT';
+        this.recordInteraction({
+          direction: 'incoming',
+          type: `${type}_TIMEOUT`,
+          requestId,
+          sessionId: this.sessionId,
+          success: false,
+          reasonCode: 'TIMEOUT',
+          durationMs: Math.max(0, Math.round(Date.now() - startedAt)),
+          summary: `Timed out after ${timeoutMs} ms`,
+          payload: { type, requestId, timeoutMs, reasonCode: 'TIMEOUT' },
+        });
         reject(err);
       }, timeoutMs);
 
       this.pending.set(requestId, {
+        startedAt,
+        reqType: type,
         resolve: (d) => {
           clearTimeout(timer);
           resolve(d as T);
@@ -764,6 +913,18 @@ export class H2BridgeEngine {
 
   public getClient(): H2BridgeClient {
     return this.client;
+  }
+
+  public getInteractionLogs(): H2InteractionLogEntry[] {
+    return this.client.getInteractionLogs();
+  }
+
+  public clearInteractionLogs(): void {
+    this.client.clearInteractionLogs();
+  }
+
+  public subscribeInteractionLogs(listener: (entries: H2InteractionLogEntry[]) => void): () => void {
+    return this.client.subscribeInteractionLogs(listener);
   }
 
   public subscribe(listener: (state: H2BridgeState) => void): () => void {

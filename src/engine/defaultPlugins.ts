@@ -1365,7 +1365,17 @@ import {
 export default function ClockieH2Plugin({ gaw }) {
   const [bridgeState, setBridgeState] = useState(() => gaw.bridge.getState());
   const [storageMeta, setStorageMeta] = useState(() => gaw.storage.getMetadata());
-  const [selectedProvider, setSelectedProvider] = useState('pcloud');
+  // Honour any drive provider requested via IDE File -> Open Drive -> (pCloud / Google Drive / Dropbox / Local)
+  const initialRequestedProvider = (() => {
+    const pending = gaw?.clockieH2PendingProvider;
+    if (pending && ['pcloud', 'gdrive', 'dropbox', 'local'].includes(pending)) {
+      gaw.clockieH2PendingProvider = null;
+      return pending;
+    }
+    return null;
+  })();
+  const [selectedProvider, setSelectedProvider] = useState(initialRequestedProvider || 'pcloud');
+  const explicitProviderRef = React.useRef(Boolean(initialRequestedProvider));
   const [currentPath, setCurrentPath] = useState('');
   const [currentFolderId, setCurrentFolderId] = useState(undefined);
   const [pathStack, setPathStack] = useState([]);
@@ -1444,9 +1454,10 @@ export default function ClockieH2Plugin({ gaw }) {
   const isConnected = bridgeState.status === 'connected';
   const activeFile = bridgeState.activeFile;
 
-  // Auto-select the first connected drive once the bridge connects
+  // Auto-select the first connected drive once the bridge connects (unless user explicitly chose a drive via File -> Open Drive)
   useEffect(() => {
     if (!isConnected) return;
+    if (explicitProviderRef.current) return;
     const drives = bridgeState.drives || {};
     if (activeFile?.provider && drives[activeFile.provider]?.connected) {
       setSelectedProvider(activeFile.provider);
@@ -1503,13 +1514,25 @@ export default function ClockieH2Plugin({ gaw }) {
     }
   }, [isConnected, selectedProvider, currentPath, currentFolderId, loadFolder]);
 
-  const handleSelectProvider = (provId) => {
+  const handleSelectProvider = useCallback((provId) => {
+    explicitProviderRef.current = true;
     setSelectedProvider(provId);
     setCurrentPath('');
     setCurrentFolderId(undefined);
     setPathStack([]);
     setFolderError(null);
-  };
+  }, []);
+
+  // Listen for IDE File -> Open Drive -> (pCloud / Google Drive / Dropbox / Local) selection events
+  useEffect(() => {
+    const unsub = gaw.eventBus?.on('clockie_h2_select_provider', (provId) => {
+      if (provId && ['pcloud', 'gdrive', 'dropbox', 'local'].includes(provId)) {
+        gaw.clockieH2PendingProvider = null;
+        handleSelectProvider(provId);
+      }
+    });
+    return () => { if (unsub) unsub(); };
+  }, [gaw, handleSelectProvider]);
 
   const handleEnterFolder = (node) => {
     const nextPath = node.relativePath || (currentPath ? currentPath + '/' + node.name : node.name);
@@ -2847,7 +2870,7 @@ export default function HelpPlugin({ gaw }) {
                   <h3 className={'text-base font-bold flex items-center gap-2 ' + (isDark ? 'text-sky-300' : 'text-blue-700')}>
                     <span>Gawkyy — Generic Application Wrapper</span>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 font-mono font-normal">
-                      v1.21
+                      v1.22
                     </span>
                   </h3>
                   <p className={'text-xs leading-relaxed ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
@@ -2868,23 +2891,32 @@ export default function HelpPlugin({ gaw }) {
             <div className={'p-5 rounded-2xl border shadow-sm ' + (
               isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-200'
             )}>
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-800/40">
-                <Keyboard className="w-4 h-4 text-blue-400" />
-                <h3 className={'text-xs font-bold tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
-                  Keyboard Shortcuts Reference
-                </h3>
+              <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-800/40">
+                <div className="flex items-center gap-2">
+                  <Keyboard className="w-4 h-4 text-blue-400" />
+                  <h3 className={'text-xs font-bold tracking-wider ' + (isDark ? 'text-sky-300/90' : 'text-blue-700')}>
+                    IDE Mode Keyboard Shortcuts Reference
+                  </h3>
+                </div>
+                <span className={'text-[10px] ' + (isDark ? 'text-slate-400' : 'text-slate-600')}>
+                  App Mode keeps only native Cut / Copy / Paste
+                </span>
               </div>
 
               <div className="grid grid-cols-1 @[450px]:grid-cols-2 gap-2.5 pt-3 text-xs cq-stack">
                 {[
-                  ['Ctrl + Shift + F', 'Toggle between IDE Mode and App Mode (auto-saves edits)'],
-                  ['Ctrl + Shift + K', 'Switch Tab between Code Editor and Live View in IDE'],
-                  ['Ctrl + Shift + D', 'Toggle IDE Primary Side Bar'],
-                  ['Ctrl + O', 'Open Local SQLite Database File'],
-                  ['Ctrl + S', 'Save Active Tab (IDE) or Database (App)'],
-                  ['Ctrl + Enter', 'Run SQL Query / Test Plugin in IDE'],
-                  ['Shift + Alt + F', 'Format Document (Prettier Auto-format)'],
-                  ['Ctrl + B', 'Toggle Primary Side Bar in IDE'],
+                  ['Alt+N C / Q / T / V / R', 'New Component, Query, Table, View, or Report'],
+                  ['Alt+T N / C / A / U', 'New Tab, Close Tab, Close All, Undo Close Tab'],
+                  ['Alt+O O', 'Open File & Workspace Manager'],
+                  ['Alt+O P / G / D / L', 'Open Drive (pCloud, Google Drive, Dropbox, Local)'],
+                  ['Ctrl+S / Alt+S', 'Save Active Tab'],
+                  ['Alt+Shift+S / Alt+A', 'Save As… / Save All Tabs'],
+                  ['Alt+E I / Alt+E P', 'Invert Selection / Preferences'],
+                  ['Alt+B I', 'Bridge: Show Interactions Log'],
+                  ['Alt+V R / S / C', 'Refresh View / System Shortcuts / Custom Shortcuts'],
+                  ['Alt+H A', 'About Gawkyy IDE'],
+                  ['Ctrl+Shift+F / Ctrl+Shift+K', 'Switch to App Mode / Toggle Code & Live View'],
+                  ['Ctrl+Enter / Shift+Alt+F', 'Run Query or Test Component / Format with Prettier'],
                 ].map(([shortcut, desc], idx) => (
                   <div
                     key={idx}
